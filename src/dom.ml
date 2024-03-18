@@ -1,0 +1,52 @@
+(*******************************************************************)
+(*     This is part of WhyMon, and it is distributed under the     *)
+(*     terms of the GNU Lesser General Public License version 3    *)
+(*           (see file LICENSE for more details)                   *)
+(*                                                                 *)
+(*  Copyright 2023:                                                *)
+(*  Dmitriy Traytel (UCPH)                                         *)
+(*  Leonardo Lima (UCPH)                                           *)
+(*******************************************************************)
+
+type tt = TInt | TStr | TFloat
+
+type t = Int of Int.t | Str of String.t | Float of Float.t
+
+let equal d d' = match d, d' with
+  | Int v, Int v' -> Int.equal v v'
+  | Str v, Str v' -> String.equal v v'
+  | Float v, Float v' -> Float.equal v v'
+  | _ -> false
+
+let tt_equal tt tt' = match tt, tt' with
+  | TInt, TInt
+    | TStr, TStr
+    | TFloat, TFloat -> true
+  | _ -> false
+
+let tt_of_string = function
+  | "int" -> TInt
+  | "string" -> TStr
+  | "float" -> TFloat
+  | t -> raise (Invalid_argument (Printf.sprintf "type %s is not supported" t))
+
+let tt_of_domain = function
+  | Int _ -> TInt
+  | Str _ -> TStr
+  | Float _ -> TFloat
+
+let tt_to_string = function
+  | TInt -> "int"
+  | TStr -> "string"
+  | TFloat -> "float"
+
+let tt_default = function
+  | TInt -> Int 0
+  | TStr -> Str ""
+  | TFloat -> Float 0.0
+
+let to_string = function
+  | Int v -> Int.to_string v
+  | Str v -> Printf.sprintf "\"%s\"" v
+  | Float v -> Float.to_string v
+

@@ -1,0 +1,90 @@
+{
+  open Lexing
+  open Parser
+
+  exception SyntaxError of string
+
+  let make_interval _ = Interval.lex (fun () -> raise (SyntaxError "interval lexing did not succeed"))
+}
+
+let white = [' ' '\t']+
+let newline = '\r' | '\n' | "\r\n"
+
+let ident = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let int = ['0'-'9']*
+
+rule read =
+  parse
+  | white          { read lexbuf }
+  | newline        { new_line lexbuf; read lexbuf }
+  | '('            { LPA }
+  | ')'            { RPA }
+  | ','            { COM }
+  | ':'            { COL }
+  | '.'            { DOT }
+  | '*'            { STAR }
+  | '"'            { read_string (Buffer.create 17) lexbuf }
+  | "import"       { IMPORT }
+  | "event"        { EVENT }
+  | "string"       { TSTRING }
+  | "int"          { TINT }
+  | "causable"     { TCAUSABLE }
+  | "suppressable" { TSUPPRESSABLE }
+  | "observable"   { TOBSERVABLE }
+  | "enforceable"  { TENFORCEABLE }
+  | "internal"     { TINTERNAL }
+  | "chapter"      { CHAPTER }
+  | "article"      { ARTICLE }
+  | "paragraph"    { PARAGRAPH }
+  | "point"        { POINT }
+  | "rule"         { RULE }
+  | "whenever"     { WHENEVER }
+  | "oblige"       { OBLIGE }
+  | "permit"       { PERMIT }
+  | "constitute"   { CONSTITUTE }
+  | "except"       { EXCEPT }
+  | "suppressing"  { SUPPRESSING }
+  | "causing"      { CAUSING }
+  | "false" | "⊥"  { FALSE }
+  | "true" | "⊤"   { TRUE }
+  | "="            { EQCONST }
+  | "¬" | "NOT"    { NEG }
+  | "∧" | "AND"    { AND }
+  | "∨" | "OR"     { OR }
+  | "→" | "IMPLIES" { IMP }
+  | "↔" | "IFF"   { IFF }
+  | "∃"  | "EXISTS"{ EXISTS }
+  | "∀"  | "FORALL"{ FORALL }
+  | "SINCE" | "S"  { SINCE }
+  | "UNTIL" | "U"  { UNTIL }
+  | "RELEASE" | "R"{ RELEASE }
+  | "TRIGGER" |	"T"{ TRIGGER }
+  | "NEXT" | "X" | "○" { NEXT }
+  | "PREV" | "PREVIOUS" | "Y" | "●" { PREV }
+  | "GLOBALLY" | "ALWAYS" | "G" | "□" { ALWAYS }
+  | "EVENTUALLY" | "F" | "◊" { EVENTUALLY }
+  | "GLOBALLY_PAST" | "HISTORICALLY" | "■" { HISTORICALLY }
+  | "ONCE" | "⧫"   { ONCE }
+  | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)
+                   {  INTERVAL (make_interval lexbuf l i j r) }
+  | ident          { IDENT (Lexing.lexeme lexbuf) }
+  | int            { INT (int_of_string (Lexing.lexeme lexbuf)) }
+  | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
+  | eof      { EOF }
+
+and read_string buf =
+  parse
+  | '"'       { STRING (Buffer.contents buf) }
+  | '\\' '/'  { Buffer.add_char buf '/'; read_string buf lexbuf }
+  | '\\' '\\' { Buffer.add_char buf '\\'; read_string buf lexbuf }
+  | '\\' 'b'  { Buffer.add_char buf '\b'; read_string buf lexbuf }
+  | '\\' 'f'  { Buffer.add_char buf '\012'; read_string buf lexbuf }
+  | '\\' 'n'  { Buffer.add_char buf '\n'; read_string buf lexbuf }
+  | '\\' 'r'  { Buffer.add_char buf '\r'; read_string buf lexbuf }
+  | '\\' 't'  { Buffer.add_char buf '\t'; read_string buf lexbuf }
+  | [^ '"' '\\']+
+    { Buffer.add_string buf (Lexing.lexeme lexbuf);
+      read_string buf lexbuf
+    }
+  | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
+  | eof { raise (SyntaxError ("String is not terminated")) }
