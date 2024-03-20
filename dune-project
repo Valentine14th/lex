@@ -6,9 +6,9 @@
 
 (generate_opam_files true)
 
-(authors "François Hublet")
+(authors "François Hublet" "Jonas Degelo")
 
-(maintainers "François Hublet")
+(maintainers "François Hublet" "Jonas Degelo")
 
 (license LICENSE)
 
@@ -18,5 +18,6 @@
  (name lex)
  (synopsis "Compiling the law into logic")
  (description "Compiling the law into logic")
- (depends ocaml dune))
+ (depends ocaml dune)
+ (allow_empty))
 
