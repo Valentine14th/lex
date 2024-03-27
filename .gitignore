@@ -1,4 +1,5 @@
 *.code-workspace
+*.exe
 
 ### ocaml gitignore: https://github.com/github/gitignore/blob/main/OCaml.gitignore ###
 *.annot
