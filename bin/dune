@@ -1,4 +1,5 @@
 (executable
  (public_name lex)
  (name main)
- (libraries lex_lib core core_unix.command_unix))
+ (libraries lex_lib core core_unix.command_unix)
+ (promote (until-clean)))
