@@ -26,9 +26,46 @@ let compile_trule tprog =
      let f' = List.map exceptions ~f:neg in
      aux f' rule
   | _ -> assert false
-  
+
+(* TODO: should redefining event names be allowed?
+   if yes, some event name prefixing is needed
+   to ensure events have unique names in the produced
+   signature *)
+let compile_events events aliases =
+  let event_list = Map.fold events ~f:(fun ~key:key ~data:value acc -> (key, value) :: acc) ~init:[] in
+  let compile_event (name, (args, pol, _)) =
+    let type_args (name, typ_alias) =
+      let typ = Map.find_exn aliases typ_alias in
+      (name, typ)
+    in
+    let typed_args = List.map args ~f:type_args in
+    (name, pol, typed_args)
+  in
+  List.map event_list ~f:compile_event
+
+let pol_to_symbol_string pol =
+  match pol with
+  | TCau -> "+"
+  | TSup -> "-"
+  | TCauSup -> "+-"
+  | TInternal -> "+-" (* TODO: is this correct? *)
+  | TObs -> ""
+
+let string_of_signatures signatures =
+  let string_of_signature (name, pol, args) =
+    let arg_strs = List.map args ~f:(fun (name, typ) ->
+      Printf.sprintf "%s: %s" name (string_of_typ typ)) in
+    let args_str = String.concat ~sep:", " arg_strs in
+    Printf.sprintf "%s(%s)%s" name args_str (pol_to_symbol_string pol)
+  in
+  let signature_strs = List.map signatures ~f:string_of_signature in
+  String.concat ~sep:"\n" signature_strs
+
 let compile tprog =
   let rules = List.filter tprog.tstmts ~f:is_trule in
   let formulae = List.map rules ~f:(compile_trule tprog) in
   let phi = bigconj formulae in
-  Printf.printf "%s\n" (Formula.to_string phi)
+  let signatures = compile_events tprog.tevents tprog.taliases in
+  Printf.printf "Signature:\n%s\nFormula:\n%s\n"
+    (string_of_signatures signatures)
+    (Formula.to_string phi)

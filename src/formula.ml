@@ -152,6 +152,28 @@ let rec fv = function
 
 let paren h k x = if h>k then "("^^x^^")" else x
 
+let rec collect_predicates l = function
+  | TT
+    | FF
+    | EqConst _ -> l
+  | Predicate (r, trms) -> (r, trms) :: l
+  | Neg f 
+    | Exists (_, f)
+    | Forall (_, f)
+    | Prev (_, f)
+    | Next (_, f)
+    | Once (_, f)
+    | Eventually (_, f)
+    | Historically (_, f)
+    | Always(_, f) -> collect_predicates l f
+  | And (_, f, g)
+    | Or (_, f, g)
+    | Imp (_, f, g)
+    | Iff (_, _, f, g)
+    | Since (_, _, f, g)
+    | Until (_, _, f, g) -> collect_predicates (collect_predicates l f) g
+  | Type (f, _) -> collect_predicates l f
+
 let rec to_string_rec l = function
   | TT -> Printf.sprintf "⊤"
   | FF -> Printf.sprintf "⊥"

@@ -20,10 +20,10 @@ let loop filename () =
   let inx = In_channel.create filename in
   let lexbuf = Lexing.from_channel inx in
   lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-  let prog = parse_with_error lexbuf in
+  let prog = parse_with_error lexbuf in (* program parsed without type information *)
   Lex.print_prog prog;
-  let tprog = Typing.do_type prog in
-  Compiler.compile tprog;
+  let tprog = Typing.do_type prog in (* type check and add type information to program *)
+  Compiler.compile tprog; (* compile correctly typed program *)
   In_channel.close inx
 
 let () =

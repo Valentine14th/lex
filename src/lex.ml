@@ -23,10 +23,20 @@ type rule_constr =
 type stmt =
   | SImport    of string list * bool
   | SSection   of section_kind * string * string
-  | SEvent     of ident * (ident * typ) list * pol
+  (* | SEvent     of ident * (ident * typ) list * pol *)
   | SRule      of string option * rule * rule_type * rule_constr list
+  | SEvent     of ident * (ident * ident) list * pol * string option
+  | SType      of ident * typ
+
+type signature = ident * (ident * typ) list
 
 type prog = { stmts: stmt list }
+
+let compare_typs t1 t2 =
+  match t1, t2 with
+  | TString, TString -> true
+  | TInt, TInt -> true
+  | _ -> false
 
 let is_rule = function
   | SRule _ -> true
@@ -89,6 +99,17 @@ let string_of_rule i rule =
     -> string_of_imp_rule (verb_of_rule rule) f g
   | Exception (f, ident) -> string_of_exc_rule f ident
 
+let string_of_args args i = 
+    let string_of_arg (name, typ_alias) = 
+      Printf.sprintf "%s%s : %s" (Etc.tabs (i+1)) name typ_alias
+    in
+    String.concat ~sep:"\n" (List.map args ~f:string_of_arg)
+
+let make_doc_string ds i = 
+    let lines = String.split ~on:'\n' ds in
+    let indented = List.map lines ~f:(fun l -> Etc.tabs i ^ l) in
+    Etc.tabs (i + 1) ^ "\"\"\"" ^ String.concat ~sep:"\n" indented ^ Etc.tabs i ^ "\"\"\"\n"
+
 let string_of_stmt ?(i=0) =
   function
   | SImport (idents, star) ->
@@ -101,12 +122,12 @@ let string_of_stmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
-  | SEvent (name, typed_idents, pol) ->
+  (* | SEvent (name, typed_idents, pol) ->
      Printf.sprintf "%sevent %s (%s) %s"
        (Etc.tabs i)
        name
        (String.concat ~sep:", " (List.map typed_idents ~f:string_of_typed_idents))
-       (string_of_pol pol)
+       (string_of_pol pol) *)
   | SRule (label, rule, rule_type, rule_constrs) ->
      Printf.sprintf "%srule%s\n%s\n%s%s%s"
        (Etc.tabs i)
@@ -118,9 +139,30 @@ let string_of_stmt ?(i=0) =
           ""
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
+  | SEvent (name, typed_args, pol, doc_string) ->
+      let description =
+          match doc_string with
+          | Some s -> make_doc_string s i
+          | None -> ""
+      in
+      Printf.sprintf "%s%s event %s\n%s%s"
+          (Etc.tabs i)
+          (string_of_pol pol)
+          name
+          description
+          (string_of_args typed_args i)
+  | SType (name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+
+let string_of_signature signature =
+  match signature with
+  | name, typed_idents ->
+     Printf.sprintf "%s(%s)"
+       name
+       (String.concat ~sep:", " (List.map typed_idents ~f:string_of_typed_idents))
     
 let string_of_prog prog =
-  String.concat ~sep:"\n\n" (List.map prog.stmts ~f:string_of_stmt)
+  (* String.concat ~sep:"\n\n" (List.map prog.stmts ~f:string_of_stmt) *)
+  String.concat ~sep:"\n" (List.map prog.stmts ~f:string_of_stmt)
       
 let print_prog prog =
   Stdio.printf "%s\n" (string_of_prog prog)

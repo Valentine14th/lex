@@ -2,25 +2,52 @@ open Core
 open Lex
 
 type tstmt =
-  | TSImport of string list * bool
-  | TSection of section_kind * string * string
-  | TSEvent  of ident * (ident * typ) list * pol
-  | TSRule   of string list * rule * rule_type * rule_constr list
+  | TSImport  of string list * bool
+  | TSection  of section_kind * string * string
+  (* | TSEvent  of ident * (ident * typ) list * pol *)
+  | TSRule    of string list * rule * rule_type * rule_constr list
+  | TSEvent   of ident * (ident * ident) list * pol * string option
+  | TSType    of ident * typ
+
+type tevent = (ident * ident) list * pol * string option
 
 type tprog =
   {
     tstmts: tstmt list;
+    taliases: (ident, typ, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t
   }
 
 let tempty =
   {
     tstmts = [];
+    taliases = Map.empty (module String);
+    tevents = Map.empty (module String);
     exceptions = Map.empty (module String)
   }
 
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
+let add_talias name typ tprog =
+  (* TODO: allow for overwriting/reusing existing type names *)
+  let tprog_with_alias = { tprog with taliases = Map.add_exn tprog.taliases ~key:name ~data:typ } in
+  add_tstmt (TSType (name, typ)) tprog_with_alias
+
+let add_tevent name args pol ds tprog =
+  let event = (args, pol, ds) in
+  (* TODO: allow for overwriting/reusing event names *)
+  let tprog_with_event = { tprog with tevents = Map.add_exn tprog.tevents ~key:name ~data:event } in
+  add_tstmt (TSEvent (name, args, pol, ds)) tprog_with_event
+
 let is_trule = function
   | TSRule _ -> true
+  | _ -> false
+
+let is_tevent_def = function
+  | TSEvent _ -> true
+  | _ -> false
+
+let is_ttyp_alias = function
+  | TSType _ -> true
   | _ -> false

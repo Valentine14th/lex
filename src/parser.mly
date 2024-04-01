@@ -9,6 +9,8 @@
 %token <string> STRING
 %token LPA RPA COM COL STAR
 %token IMPORT EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TENFORCEABLE
+%token IS TTYPE
+%token <string> DOCSTRING
 %token CHAPTER ARTICLE PARAGRAPH POINT
 %token RULE WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
 %token CAUSING SUPPRESSING
@@ -55,9 +57,11 @@ stmts: list(stmt) EOF { { stmts = $1 } }
 
 stmt:
   | IMPORT import                        { SImport (fst $2, snd $2) }
-  | EVENT IDENT LPA typed_idents RPA pol { SEvent ($2, $4, $6) }
+  // | EVENT IDENT LPA typed_idents RPA pol { SEvent ($2, $4, $6) }
   | section_type STRING                  { SSection ($1, $2, "") }
   | section_type STRING COL STRING       { SSection ($1, $2, $4) }
+  | TTYPE IDENT IS typ                   { SType ($2, $4) }
+  | event_def                            { $1 }
   | srule                                { $1 }
 
 import:
@@ -84,10 +88,10 @@ pol:
   | TSUPPRESSABLE TCAUSABLE { TCauSup }
   |                         { TObs }
 
-typed_idents:
-  | separated_list(COM, typed_ident) { $1 }
+// typed_idents:
+//   | separated_list(COM, typed_ident) { $1 }
 
-typed_ident: IDENT COL typ { ($1, $3) }
+// typed_ident: IDENT COL typ { ($1, $3) }
 
 typ:
   | TSTRING { TString }
@@ -109,6 +113,16 @@ rule_constrs:
 srule:
   | RULE rule rule_type rule_constrs        { SRule (None, $2, $3, $4) }
   | RULE STRING rule rule_type rule_constrs { SRule (Some $2, $3, $4, $5) }
+
+event_def:
+  | pol EVENT IDENT list(arg) { SEvent ($3, $4, $1, None) }
+  | pol EVENT IDENT DOCSTRING list(arg) { SEvent ($3, $5, $1, Some $4) }
+
+arg:
+  | IDENT COL IDENT { ($1, $3) }
+
+// docstring:
+//   | TRIQUOTES STRING TRIQUOTES { $2 }
 
 e:
 | LPA e RPA                            { $2 }
