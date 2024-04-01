@@ -2,6 +2,88 @@ import prOnto.*
 import dapreco.*
 import rioOnto.*
 
+
+type processingid is int
+type processorid is int
+type dataid is int
+type userid is int
+type id is int # only a placeholder such that every argument has a type
+
+# observable event
+# causable event
+# internal event
+suppressable event PersonalDataProcessing
+    """
+    {x} is processing personal data {z} as part
+    of processing operation {ep}
+    """
+    ep: processingid
+    x: processorid
+    z: dataid
+
+observable event nominates
+    # """
+    # TODO: what does "nominates" model?
+    # """
+    # TODO: update types according to intended meaning
+    #       of the arguments
+    edp: processorid
+    y: processorid
+    x: processorid
+
+observable event PersonalData
+    # """
+    # TODO
+    # """
+    # TODO: update types according to intended meaning
+    #       of the arguments
+    z: dataid
+    w: id # TODO: what is {w} meant to be?
+
+internal event lawfulness
+    """
+    processing {ep} is lawful
+    """
+    ep: processingid
+
+internal event fairness
+    """
+    processing {ep} is fair
+    """
+    ep: processingid
+
+internal event transparency
+    """
+    processing {ep} is transparent
+    """
+    ep: processingid
+
+observable event isBasedOn
+    """
+    processing {ep} is based on {epu}
+    """
+    ep: processingid
+    epu: id
+
+observable event GiveConsent
+    # """
+    # TODO
+    # """
+    ehc: id
+    w: id
+    c: id
+
+observable event AuthorizedBy
+    eau: id
+    epu: id
+    c: id
+
+observable event Purpose
+    epu: id
+
+observable event isMinor
+    w: id
+
 article "5"
 paragraph "5(1)"
 point "5(1)(a)"
