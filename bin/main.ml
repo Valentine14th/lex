@@ -22,6 +22,7 @@ let loop filename () =
   lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
   let prog = parse_with_error lexbuf in (* program parsed without type information *)
   Lex.print_prog prog;
+  (* TOOD: error reporting with lexbuf positions for type checking *)
   let tprog = Typing.do_type prog in (* type check and add type information to program *)
   Compiler.compile tprog; (* compile correctly typed program *)
   In_channel.close inx

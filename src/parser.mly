@@ -57,7 +57,6 @@ stmts: list(stmt) EOF { { stmts = $1 } }
 
 stmt:
   | IMPORT import                        { SImport (fst $2, snd $2) }
-  // | EVENT IDENT LPA typed_idents RPA pol { SEvent ($2, $4, $6) }
   | section_type STRING                  { SSection ($1, $2, "") }
   | section_type STRING COL STRING       { SSection ($1, $2, $4) }
   | TTYPE IDENT IS typ                   { SType ($2, $4) }
@@ -88,11 +87,6 @@ pol:
   | TSUPPRESSABLE TCAUSABLE { TCauSup }
   |                         { TObs }
 
-// typed_idents:
-//   | separated_list(COM, typed_ident) { $1 }
-
-// typed_ident: IDENT COL typ { ($1, $3) }
-
 typ:
   | TSTRING { TString }
   | TINT    { TInt }
@@ -120,9 +114,6 @@ event_def:
 
 arg:
   | IDENT COL IDENT { ($1, $3) }
-
-// docstring:
-//   | TRIQUOTES STRING TRIQUOTES { $2 }
 
 e:
 | LPA e RPA                            { $2 }

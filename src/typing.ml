@@ -76,12 +76,29 @@ let type_check_constant c t = match (c, t) with
   | Dom.Float _, _ -> false (* floats aren't yet supported by "lex"*)
   | _, _ -> false
 
+(* TODO: forward the error further up in the compilation process
+         such that it can be reported together with file name,
+         and location in file *)
+let type_error msg = Printf.eprintf "Type error: %s\n" msg
+
+let string_of_const = function
+  | Dom.Int i -> string_of_int i
+  | Dom.Str s -> s
+  | Dom.Float f -> string_of_float f
+
+let typ_of_const = function
+  | Dom.Int _ -> TInt
+  | Dom.Str _ -> TString
+  | Dom.Float _ -> assert false (* floats are not supported yet *)
+
 let type_formulas fs s =
   let predicates = List.fold_left (List.map fs ~f:(fun f -> Formula.collect_predicates [] f)) ~init:[] ~f:(fun l ps -> List.concat [l; ps]) in
   let type_var (v, t_alias) typed_vars =
     let t = match Map.find s.tprog.taliases t_alias with
       | Some typ -> typ
-      | None -> assert false (* TODO: add meaningful error message when type alias isn't found *)
+      | None ->
+        type_error ("Type alias " ^ t_alias ^ " is undefined");
+        exit 1
     in
     match v with
     | Formula.Term.Var x -> begin match Map.find typed_vars x with
@@ -89,19 +106,28 @@ let type_formulas fs s =
                          typed_vars
       | None -> Map.add_exn typed_vars ~key:x ~data:(t_alias, t)
       end
-    | Const c -> assert (type_check_constant c t);
-                 typed_vars
+    | Const c ->
+      begin match type_check_constant c t with
+        | true -> typed_vars
+        | false ->
+          type_error ("Constant " ^ (string_of_const c) ^ " has type \"" ^ (string_of_typ (typ_of_const c)) ^ "\" but expected \"" ^ (string_of_typ t) ^ "\"");
+          exit 1;
+    end
   in
   let type_vars event_name vars t_vars =
     let t_vars' =
       match Map.find s.tprog.tevents event_name with
         | Some (args, _, _) ->
           List.fold2 args vars ~init:t_vars ~f:(fun t_vars (_, type_alias) v -> type_var (v, type_alias) t_vars) (* list of triples with (variable name, type alias (according to position as argument), actual type of alias)*)
-        | None -> assert false (* TODO: add meaningful error message when predicate/event name isn't found *)
+        | None ->
+          type_error ("Event \"" ^ event_name ^ "\" is undefined");
+          exit 1
       in
       match t_vars' with
         | Ok t_vars'' -> t_vars''
-        | Unequal_lengths -> assert false (* TODO: add meaningful error message when number of arguments doesn't match *)
+        | Unequal_lengths ->
+          type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"");
+          exit 1
   in
   List.fold_left predicates ~init:(Map.empty (module String)) ~f:(fun t_vars (n, ts) -> type_vars n ts t_vars)
   |> ignore
@@ -129,9 +155,9 @@ let type_rule s = function
   | _ -> assert false
 
 let type_stmt s = function
-  | SImport (idents, star) -> add_tstmt (TSImport (idents, star)) s (* TODO: how to type check imports, depends on how imports are actually done in practice *)
+  | SImport (idents, star) -> add_tstmt (TSImport (idents, star)) s
   | SSection (section_kind, label, _) -> set_labels section_kind label s
-  | SRule _ as rule -> type_rule s rule (* TODO: type check arguments in events of rule *)
+  | SRule _ as rule -> type_rule s rule
   | SEvent (name, args, pol, ds) -> add_tevent name args pol ds s
   | SType (name, typ) -> add_talias name typ s
 
