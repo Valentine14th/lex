@@ -117,5 +117,5 @@ enforceable causing lawfulness
 article "8"
 paragraph "8(1)"
 rule 
-    whenever isMinor(w)
+    whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
     except "6(1)(a)"
