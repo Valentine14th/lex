@@ -66,6 +66,6 @@ let compile tprog =
   let formulae = List.map rules ~f:(compile_trule tprog) in
   let phi = bigconj formulae in
   let signatures = compile_events tprog.tevents tprog.taliases in
-  Printf.printf "Signature:\n%s\nFormula:\n%s\n"
+  Printf.printf "Signature:\n%s\n\nFormula:\n%s\n"
     (string_of_signatures signatures)
     (Formula.to_string phi)

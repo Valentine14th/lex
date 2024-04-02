@@ -98,7 +98,7 @@ let type_formulas fs s =
       | Some typ -> typ
       | None ->
         type_error ("Type alias " ^ t_alias ^ " is undefined");
-        exit 1
+        exit (-1)
     in
     match v with
     | Formula.Term.Var x -> begin match Map.find typed_vars x with
@@ -111,7 +111,7 @@ let type_formulas fs s =
         | true -> typed_vars
         | false ->
           type_error ("Constant " ^ (string_of_const c) ^ " has type \"" ^ (string_of_typ (typ_of_const c)) ^ "\" but expected \"" ^ (string_of_typ t) ^ "\"");
-          exit 1;
+          exit (-1)
     end
   in
   let type_vars event_name vars t_vars =
@@ -121,13 +121,13 @@ let type_formulas fs s =
           List.fold2 args vars ~init:t_vars ~f:(fun t_vars (_, type_alias) v -> type_var (v, type_alias) t_vars) (* list of triples with (variable name, type alias (according to position as argument), actual type of alias)*)
         | None ->
           type_error ("Event \"" ^ event_name ^ "\" is undefined");
-          exit 1
+          exit (-1)
       in
       match t_vars' with
         | Ok t_vars'' -> t_vars''
         | Unequal_lengths ->
           type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"");
-          exit 1
+          exit (-1)
   in
   List.fold_left predicates ~init:(Map.empty (module String)) ~f:(fun t_vars (n, ts) -> type_vars n ts t_vars)
   |> ignore
