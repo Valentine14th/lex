@@ -43,6 +43,10 @@
 \newcommand{\Lex}{\texttt{Lex}}
 \newcommand{\kw}[1]{{\color{purple}\texttt{#1}}}
 
+\newcommand{\Oblig}{\Circle}
+\newcommand{\Epsilon}{\mathcal{E}}
+\newcommand{\Models}{\mathcal{M}}
+
 \linepenalty=1000
 
 \begin{document}
@@ -66,7 +70,55 @@
 %
 \section{Introduction}
 
+
+\section{Logical foundations}
+
+\Lex{} has its foundations in runtime enforcement~\cite{Schneider2000} and uses
+Metric First-Order Temporal Logic~\cite{Chomicki1995,Basin2015} as its underlying logic.
+In contrast with other approaches to legal formalization~\cite{...}, its logic is thus `classical,'
+having no explicit deontic operators (as in deontic logic) nor obligation-specific syntax
+(as in input-output logic). In this section, we outline our runtime-enforcement-based
+approach to legal formalization and briefly compare it to deontic and input-output logics.
+
+\subsection{Obligations through the lense of runtime enforcement}
+
+Consider a conditional obligation of the form ``if $a$ is the case, then it ought to be that $b$ is the case,'' where $a,b$ are taken from some object logic, e.g., first-order logic.
+Such an obligation can be represented by the formula $\Oblig(a \rightarrow b)$ in standard deontic logic and
+by the pair $(a,b)$ in input-output logic. In our framework, we simply represent such an
+obligation by the implication $a \rightarrow b$. This implication is passed to an \emph{enforcer},
+which is a mapping
+$\Epsilon: F \rightarrow \Models \rightarrow \Models \cup \lbrace \bot\rbrace $, where $F$ is the set of formulae in the
+object logic and $\Models$ is the set of models, such that
+\begin{align*}
+  \forall \phi, M.\,(\Epsilon(\phi, M) \neq \bot) \Rightarrow (\Epsilon(\phi,M) \models \phi).
+\end{align*}
+ When $\phi = a \rightarrow b$ and ..., we obtain $\Epsilon(a \rightarrow b, M) \models a \rightarrow b$
+
+
+ 
+
 \section{Syntax}
+
+\subsection{Labels}
+
+Labels are used to capture the structure of the law. Their syntax is as follows:
+\begin{align*}
+  label\_level::=&~ \kw{law}\mid \kw{title} \mid \kw{chapter} \mid \kw{section} \\
+              &\mid \kw{article} \mid \kw{paragraph} \mid \kw{point} \mid \kw{subpoint}\\
+  label ::=&~ label\_level[\kw{[} int\kw{]}]~string~[string]
+\end{align*}
+The optional integer parameter that follows the level can be used to encode an arbitrary number
+of additional hierarchical levels: $\kw{chapter}\kw{[}1\kw{]}$ is one level below $\kw{chapter}$
+but still above $\kw{section}$, $\kw{chapter}\kw{[}i\kw{]}$ is one level below
+$\kw{chapter}\kw{[}i-1\kw{]}$ and one level above $\kw{chapter}\kw{[}i+1\kw{]}$, etc. The second
+and (optional) third argument collect the number and header of the corresponding part of the law.
+
+\begin{example}
+  Art. 2 GDPR can be introduced as
+  \begin{align*}
+    \kw{article}~\kw{"}\text{\itshape 2}\kw{"}~\kw{"}\text{\itshape Material scope}\kw{"}
+  \end{align*}
+\end{example}
 
 \subsection{Types}
 
@@ -145,6 +197,31 @@ The pairs of identifiers $ident_{i1}\kw{:} ident_{i2}$ contained in the event de
   \end{align*}
 \end{example}
 
+
+\subsection{Rules}
+
+The general syntax for rule declarations is as follows:
+\begin{align*}
+  rule\_verb ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{constitute} \mid \kw{except}\\
+  rule\_decl ::=&~\kw{rule}~[string]\\
+                &~[\kw{whenever}~[pre\_opt]\\
+                &\qquad expr_{11}\\
+                &\qquad \dots\\
+                &\qquad expr_{1k}]\\
+                &~rule\_verb~[post\_opt]\\
+                &\qquad expr_{21}\\
+                &\qquad \dots\\
+                &\qquad expr_{2k}
+\end{align*}
+
+% Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
+
+{%\setlength\bibsep{2pt}
+\small
+\bibliographystyle{unsrt}
+\bibliography{lex}
+}
+ 
 \end{document}
 %%% Local Variables:
 %%% mode: latex
