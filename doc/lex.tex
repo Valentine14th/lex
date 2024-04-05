@@ -206,14 +206,45 @@ The general syntax for rule declarations is as follows:
   rule\_verb ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{constitute} \mid \kw{except}\\
   rule\_decl ::=&~\kw{rule}~[string]\\
                 &~[\kw{whenever}~[pre\_opt]\\
-                &\qquad expr_{11}\\
+                &\qquad [label_{11}\kw{:}]~expr_{11}\\
                 &\qquad \dots\\
-                &\qquad expr_{1k}]\\
+                &\qquad [label_{1k}\kw{:}]~expr_{1k}]\\
                 &~rule\_verb~[post\_opt]\\
-                &\qquad expr_{21}\\
+                &\qquad [label_{21}\kw{:}]~expr_{21}\\
                 &\qquad \dots\\
-                &\qquad expr_{2k}
+                &\qquad [label_{2k}\kw{:}]~expr_{2k}
 \end{align*}
+In the following we review the syntax of expressions $expr_{ij}$ (Section~\ref{sec:expr}), the available verbs
+(Section~\ref{sec:expr_verb}) and the temporal patterns determined by $pre\_opt$ and $post\_opt$ (Section~\ref{sec:opt}).
+
+\subsubsection{Temporal patterns.}
+
+\label{sec:opt}
+
+Except for $\kw{except}$ rules, every \Lex{} rule declaration represents a statement of the form
+$$\kw{ALWAYS} \left[pre(expr_{11}~\kw{AND}~\ldots~\kw{AND}~expr_{1k})~\kw{IMPLIES}~post(expr_{21}~\kw{AND}~\ldots~\kw{AND}~expr_{2k})\right]$$
+where $pre$ and $post$ are determined by $pre\_opt$ and $post\_opt$, respectively. These options use the following
+grammars for time and time intervals:
+\begin{align*}
+  time\_unit ::= &~\kw{y} \mid \kw{d} \mid \kw{h} \mid \kw{s} \mid \kw{ms} \\
+  time\_bound ::= &~ int~time\_unit \\
+  time\_interval ::= &~ \kw{within}~time\_bound \mid \kw{before}~time\_bound \mid \kw{after}~time\_bound
+\end{align*}
+
+Table~\ref{tab:patterns} lists available $(pre\_opt, post\_opt)$ pairs as well as the corresponding $pre$ and $post$ functions.
+
+\begin{table}
+  \centering
+\begin{tabular}{lllll}
+  Pattern & $pre\_opt$ & $post\_opt$ & $pre(\phi)$ & $post(\psi)$ \\
+  \hline
+          & -- & -- & $\phi$ & $\psi$\\
+          & -- & $\kw{eventually}~[time\_interval]$ & $\phi$ & $\kw{EVENTUALLY}_I~\psi$\\
+          & -- & $\kw{always}~[time\_interval]$ & $\phi$ & $\kw{ALWAYS}_I~\psi$\\
+  TBC....
+\end{tabular}\\[10pt]
+\caption{Available temporal patterns for \Lex{} rules\label{tab:patterns}}
+\end{table}
 
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
