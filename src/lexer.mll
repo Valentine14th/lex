@@ -26,7 +26,7 @@ rule read =
   | '*'            { STAR }
   | '"'            { read_string (Buffer.create 17) lexbuf }
   | "\"\"\""       { read_docstring (Buffer.create 17) lexbuf }
-  | "import"       { IMPORT }
+  | "import"       { IMPORT lexbuf.lex_start_p }
   | "event"        { EVENT }
   | "string"       { TSTRING }
   | "int"          { TINT }
@@ -37,11 +37,14 @@ rule read =
   | "observable"   { TOBSERVABLE }
   | "enforceable"  { TENFORCEABLE }
   | "internal"     { TINTERNAL }
-  | "chapter"      { CHAPTER }
-  | "article"      { ARTICLE }
-  | "paragraph"    { PARAGRAPH }
-  | "point"        { POINT }
-  | "rule"         { RULE }
+  | "law"          { LAW lexbuf.lex_start_p }
+  | "title"        { TITLE lexbuf.lex_start_p }
+  | "chapter"      { CHAPTER lexbuf.lex_start_p }
+  | "article"      { ARTICLE lexbuf.lex_start_p }
+  | "paragraph"    { PARAGRAPH lexbuf.lex_start_p }
+  | "point"        { POINT lexbuf.lex_start_p }
+  | "subpoint"     { SUBPOINT lexbuf.lex_start_p }
+  | "rule"         { RULE lexbuf.lex_start_p }
   | "whenever"     { WHENEVER }
   | "oblige"       { OBLIGE }
   | "permit"       { PERMIT }
@@ -71,7 +74,7 @@ rule read =
   | "ONCE" | "⧫"   { ONCE }
   | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)
                    { INTERVAL (make_interval lexbuf l i j r) }
-  | ident          { IDENT (Lexing.lexeme lexbuf) }
+  | ident          { IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf) }
   | int            { INT (int_of_string (Lexing.lexeme lexbuf)) }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | comment? eof   { EOF }
@@ -97,6 +100,10 @@ and read_string buf =
 and read_docstring buf =
   parse
   | "\"\"\"" { DOCSTRING (Buffer.contents buf) }
+  | newline
+    { new_line lexbuf;
+      Buffer.add_char buf '\n';
+      read_docstring buf lexbuf}
   | _
     { Buffer.add_string buf (Lexing.lexeme lexbuf);
       read_docstring buf lexbuf

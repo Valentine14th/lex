@@ -7,26 +7,35 @@ module Labels = struct
 
   type t =
     {
+      law: ident option;
+      title: ident option;
       chapter: ident option;
       article: ident option;
       paragraph: ident option;
-      point: ident option
+      point: ident option;
+      subpoint: ident option
     }
 
   let empty =
     {
+      law = None;
+      title = None;
       chapter = None;
       article = None;
       paragraph = None;
-      point = None
+      point = None;
+      subpoint = None
     }
 
   let set section_kind label l =
     match section_kind with
-    | Chapter   -> { empty with chapter   = Some label }
+    | Law       -> { empty with law       = Some label }
+    | Title     -> { l     with title     = Some label; chapter = None; article = None; paragraph = None; point = None; subpoint = None}
+    | Chapter   -> { l     with chapter   = Some label; article = None; paragraph = None; point = None; subpoint = None}
     | Article   -> { l     with article   = Some label; paragraph = None; point = None }
-    | Paragraph -> { l     with paragraph = Some label; point     = None }
-    | Point     -> { l     with point     = Some label }
+    | Paragraph -> { l     with paragraph = Some label; point = None; subpoint = None }
+    | Point     -> { l     with point     = Some label; subpoint = None}
+    | Subpoint  -> { l     with subpoint  = Some label }
 
   let collect l =
     List.filter_map [l.chapter; l.article; l.paragraph; l.point] ~f:(fun x -> x)
@@ -50,11 +59,11 @@ let empty =
 let add_tstmt tstmt s =
   { s with tprog = Tlex.add_tstmt tstmt s.tprog }
 
-let add_talias alias typ s =
-  { s with tprog = Tlex.add_talias alias typ s.tprog }
+let add_talias alias typ s pos =
+  { s with tprog = Tlex.add_talias alias typ s.tprog pos }
 
-let add_tevent name args pol ds s =
-  { s with tprog = Tlex.add_tevent name args pol ds s.tprog }
+let add_tevent name args pol ds s pos =
+  { s with tprog = Tlex.add_tevent name args pol ds s.tprog pos }
 
 let add_exception f ident s =
   { s with exceptions = Map.add_multi s.exceptions ~key:ident ~data:f }
@@ -79,7 +88,8 @@ let type_check_constant c t = match (c, t) with
 (* TODO: forward the error further up in the compilation process
          such that it can be reported together with file name,
          and location in file *)
-let type_error msg = Printf.eprintf "Type error: %s\n" msg
+let type_error msg pos = Printf.eprintf "Type error at %s: %s\n"
+                            (Util.string_of_pos pos) msg
 
 let string_of_const = function
   | Dom.Int i -> string_of_int i
@@ -91,26 +101,35 @@ let typ_of_const = function
   | Dom.Str _ -> TString
   | Dom.Float _ -> assert false (* floats are not supported yet *)
 
-let type_formulas fs s =
+(* TODO: currently the error location `pos` is the beginning of the rul
+         it might be helpful to have pointers inside the rule,
+         e.g. to the predicate name, or variable names
+         this would require changes to formaula.ml *)
+let type_formulas fs s pos =
   let predicates = List.fold_left (List.map fs ~f:(fun f -> Formula.collect_predicates [] f)) ~init:[] ~f:(fun l ps -> List.concat [l; ps]) in
-  let type_var (v, t_alias) typed_vars =
+  let type_var (_, v, t_alias) typed_vars =
     let t = match Map.find s.tprog.taliases t_alias with
       | Some typ -> typ
       | None ->
-        type_error ("Type alias " ^ t_alias ^ " is undefined");
+        type_error ("Type alias " ^ t_alias ^ " is undefined") pos;
         exit (-1)
     in
     match v with
     | Formula.Term.Var x -> begin match Map.find typed_vars x with
-      | Some (a', t') -> assert (compare_aliases (t_alias, t) (a', t')); (* TODO: add meaningful error message when variable typing doesn't match *)
-                         typed_vars
+      | Some (a', t') ->
+        begin match (compare_aliases (t_alias, t) (a', t')) with
+          | true -> typed_vars
+          | false ->
+            type_error ("Variable " ^ x ^ " has type \"" ^ a' ^ ":" ^ (string_of_typ t') ^ "\" but was expected to have type \"" ^ t_alias ^ ":" ^ (string_of_typ t)) pos;
+            exit (-1)
+        end
       | None -> Map.add_exn typed_vars ~key:x ~data:(t_alias, t)
       end
     | Const c ->
       begin match type_check_constant c t with
         | true -> typed_vars
         | false ->
-          type_error ("Constant " ^ (string_of_const c) ^ " has type \"" ^ (string_of_typ (typ_of_const c)) ^ "\" but expected \"" ^ (string_of_typ t) ^ "\"");
+          type_error ("Constant " ^ (string_of_const c) ^ " has type \"" ^ (string_of_typ (typ_of_const c)) ^ "\" but expected \"" ^ (string_of_typ t)) pos;
           exit (-1)
     end
   in
@@ -118,22 +137,22 @@ let type_formulas fs s =
     let t_vars' =
       match Map.find s.tprog.tevents event_name with
         | Some (args, _, _) ->
-          List.fold2 args vars ~init:t_vars ~f:(fun t_vars (_, type_alias) v -> type_var (v, type_alias) t_vars) (* list of triples with (variable name, type alias (according to position as argument), actual type of alias)*)
+          List.fold2 args vars ~init:t_vars ~f:(fun t_vars (pos, _, type_alias) v -> type_var (pos, v, type_alias) t_vars) (* list of triples with (variable name, type alias (according to position as argument), actual type of alias)*)
         | None ->
-          type_error ("Event \"" ^ event_name ^ "\" is undefined");
+          type_error ("Event \"" ^ event_name ^ "\" is undefined") pos;
           exit (-1)
       in
       match t_vars' with
         | Ok t_vars'' -> t_vars''
         | Unequal_lengths ->
-          type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"");
+          type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"") pos;
           exit (-1)
   in
   List.fold_left predicates ~init:(Map.empty (module String)) ~f:(fun t_vars (n, ts) -> type_vars n ts t_vars)
   |> ignore
 
-let type_rule s = function
-  | SRule (label, rule, rule_type, rule_constrs) -> begin
+let type_rule s pos = function
+  | SRule (_, label, rule, rule_type, rule_constrs) -> begin
       let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in
       let labels = label0 :: (collect_labels s) in
       let s, rule, fs = 
@@ -149,17 +168,17 @@ let type_rule s = function
         | Constitutive (f1, f2) ->
            s, rule, List.concat [f1; f2]
       in
-      type_formulas fs s;
+      type_formulas fs s pos;
       add_tstmt (TSRule (labels, rule, rule_type, rule_constrs)) s
     end  
   | _ -> assert false
 
 let type_stmt s = function
-  | SImport (idents, star) -> add_tstmt (TSImport (idents, star)) s
-  | SSection (section_kind, label, _) -> set_labels section_kind label s
-  | SRule _ as rule -> type_rule s rule
-  | SEvent (name, args, pol, ds) -> add_tevent name args pol ds s
-  | SType (name, typ) -> add_talias name typ s
+  | SImport (_, idents, star) -> add_tstmt (TSImport (idents, star)) s
+  | SSection (_, section_kind, label, _) -> set_labels section_kind label s
+  | SRule (pos, _, _, _, _) as rule -> type_rule s pos rule
+  | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
+  | SType (pos, name, typ) -> add_talias name typ s pos
 
 let do_type tprog =
   let s = List.fold_left tprog.stmts ~init:empty ~f:type_stmt in

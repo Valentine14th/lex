@@ -6,7 +6,7 @@ type typ = TString | TInt
 
 type pol = TCau | TSup | TObs | TCauSup | TInternal
 
-type section_kind = Chapter | Article | Paragraph | Point
+type section_kind = Law | Title | Chapter | Article | Paragraph | Point | Subpoint
 
 type rule =
   | Obligation   of Formula.t list * Formula.t list
@@ -21,12 +21,11 @@ type rule_constr =
   | Causing     of ident list
 
 type stmt =
-  | SImport    of string list * bool
-  | SSection   of section_kind * string * string
-  (* | SEvent     of ident * (ident * typ) list * pol *)
-  | SRule      of string option * rule * rule_type * rule_constr list
-  | SEvent     of ident * (ident * ident) list * pol * string option
-  | SType      of ident * typ
+  | SImport    of Lexing.position * string list * bool (* location points to beginning of "import" keyword *)
+  | SSection   of Lexing.position * section_kind * string * string (* location points to beginning of section label *)
+  | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list (* location points to the beginning of the "rule" keyword *)
+  | SEvent     of Lexing.position * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
+  | SType      of Lexing.position * ident * typ (* location points to beginning of type identifier *)
 
 type signature = ident * (ident * typ) list
 
@@ -57,10 +56,13 @@ let string_of_typed_idents (name, typ) =
   Printf.sprintf "%s : %s" name (string_of_typ typ)
 
 let string_of_section_kind = function
+  | Law -> "law"
+  | Title -> "title"
   | Chapter -> "chapter"
   | Article -> "article"
   | Paragraph -> "paragraph"
   | Point -> "point"
+  | Subpoint -> "subpoint"
 
 let string_of_rule_type = function
   | Vanilla -> ""
@@ -100,7 +102,7 @@ let string_of_rule i rule =
   | Exception (f, ident) -> string_of_exc_rule f ident
 
 let string_of_args args i = 
-    let string_of_arg (name, typ_alias) = 
+    let string_of_arg (_, name, typ_alias) = 
       Printf.sprintf "%s%s : %s" (Etc.tabs (i+1)) name typ_alias
     in
     String.concat ~sep:"\n" (List.map args ~f:string_of_arg)
@@ -112,23 +114,17 @@ let make_doc_string ds i =
 
 let string_of_stmt ?(i=0) =
   function
-  | SImport (idents, star) ->
+  | SImport (_, idents, star) ->
      Printf.sprintf "import %s%s"
        (String.concat ~sep:"." idents)
        (if star then ".*" else "")
-  | SSection (section_kind, label, title) ->
+  | SSection (_, section_kind, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"
        (Etc.tabs i)
        (string_of_section_kind section_kind)
        label
        (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
-  (* | SEvent (name, typed_idents, pol) ->
-     Printf.sprintf "%sevent %s (%s) %s"
-       (Etc.tabs i)
-       name
-       (String.concat ~sep:", " (List.map typed_idents ~f:string_of_typed_idents))
-       (string_of_pol pol) *)
-  | SRule (label, rule, rule_type, rule_constrs) ->
+  | SRule (_, label, rule, rule_type, rule_constrs) ->
      Printf.sprintf "%srule%s\n%s\n%s%s%s"
        (Etc.tabs i)
        (Option.value_map label ~default:"" ~f:(fun label -> " " ^ label))
@@ -139,7 +135,7 @@ let string_of_stmt ?(i=0) =
           ""
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
-  | SEvent (name, typed_args, pol, doc_string) ->
+  | SEvent (_, name, typed_args, pol, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
@@ -151,7 +147,7 @@ let string_of_stmt ?(i=0) =
           name
           description
           (string_of_args typed_args i)
-  | SType (name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | SType (_, name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
 
 let string_of_signature signature =
   match signature with

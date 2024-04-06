@@ -4,15 +4,17 @@
 %}
 
 %token EOF
-%token <string> IDENT
+%token <Lexing.position * string> IDENT
 %token <int> INT
 %token <string> STRING
 %token LPA RPA COM COL STAR
-%token IMPORT EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TENFORCEABLE
+%token <Lexing.position> IMPORT
+%token EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TENFORCEABLE
 %token IS TTYPE
 %token <string> DOCSTRING
-%token CHAPTER ARTICLE PARAGRAPH POINT
-%token RULE WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
+%token <Lexing.position> LAW TITLE CHAPTER ARTICLE PARAGRAPH POINT SUBPOINT
+%token <Lexing.position> RULE
+%token WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
 %token CAUSING SUPPRESSING
 
 %token DOT
@@ -56,23 +58,26 @@ prog: stmts {$1}
 stmts: list(stmt) EOF { { stmts = $1 } }
 
 stmt:
-  | IMPORT import                        { SImport (fst $2, snd $2) }
-  | section_type STRING                  { SSection ($1, $2, "") }
-  | section_type STRING COL STRING       { SSection ($1, $2, $4) }
-  | TTYPE IDENT IS typ                   { SType ($2, $4) }
-  | event_def                            { $1 }
-  | srule                                { $1 }
+  | IMPORT import                          { SImport ($1, fst $2, snd $2) }
+  | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, "") }
+  | section_kind_and_pos STRING COL STRING { SSection (snd $1, fst $1, $2, $4) }
+  | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
+  | event_def                              { $1 }
+  | srule                                  { $1 }
 
 import:
-  | IDENT            { [$1], false }
-  | IDENT DOT STAR   { [$1], true }
-  | IDENT DOT import { let (a, b) = $3 in ($1::a, b) }
+  | IDENT            { [snd $1], false }
+  | IDENT DOT STAR   { [snd $1], true }
+  | IDENT DOT import { let (a, b) = $3 in ((snd $1)::a, b) }
 
-section_type:
-  | CHAPTER   { Chapter }
-  | ARTICLE   { Article }
-  | PARAGRAPH { Paragraph }
-  | POINT     { Point }
+section_kind_and_pos:
+  | LAW       { Law, $1 }
+  | TITLE     { Title, $1 }
+  | CHAPTER   { Chapter, $1 }
+  | ARTICLE   { Article, $1 }
+  | PARAGRAPH { Paragraph, $1 }
+  | POINT     { Point, $1 }
+  | SUBPOINT  { Subpoint, $1 }
                       
 rule_type:
   | TENFORCEABLE { Enforceable }
@@ -97,29 +102,32 @@ rule:
   | WHENEVER nonempty_list(e) CONSTITUTE nonempty_list(e)  { Constitutive ($2, $4) }
   | WHENEVER nonempty_list(e) EXCEPT STRING                { Exception ($2, $4) }
 
+ident:
+  | IDENT { snd $1 }
+
 rule_constr:
-  | CAUSING list(IDENT)     { Causing $2 }
-  | SUPPRESSING list(IDENT) { Suppressing $2 }
+  | CAUSING list(ident)     { Causing $2 }
+  | SUPPRESSING list(ident) { Suppressing $2 }
 
 rule_constrs:
   | separated_list(COM, rule_constr) { $1 }
 
 srule:
-  | RULE rule rule_type rule_constrs        { SRule (None, $2, $3, $4) }
-  | RULE STRING rule rule_type rule_constrs { SRule (Some $2, $3, $4, $5) }
+  | RULE rule rule_type rule_constrs        { SRule ($1, None, $2, $3, $4) }
+  | RULE STRING rule rule_type rule_constrs { SRule ($1, Some $2, $3, $4, $5) }
 
 event_def:
-  | pol EVENT IDENT list(arg) { SEvent ($3, $4, $1, None) }
-  | pol EVENT IDENT DOCSTRING list(arg) { SEvent ($3, $5, $1, Some $4) }
+  | pol EVENT IDENT list(arg) { SEvent (fst $3, snd $3, $4, $1, None) }
+  | pol EVENT IDENT DOCSTRING list(arg) { SEvent (fst $3, snd $3, $5, $1, Some $4) }
 
 arg:
-  | IDENT COL IDENT { ($1, $3) }
+  | IDENT COL IDENT { (fst $1, snd $1, snd $3) }
 
 e:
 | LPA e RPA                            { $2 }
 | TRUE                                 { tt }
 | FALSE                                { ff }
-| IDENT EQCONST const                  { eqconst $1 (Term.unconst $3)}
+| ident EQCONST const                  { eqconst $1 (Term.unconst $3)}
 | NEG e                                { neg $2 }
 | PREV INTERVAL e                      { prev $2 $3 }
 | PREV e                               { prev Interval.full $2 }
@@ -159,18 +167,18 @@ e:
 | e RELEASE e                          { release N Interval.full $1 $3 }
 | EXISTS vars DOT e %prec EXISTS       { List.fold_right exists (List.tl $2) (exists (List.hd $2) $4) }
 | FORALL vars DOT e %prec FORALL       { List.fold_right forall (List.tl $2) (forall (List.hd $2) $4) }
-| IDENT LPA terms RPA                  { predicate $1 $3 }
+| IDENT LPA terms RPA                  { predicate (snd $1) $3 }
 | e COL ty                             { type_ $1 $3 }
 
 side:
-| COL IDENT                            { Side.of_string $2 }
+| COL IDENT                            { Side.of_string (snd $2) }
 
 sides:
-| COL IDENT COM IDENT                  { (Side.of_string $2, Side.of_string $4) }
+| COL IDENT COM IDENT                  { (Side.of_string (snd $2), Side.of_string (snd $4)) }
 
 term:
 | const                                { $1 }
-| IDENT                                { Term.Var $1 }
+| IDENT                                { Term.Var (snd $1) }
 
 const:
 | INT                                  { Term.Const (Int $1) }
@@ -180,7 +188,7 @@ terms:
 | trms=separated_list(COM, term)      { trms }
 
 vars:
-| vrs=separated_nonempty_list (COM, IDENT) { vrs }
+| vrs=separated_nonempty_list (COM, ident) { vrs }
 
 ty:
 | TCAUSABLE                            { Cau }

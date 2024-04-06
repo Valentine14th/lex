@@ -34,7 +34,7 @@ let compile_trule tprog =
 let compile_events events aliases =
   let event_list = Map.fold events ~f:(fun ~key:key ~data:value acc -> (key, value) :: acc) ~init:[] in
   let compile_event (name, (args, pol, _)) =
-    let type_args (name, typ_alias) =
+    let type_args (_, name, typ_alias) =
       let typ = Map.find_exn aliases typ_alias in
       (name, typ)
     in
