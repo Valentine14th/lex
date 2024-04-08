@@ -101,8 +101,6 @@ let type_check_constant c t = match (c, t) with
 (* TODO: forward the error further up in the compilation process
          such that it can be reported together with file name,
          and location in file *)
-let type_error msg pos = Printf.eprintf "Type error at %s: %s\n"
-                            (Util.string_of_pos pos) msg
 
 let string_of_const = function
   | Dom.Int i -> string_of_int i
@@ -123,27 +121,21 @@ let type_formulas fs s pos =
   let type_var (_, v, t_alias) typed_vars =
     let t = match Map.find s.tprog.taliases t_alias with
       | Some typ -> typ
-      | None ->
-        type_error ("Type alias " ^ t_alias ^ " is undefined") pos;
-        exit (-1)
+      | None -> Util.type_error ("Type alias " ^ t_alias ^ " is undefined") pos
     in
     match v with
     | Formula.Term.Var x -> begin match Map.find typed_vars x with
       | Some (a', t') ->
         begin match (compare_aliases (t_alias, t) (a', t')) with
           | true -> typed_vars
-          | false ->
-            type_error ("Variable " ^ x ^ " has type \"" ^ a' ^ ":" ^ (string_of_typ t') ^ "\" but was expected to have type \"" ^ t_alias ^ ":" ^ (string_of_typ t)) pos;
-            exit (-1)
+          | false -> Util.type_error ("Variable " ^ x ^ " has type \"" ^ a' ^ ":" ^ (string_of_typ t') ^ "\" but was expected to have type \"" ^ t_alias ^ ":" ^ (string_of_typ t)) pos
         end
       | None -> Map.add_exn typed_vars ~key:x ~data:(t_alias, t)
       end
     | Const c ->
       begin match type_check_constant c t with
         | true -> typed_vars
-        | false ->
-          type_error ("Constant " ^ (string_of_const c) ^ " has type \"" ^ (string_of_typ (typ_of_const c)) ^ "\" but expected \"" ^ (string_of_typ t)) pos;
-          exit (-1)
+        | false -> Util.type_error ("Constant " ^ (string_of_const c) ^ " has type \"" ^ (string_of_typ (typ_of_const c)) ^ "\" but expected \"" ^ (string_of_typ t)) pos
     end
   in
   let type_vars event_name vars t_vars =
@@ -151,15 +143,11 @@ let type_formulas fs s pos =
       match Map.find s.tprog.tevents event_name with
         | Some (args, _, _) ->
           List.fold2 args vars ~init:t_vars ~f:(fun t_vars (pos, _, type_alias) v -> type_var (pos, v, type_alias) t_vars) (* list of triples with (variable name, type alias (according to position as argument), actual type of alias)*)
-        | None ->
-          type_error ("Event \"" ^ event_name ^ "\" is undefined") pos;
-          exit (-1)
+        | None -> Util.type_error ("Event \"" ^ event_name ^ "\" is undefined") pos
       in
       match t_vars' with
         | Ok t_vars'' -> t_vars''
-        | Unequal_lengths ->
-          type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"") pos;
-          exit (-1)
+        | Unequal_lengths -> Util.type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"") pos
   in
   List.fold_left predicates ~init:(Map.empty (module String)) ~f:(fun t_vars (n, ts) -> type_vars n ts t_vars)
   |> ignore

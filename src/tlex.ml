@@ -30,28 +30,23 @@ let tempty =
 
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
+
 let add_talias name typ tprog pos =
   (* TODO: allow for overwriting/reusing existing type names *)
-  let tprog_with_alias =
-    try
-      { tprog with taliases = Map.add_exn tprog.taliases ~key:name ~data:typ }
-    with _ ->
-      eprintf "Error at %s: type alias %s already exists\n" (Util.string_of_pos pos) name;
-      exit (-1)
+  let aliases =
+    try Map.add_exn tprog.taliases ~key:name ~data:typ 
+    with _ -> Util.type_error (Printf.sprintf "type alias %s already exists" name) pos
   in
-  add_tstmt (TSType (name, typ)) tprog_with_alias
+  { tprog with taliases = aliases; tstmts = TSType (name, typ)::tprog.tstmts }
 
 let add_tevent name args pol ds tprog pos =
   let event = (args, pol, ds) in
   (* TODO: allow for overwriting/reusing event names *)
-  let tprog_with_event = 
-    try
-      { tprog with tevents = Map.add_exn tprog.tevents ~key:name ~data:event }
-    with _ ->
-      eprintf "Error at %s: event %s already exists\n" (Util.string_of_pos pos) name;
-      exit (-1)
+  let events =
+    try Map.add_exn tprog.tevents ~key:name ~data:event
+    with _ -> Util.type_error (Printf.sprintf "event %s already exists" name) pos
   in
-  add_tstmt (TSEvent (name, args, pol, ds)) tprog_with_event
+  { tprog with tevents = events; tstmts = TSEvent (name, args, pol, ds)::tprog.tstmts}
 
 let is_trule = function
   | TSRule _ -> true
