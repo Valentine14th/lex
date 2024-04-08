@@ -20,8 +20,6 @@ let loop filename () =
   let lexbuf = Lexing.from_channel inx in
   lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
   let prog = parse_with_error lexbuf in (* program parsed without type information *)
-  (* TOOD: error reporting with lexbuf positions for type checking
-           IDEA: keep position information together with statement *)
   let tprog = Typing.do_type prog in (* type check and add type information to program *)
   Lex.print_prog prog;
   print_endline "#################\n";
