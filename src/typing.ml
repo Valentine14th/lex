@@ -32,11 +32,11 @@ module Labels = struct
   let set section_kind label l =
     match section_kind with
     | Law       -> { empty with law       = Some label }
-    | Title     -> { l     with title     = Some label; chapter = None; section = None; article = None; paragraph = None; point = None; subpoint = None}
-    | Chapter   -> { l     with chapter   = Some label; section = None; article = None; paragraph = None; point = None; subpoint = None}
-    | Section   -> { l     with section   = Some label; article = None; paragraph = None; point = None; subpoint = None}
-    | Article   -> { l     with article   = Some label; paragraph = None; point = None }
-    | Paragraph -> { l     with paragraph = Some label; point = None; subpoint = None }
+    | Title     -> { l     with title     = Some label; subpoint = None; point = None; paragraph = None; article = None; section = None; chapter = None }
+    | Chapter   -> { l     with chapter   = Some label; subpoint = None; point = None; paragraph = None; article = None; section = None }
+    | Section   -> { l     with section   = Some label; subpoint = None; point = None; paragraph = None; article = None}
+    | Article   -> { l     with article   = Some label; subpoint = None; point = None; paragraph = None }
+    | Paragraph -> { l     with paragraph = Some label; subpoint = None; point = None }
     | Point     -> { l     with point     = Some label; subpoint = None}
     | Subpoint  -> { l     with subpoint  = Some label }
 
