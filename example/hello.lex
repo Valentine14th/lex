@@ -2,7 +2,6 @@ import prOnto.*
 import dapreco.*
 import rioOnto.*
 
-
 type processingid is int
 type processorid is int
 type dataid is int
@@ -13,18 +12,17 @@ type id is int # only a placeholder such that every argument has a type
 # causable event
 # internal event
 suppressable event PersonalDataProcessing
-    """
-    {x} is processing personal data {z} as part
-    of processing operation {ep}
-    """
+"""
+{x} is processing personal data {z} as part
+of processing operation {ep}
+"""
     ep: processingid
     x: processorid
     z: dataid
 
 observable event nominates
-    # """
-    # TODO: what does "nominates" model?
-    # """
+ """
+ """
     # TODO: update types according to intended meaning
     #       of the arguments
     edp: processorid
@@ -32,43 +30,41 @@ observable event nominates
     x: processorid
 
 observable event PersonalData
-    # """
-    # TODO
-    # """
+"""
+"""
     # TODO: update types according to intended meaning
     #       of the arguments
     z: dataid
     w: id # TODO: what is {w} meant to be?
 
 internal event lawfulness
-    """
-    processing {ep} is lawful
-    """
+"""
+processing {ep} is lawful
+"""
     ep: processingid
 
 internal event fairness
-    """
-    processing {ep} is fair
-    """
+"""
+processing {ep} is fair
+"""
     ep: processingid
 
 internal event transparency
-    """
-    processing {ep} is transparent
-    """
+"""
+processing {ep} is transparent
+"""
     ep: processingid
 
 observable event isBasedOn
-    """
-    processing {ep} is based on {epu}
-    """
+"""
+processing {ep} is based on {epu}
+"""
     ep: processingid
     epu: id
 
 observable event GiveConsent
-    # """
-    # TODO
-    # """
+"""
+"""
     ehc: id
     w: id
     c: id
@@ -87,8 +83,7 @@ observable event isMinor
 article "5"
 paragraph "5(1)"
 point "5(1)(a)"
-rule
-    whenever
+    rule whenever
         PersonalDataProcessing(ep, x, z)
         nominates(edp, y, x) 
         PersonalData(z, w)
@@ -97,7 +92,7 @@ rule
         fairness(ep)
         transparency(ep)
 enforceable suppressing PersonalDataProcessing 
-                
+
 article "6"
 paragraph "6(1)"
 point "6(1)(a)"
