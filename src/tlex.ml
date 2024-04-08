@@ -56,11 +56,3 @@ let add_tevent name args pol ds tprog pos =
 let is_trule = function
   | TSRule _ -> true
   | _ -> false
-
-let is_tevent_def = function
-  | TSEvent _ -> true
-  | _ -> false
-
-let is_ttyp_alias = function
-  | TSType _ -> true
-  | _ -> false
