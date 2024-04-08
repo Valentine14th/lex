@@ -40,6 +40,7 @@ rule read =
   | "law"          { LAW lexbuf.lex_start_p }
   | "title"        { TITLE lexbuf.lex_start_p }
   | "chapter"      { CHAPTER lexbuf.lex_start_p }
+  | "section"      { SECTION lexbuf.lex_start_p }
   | "article"      { ARTICLE lexbuf.lex_start_p }
   | "paragraph"    { PARAGRAPH lexbuf.lex_start_p }
   | "point"        { POINT lexbuf.lex_start_p }

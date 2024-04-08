@@ -6,7 +6,7 @@ type typ = TString | TInt
 
 type pol = TCau | TSup | TObs | TCauSup | TInternal
 
-type section_kind = Law | Title | Chapter | Article | Paragraph | Point | Subpoint
+type section_kind = Law | Title | Chapter | Section | Article | Paragraph | Point | Subpoint
 
 type rule =
   | Obligation   of Formula.t list * Formula.t list
@@ -59,6 +59,7 @@ let string_of_section_kind = function
   | Law -> "law"
   | Title -> "title"
   | Chapter -> "chapter"
+  | Section -> "section"
   | Article -> "article"
   | Paragraph -> "paragraph"
   | Point -> "point"

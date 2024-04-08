@@ -12,7 +12,7 @@
 %token EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TENFORCEABLE
 %token IS TTYPE
 %token <string> DOCSTRING
-%token <Lexing.position> LAW TITLE CHAPTER ARTICLE PARAGRAPH POINT SUBPOINT
+%token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
 %token <Lexing.position> RULE
 %token WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
 %token CAUSING SUPPRESSING
@@ -74,6 +74,7 @@ section_kind_and_pos:
   | LAW       { Law, $1 }
   | TITLE     { Title, $1 }
   | CHAPTER   { Chapter, $1 }
+  | SECTION   { Section, $1 }
   | ARTICLE   { Article, $1 }
   | PARAGRAPH { Paragraph, $1 }
   | POINT     { Point, $1 }

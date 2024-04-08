@@ -10,6 +10,7 @@ module Labels = struct
       law: ident option;
       title: ident option;
       chapter: ident option;
+      section: ident option;
       article: ident option;
       paragraph: ident option;
       point: ident option;
@@ -21,6 +22,7 @@ module Labels = struct
       law = None;
       title = None;
       chapter = None;
+      section = None;
       article = None;
       paragraph = None;
       point = None;
@@ -30,8 +32,9 @@ module Labels = struct
   let set section_kind label l =
     match section_kind with
     | Law       -> { empty with law       = Some label }
-    | Title     -> { l     with title     = Some label; chapter = None; article = None; paragraph = None; point = None; subpoint = None}
-    | Chapter   -> { l     with chapter   = Some label; article = None; paragraph = None; point = None; subpoint = None}
+    | Title     -> { l     with title     = Some label; chapter = None; section = None; article = None; paragraph = None; point = None; subpoint = None}
+    | Chapter   -> { l     with chapter   = Some label; section = None; article = None; paragraph = None; point = None; subpoint = None}
+    | Section   -> { l     with section   = Some label; article = None; paragraph = None; point = None; subpoint = None}
     | Article   -> { l     with article   = Some label; paragraph = None; point = None }
     | Paragraph -> { l     with paragraph = Some label; point = None; subpoint = None }
     | Point     -> { l     with point     = Some label; subpoint = None}
@@ -186,6 +189,7 @@ let do_type tprog =
     tstmts = List.rev s.tprog.tstmts;
     taliases = s.tprog.taliases;
     tevents = s.tprog.tevents;
+    rule_variables = s.tprog.rule_variables;
     exceptions = s.exceptions
   }
 

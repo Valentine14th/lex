@@ -15,6 +15,7 @@ type tprog =
     tstmts: tstmt list;
     taliases: (ident, typ, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
+    rule_variables: (string, (ident * ident * typ), Base.String.comparator_witness) Map.t; (* maps section labels to variables used in section *)
     exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t
   }
 
@@ -23,6 +24,7 @@ let tempty =
     tstmts = [];
     taliases = Map.empty (module String);
     tevents = Map.empty (module String);
+    rule_variables = Map.empty (module String); 
     exceptions = Map.empty (module String)
   }
 
