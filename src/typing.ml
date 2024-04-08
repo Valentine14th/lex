@@ -41,7 +41,17 @@ module Labels = struct
     | Subpoint  -> { l     with subpoint  = Some label }
 
   let collect l =
-    List.filter_map [l.chapter; l.article; l.paragraph; l.point] ~f:(fun x -> x)
+    let ls = [
+      l.law;
+      l.title;
+      l.chapter;
+      l.section;
+      l.article;
+      l.paragraph;
+      l.point;
+      l.subpoint
+    ] in
+    List.filter_map ls ~f:(fun x -> x)
 
 end
 
