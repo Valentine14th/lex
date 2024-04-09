@@ -41,11 +41,11 @@
 					"name": "keyword.control"
 				},
 				{
-					"match": "\\b(chapter|article|paragraph|point|import|causing|suppressing)\\b",
+					"match": "\\b(law|title|chapter|section|article|paragraph|point|subpoint|import|causing|suppressing)\\b",
 					"name": "keyword.other"
 				},
 				{
-					"match": "\\b(event|rule)\\b",
+					"match": "\\b(type|is|event|rule)\\b",
 					"name": "storage.type"
 				},
 				{
