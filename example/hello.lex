@@ -80,9 +80,11 @@ observable event Purpose
 observable event isMinor
     w: id
 
-article "5"
-paragraph "5(1)"
-point "5(1)(a)"
+law "GDPR"
+chapter "GDPR 2"
+article "GDPR 2 5"
+paragraph "GDPR 2 5(1)"
+point "GDPR 2 5(1)(a)" # labels must currently contain redundant information
     rule whenever
         PersonalDataProcessing(ep, x, z)
         nominates(edp, y, x) 
@@ -93,9 +95,9 @@ point "5(1)(a)"
         transparency(ep)
 enforceable suppressing PersonalDataProcessing 
 
-article "6"
-paragraph "6(1)"
-point "6(1)(a)"
+article "GDPR 2 6"
+paragraph "GDPR 2 6(1)"
+point "GDPR 2 6(1)(a)"
 rule
     whenever 
         PersonalDataProcessing(ep, x, z)
@@ -109,8 +111,8 @@ rule
         lawfulness(ep)
 enforceable causing lawfulness
        
-article "8"
-paragraph "8(1)"
+article "GDPR 2 8"
+paragraph "GDPR 2 8(1)"
 rule 
     whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
-    except "6(1)(a)"
+    except "GDPR 2 6(1)(a)"

@@ -6,17 +6,16 @@ type dataid is int
 # causable event
 # internal event
 suppressable event PersonalDataProcessing
-    """
-    {x} is processing personal data {z} as part
-    of processing operation {ep}
+"""
+{x} is processing personal data {z} as part
+of processing operation {ep}
 
-    @x is processing personal data @z as part of
-    processing operation @ep
-    """
+@x is processing personal data @z as part of
+processing operation @ep
+"""
     ep: processingid
     x: processorid
     z: dataid
 
 causable event EventWithoutParameters
-    # docstring is optional
-    
+# docstring is optional
