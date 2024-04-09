@@ -27,10 +27,6 @@ let compile_trule tprog =
      aux f' rule
   | _ -> assert false
 
-(* TODO: should redefining event names be allowed?
-   if yes, some event name prefixing is needed
-   to ensure events have unique names in the produced
-   signature *)
 let compile_events events aliases =
   let event_list = Map.fold events ~f:(fun ~key:key ~data:value acc -> (key, value) :: acc) ~init:[] in
   let compile_event (name, (args, pol, _)) =
@@ -48,7 +44,7 @@ let pol_to_symbol_string pol =
   | TCau -> "+"
   | TSup -> "-"
   | TCauSup -> "+-"
-  | TInternal -> "+-" (* TODO: is this correct? *)
+  | TInternal -> "+-"
   | TObs -> ""
 
 let string_of_signatures signatures =
