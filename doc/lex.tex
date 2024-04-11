@@ -100,6 +100,8 @@ object logic and $\Models$ is the set of models, such that
 
 \section{Syntax}
 
+\subsection{Modules}
+
 \subsection{Labels}
 
 Labels are used to capture the structure of the law. Their syntax is as follows:
@@ -120,6 +122,49 @@ and (optional) third argument collect the number and header of the corresponding
     \kw{article}~\kw{"}\text{\itshape 2}\kw{"}~\kw{"}\text{\itshape Material scope}\kw{"}
   \end{align*}
 \end{example}
+
+The levels $\kw{law}$, $\kw{article}$, $\kw{paragraph}$, $\kw{point}$, and $\kw{subpoint}$ plain
+a special role in determining the \emph{qualified name} of \Lex{} rules. Rules can only defined
+within articles, which can themselves only defined within laws. The induced uniqueness
+constraints are shown in Table~\ref{tab:uniqueness}. The qualified name of a rule is of the
+form
+$$law~article[\kw{(}paragraph\kw{)}][\kw{(}point\kw{)}][\kw{(}subpoint\kw{)}]~\kw{\#}rule\_id$$
+where additional level numbers placed in brackets can be introduced if intermediate,
+indexed levels are present. Rules introduced within the scope of a given label can
+be referred to using a suffix of their qualified name that omits the part determined by the
+scope. The set of all rules located within the scope of a given label can be referred to using the
+prefix of their qualified name corresponding to that scope, or by a suffix of this prefix,
+if applicable within the current scope.
+
+\begin{example}
+  The set of rules defined in Art. 2, §2 of the GDPR can be referred to as
+  $\kw{"}\text{\itshape GDPR~2(2)}\kw{"}$. Within the GDPR, they can be referred to as just
+  $\kw{"}\text{\itshape 2(2)}\kw{"}$, and within Art. 2, as $\kw{"}\text{\itshape (2)}\kw{"}$.
+  The first of such rules is $\kw{"}\text{\itshape GDPR~2(2)~\#1}\kw{"}$, the second one is
+  $\kw{"}\text{\itshape GDPR~2(2)~\#2}\kw{"}$, etc. The rule IDs $1..k$ can be overwritten
+  by defining explicit rule IDs (see the syntax of rules below).
+\end{example}
+
+\begin{table}
+  \centering
+  \begin{tabular}{llll}
+    \hline
+    Label level & Number unique within & Part of qualified name & Required \\
+    \hline
+    \kw{law} & -- & $\checkmark$ & $\checkmark$ \\
+    \kw{chapter} & \kw{law}\\
+    \kw{section} & \kw{law} \\
+    \kw{article} & \kw{law} & $\checkmark$ & $\checkmark$ \\
+    \kw{paragraph} & \kw{article} & $\checkmark$ \\
+    \kw{point} & \kw{paragraph} & $\checkmark$ \\
+    \kw{subpoint} & \kw{point} & $\checkmark$ \\
+    \hline
+  \end{tabular}
+  \vspace{10pt}
+  \caption{Uniqueness constraints for labels\label{tab:uniqueness}}
+\end{table}
+
+
 
 \subsection{Types}
 
@@ -203,27 +248,60 @@ The pairs of identifiers $ident_{i1}\kw{:} ident_{i2}$ contained in the event de
 
 The general syntax for rule declarations is as follows:
 \begin{align*}
-  rule\_verb ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{constitute} \mid \kw{except}\\
+  rule\_verb ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{prohibit} \mid \kw{constitute} \mid \kw{except} \mid \kw{scope}\\
+  rule\_constr\_verb ::=&~\kw{causing} \mid \kw{suppressing}\\
+  rule\_constr ::=&~rule\_constr\_verb~ident_1~\dots~ident_m\\
   rule\_decl ::=&~\kw{rule}~[string]\\
-                &~[\kw{whenever}~[pre\_opt]\\
+                &~[\kw{fix}\\
+                &\qquad ident_{11}\kw{:} ident_{21}\\
+                &\qquad \dots\\
+                &\qquad ident_{1n}\kw{:} ident_{2n}]\\
+                &~[\kw{whenever}~[patt_1]\\
                 &\qquad [label_{11}\kw{:}]~expr_{11}\\
                 &\qquad \dots\\
-                &\qquad [label_{1k}\kw{:}]~expr_{1k}]\\
-                &~rule\_verb~[post\_opt]\\
+                &\qquad [label_{1{k_1}}\kw{:}]~expr_{1{k_1}}]\\
+                &~rule\_verb~[patt_2]\\
                 &\qquad [label_{21}\kw{:}]~expr_{21}\\
                 &\qquad \dots\\
-                &\qquad [label_{2k}\kw{:}]~expr_{2k}
+                &\qquad [label_{2{k_2}}\kw{:}]~expr_{2{k_2}}\\
+                &[[\kw{transparently}]~\kw{enforceable}]~rule\_constr_1\kw{,}\dots\kw{,}rule\_constr_\ell
 \end{align*}
-In the following we review the syntax of expressions $expr_{ij}$ (Section~\ref{sec:expr}), the available verbs
-(Section~\ref{sec:expr_verb}) and the temporal patterns determined by $pre\_opt$ and $post\_opt$ (Section~\ref{sec:opt}).
+In the following we review the syntax of expressions $expr_{ij}$ (Section~\ref{sec:expr}), the available verbs (Section~\ref{sec:expr-verb}) and the temporal patterns determined by $patt_1$ and $patt_2$ (Section~\ref{sec:opt}).
+
+\subsubsection{Expressions.}
+
+\label{sec:expr}
+
+The syntax of expressions closely follows MFOTL syntax:
+\begin{align*}
+  expr\_itv ::= &~ \kw{[}time\_bound_1\kw{,}(time\_bound_2\mid \kw{*})\kw{]}\\
+  term ::= &~(const \mid ident) [\kw{:} ident]\\
+  pred ::= &~ident\kw{(}term_1\kw{,}\dots\kw{,}term_k\kw{)}\\
+  expr ::= &~ \kw{TRUE} \mid \kw{FALSE} \mid pred \mid special\_pred \\
+  \mid &~ \kw{NOT}~expr \mid expr_1~(\kw{AND} \mid \kw{OR} \mid \kw{IMPLIES} \mid \kw{EQUIV})~expr_2 \\
+  \mid &~ (\kw{EXISTS} \mid \kw{FORALL})~expr \\
+  \mid &~(\kw{ONCE} \mid \kw{EVENTUALLY} \mid \kw{ALWAYS\_PAST} \mid \kw{ALWAYS\_FUTURE})~[expr\_itv]~expr\\
+  \mid &~expr_1~(\kw{SINCE} \mid \kw{UNTIL} \mid \kw{TRIGGER} \mid \kw{RELEASE})~[expr\_itv]~expr_2\\
+  special\_pred ::= &~ \kw{obliged}(pred) \mid \kw{permitted}(pred) \mid \kw{prohibited}(pred) \\
+  \mid&~\kw{applicable}(string) \mid \kw{violated}(string)
+\end{align*}
+
+\subsubsection{Verbs.}
+
+\label{sec:expr-verb}
 
 \subsubsection{Temporal patterns.}
 
 \label{sec:opt}
 
-Except for $\kw{except}$ rules, every \Lex{} rule declaration represents a statement of the form
-$$\kw{ALWAYS} \left[pre(expr_{11}~\kw{AND}~\ldots~\kw{AND}~expr_{1k})~\kw{IMPLIES}~post(expr_{21}~\kw{AND}~\ldots~\kw{AND}~expr_{2k})\right]$$
-where $pre$ and $post$ are determined by $pre\_opt$ and $post\_opt$, respectively. These options use the following
+Except for $\kw{except}$ and $\kw{scope}$ rules,
+every \Lex{} rule declaration represents a statement of the form
+\begin{align*}
+  &\kw{FORALL}~ident_{11},\dots,ident_{1n}. \\
+  &\quad\kw{ALWAYS} \left(form_1(expr_{11}~\kw{AND}~\ldots~\kw{AND}~expr_{1k})\rught.\\
+  &\qquad \left\kw{IMPLIES}~form_2(expr_{21}~\kw{AND}~\ldots~\kw{AND}~expr_{2k})\right)
+\end{align*}
+where $form_1$ and $form_2$ are determined by $patt_1$ and $patt_2$, respectively. These options use the following
 grammars for time and time intervals:
 \begin{align*}
   time\_unit ::= &~\kw{y} \mid \kw{d} \mid \kw{h} \mid \kw{s} \mid \kw{ms} \\
@@ -231,22 +309,53 @@ grammars for time and time intervals:
   time\_interval ::= &~ \kw{within}~time\_bound \mid \kw{before}~time\_bound \mid \kw{after}~time\_bound
 \end{align*}
 
-Table~\ref{tab:patterns} lists available $(pre\_opt, post\_opt)$ pairs as well as the corresponding $pre$ and $post$ functions.
+Table~\ref{tab:patterns} lists available $patt_i$ and the corresponding $form_i$ functions, as
+well as the conversion of $time\_interval$ expressions into intervals:
 
 \begin{table}
   \centering
-\begin{tabular}{lllll}
-  Pattern & $pre\_opt$ & $post\_opt$ & $pre(\phi)$ & $post(\psi)$ \\
-  \hline
-          & -- & -- & $\phi$ & $\psi$\\
-          & -- & $\kw{eventually}~[time\_interval]$ & $\phi$ & $\kw{EVENTUALLY}_I~\psi$\\
-          & -- & $\kw{always}~[time\_interval]$ & $\phi$ & $\kw{ALWAYS}_I~\psi$\\
-  TBC....
+  \begin{tabular}{lll}
+    \hline
+    $itv$ & $I$ & Restriction \\
+    \hline
+    -- & $[0,\infty)$\\
+    $\kw{within}~b$ & $[0,b]$ \\
+    $\kw{before}~a$ & $[a,\infty)$ & Only past patterns \\
+    $\kw{strictly before}~a$ & $(a,\infty)$ & Only past patterns \\
+    $\kw{after}~a$ & $[a,\infty)$ & Only future patterns \\
+    $\kw{strictly after}~a$ & $(a,\infty)$ & Only future patterns \\
+    $\kw{between}~a~\kw{and}~b$ & $[a,b]$ \\
+    $\kw{strictly between}~a~\kw{and}~b$ & $(a,b)$ \\
+    $\kw{between}~a~\kw{and}~b~\kw{excluded}$ & $[a,b)$ \\
+    $\kw{between}~a~\kw{excluded and}~b$ & $(a,b]$ \\
+  \end{tabular}\\[10pt]
+    \begin{tabular}{llll}
+    \hline
+  Description & $patt_i$ & $form_i(\phi)$ & Type \\
+    \hline
+              & -- & $\phi$ & Present\\
+              & $\kw{eventually}~[itv]$ & $\kw{EVENTUALLY}_I~\phi$ & Future\\
+              & $\kw{eventually delaying if}~\psi~[itv]$ & $\psi~\kw{UNTIL}_I~\phi$ & Future\\
+              & $\kw{always in the future}~[itv]$ & $\kw{ALWAYS}_I~\psi$ & Future\\
+              & $\kw{once}~[itv]$ & $\kw{ONCE}_I~\psi$ & Past\\
+              & $\kw{always in the past}~[itv]$ & $\kw{HISTORICALLY}_I~\psi$ & Past\\
 \end{tabular}\\[10pt]
 \caption{Available temporal patterns for \Lex{} rules\label{tab:patterns}}
 \end{table}
 
+\section{Compilation}
+
+\subsection{To MFOTL}
+
+\subsection{To LegalRuleML}
+
+% LegalRuleML: Design Principles and Foundations
+
+\subsection{To documentation}
+
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
+
+% todo: more complex terms? access databases? reason about time? complex data structures
 
 {%\setlength\bibsep{2pt}
 \small
