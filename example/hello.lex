@@ -87,7 +87,13 @@ chapter "2" "Principles"
 article "5" "Principles relating to processing of personal data"
 paragraph "1"
 point "a" # labels must currently contain redundant information
-    rule whenever
+    rule
+"""
+1. Personal data shall be: [...]
+(a) processed lawfully, fairly and in a transparent manner in relation to the
+ data subject (‘lawfulness, fairness and transparency’);
+"""
+    whenever
         PersonalDataProcessing(ep, x, z)
     oblige
         lawfulness(ep)

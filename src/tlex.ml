@@ -4,7 +4,7 @@ open Lex
 type tstmt =
   | TSImport  of string list * bool
   | TSSection  of section_kind * string * string
-  | TSRule    of string list * rule * rule_type * rule_constr list
+  | TSRule    of string list * rule * rule_type * rule_constr list * string option
   | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
 
@@ -64,8 +64,13 @@ let string_of_tstmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
-  | TSRule (labels, rule, rule_type, rule_constrs) ->
-     Printf.sprintf "%srule%s\n%s\n%s%s%s"
+  | TSRule (labels, rule, rule_type, rule_constrs, doc_string) ->
+     let description =
+          match doc_string with
+          | Some s -> "\n" ^ make_doc_string s i
+          | None -> ""
+      in
+     Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
        (Etc.tabs i)
        (String.concat ~sep:" " labels)
        (string_of_rule (i+1) rule)
@@ -75,6 +80,7 @@ let string_of_tstmt ?(i=0) =
           ""
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
+       description
   | TSEvent (name, typed_args, pol, doc_string) ->
       let description =
           match doc_string with

@@ -21,7 +21,7 @@ let compile_trule tprog =
     | _ -> assert false
   in
   function
-  | TSRule (labels, rule, _, _) ->
+  | TSRule (labels, rule, _, _, _) ->
      let exceptions = List.concat (List.map labels ~f:(Map.find_multi tprog.exceptions)) in
      let f' = List.map exceptions ~f:neg in
      aux f' rule

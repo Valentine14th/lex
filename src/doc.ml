@@ -80,11 +80,19 @@ let html_of_rule_constrs rule_constrs =
       String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
     )
 
-let html_of_rule_reading tprog rule =
-  div "lex-rule-reading" (
-      div "lex-reading-header" "Reading" 
-      ^ div "lex-reading-body" (Reading.reading_of_rule tprog rule)
-    )
+let html_of_rule_reading tprog rule = function
+  | None -> 
+     div "lex-rule-reading" (
+         div "lex-reading-header" "Reading" 
+         ^ div "lex-reading-body" (Reading.reading_of_rule tprog rule)
+       )
+  | Some doc_string ->
+     div "lex-rule-reading" (
+         div "lex-reading-header" "Reading"
+         ^ ul "list-group list-group-flush" (
+               li "list-group-item lex-reading-body" (Reading.reading_of_rule tprog rule)
+               ^ li "list-group-item lex-docstring-body" doc_string)
+       )
 
 let html_of_doc_string s =
   div "lex-event-reading" (
@@ -125,7 +133,7 @@ let html_of_tstmt tprog =
              )
            )
        )
-  | TSRule (_, rule, rule_type, rule_constrs) ->
+  | TSRule (_, rule, rule_type, rule_constrs, doc_string) ->
      div "lex-stmt-rule" (
          two_column (
              kw "rule"
@@ -138,7 +146,7 @@ let html_of_tstmt tprog =
                  html_of_rule_constrs rule_constrs
              )
            )
-           (html_of_rule_reading tprog rule)
+           (html_of_rule_reading tprog rule doc_string)
        )
   | TSEvent (name, typed_args, pol, doc_string) ->
      let html_of_event =

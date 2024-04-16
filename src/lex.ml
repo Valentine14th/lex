@@ -23,7 +23,7 @@ type rule_constr =
 type stmt =
   | SImport    of Lexing.position * string list * bool (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string (* location points to beginning of section label *)
-  | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list (* location points to the beginning of the "rule" keyword *)
+  | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
   | SType      of Lexing.position * ident * typ (* location points to beginning of type identifier *)
 
@@ -125,8 +125,13 @@ let string_of_stmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
-  | SRule (_, label, rule, rule_type, rule_constrs) ->
-     Printf.sprintf "%srule%s\n%s\n%s%s%s"
+  | SRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
+     let description =
+       match doc_string with
+       | Some s -> "\n" ^ make_doc_string s i
+       | None -> ""
+      in
+     Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
        (Etc.tabs i)
        (Option.value_map label ~default:"" ~f:(fun label -> " " ^ label))
        (string_of_rule (i+1) rule)
@@ -136,6 +141,7 @@ let string_of_stmt ?(i=0) =
           ""
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
+       description
   | SEvent (_, name, typed_args, pol, doc_string) ->
       let description =
           match doc_string with
