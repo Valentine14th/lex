@@ -15,19 +15,30 @@ let parse_with_error lexbuf =
     fprintf stderr "%a: syntax error\n" print_position lexbuf;
     exit (-1)
 
-let loop filename () =
+let loop filename mode () =
   let inx = In_channel.create filename in
   let lexbuf = Lexing.from_channel inx in
   lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
   let prog = parse_with_error lexbuf in (* program parsed without type information *)
   let tprog = Typing.do_type prog in (* type check and add type information to program *)
-  Lex.print_prog prog;
-  print_endline "#################\n";
-  Compiler.compile tprog; (* compile correctly typed program *)
-  In_channel.close inx
+  In_channel.close inx;
+  match mode with
+  | None | Some "mfotl" -> begin
+      Lex.print_prog prog;
+      print_endline "#################\n";
+      Compiler.compile tprog; (* compile correctly typed program *)
+    end
+  | Some "doc" -> begin
+      Doc.print filename (filename ^ "_doc.html") tprog
+    end
+  | Some _ -> assert false
+
 
 let () =
   Command.basic_spec ~summary:"Parse Lex"
-    Command.Spec.(empty +> anon ("filename" %: string))
+    Command.Spec.(empty
+                  +> anon ("filename" %: string)
+                  +> flag "-mode" (optional string) ~doc:"mode options: mfotl (default), doc")
     loop
   |> Command_unix.run
+     

@@ -123,8 +123,10 @@ rule_constrs:
   | separated_list(COM, rule_constr) { $1 }
 
 srule:
-  | RULE rule rule_type rule_constrs        { SRule ($1, None, $2, $3, $4) }
-  | RULE STRING rule rule_type rule_constrs { SRule ($1, Some $2, $3, $4, $5) }
+  | RULE DOCSTRING rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, Some $2) }
+  | RULE STRING DOCSTRING rule rule_type rule_constrs { SRule ($1, Some $2, $4, $5, $6, Some $3) }
+  | RULE rule rule_type rule_constrs                  { SRule ($1, None, $2, $3, $4, None) }
+  | RULE STRING rule rule_type rule_constrs           { SRule ($1, Some $2, $3, $4, $5, None) }
 
 event_def:
   | pol EVENT IDENT list(arg) { SEvent (fst $3, snd $3, $4, $1, None) }

@@ -96,6 +96,7 @@ let to_string_BI = function
   | BI (i, j) -> Printf.sprintf "[%d,%d]" i j
 
 let to_string = function
+  | U (UI 0) -> ""
   | U (UI i) -> Printf.sprintf "[%d,∞)" i
   | B i -> Printf.sprintf "%a" (fun _ -> to_string_BI) i
 

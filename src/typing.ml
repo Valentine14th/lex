@@ -104,7 +104,7 @@ let type_formulas fs s pos =
   |> ignore
 
 let type_rule s pos = function
-  | SRule (_, label, rule, rule_type, rule_constrs) -> begin
+  | SRule (_, label, rule, rule_type, rule_constrs, doc_string) -> begin
       let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in
       let labels = label0 :: (collect_labels s) in
       let s, rule, fs = 
@@ -124,14 +124,15 @@ let type_rule s pos = function
            s, rule, List.concat [f1; f2]
       in
       type_formulas fs s pos;
-      add_tstmt (TSRule (labels, rule, rule_type, rule_constrs)) s
+      add_tstmt (TSRule (labels, rule, rule_type, rule_constrs, doc_string)) s
     end  
   | _ -> assert false
 
 let type_stmt s = function
   | SImport (_, idents, star) -> add_tstmt (TSImport (idents, star)) s
-  | SSection (_, section_kind, label, description) -> set_labels section_kind (label, Some description) s
-  | SRule (pos, _, _, _, _) as rule -> type_rule s pos rule
+  | SSection (_, section_kind, label, title) ->
+     add_tstmt (TSSection (section_kind, label, title)) (set_labels section_kind label s)
+  | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
 
