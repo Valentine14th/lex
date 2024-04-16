@@ -13,6 +13,7 @@
 %token IS TTYPE
 %token <string> DOCSTRING
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
+%token <int> LABEL_LEVEL
 %token <Lexing.position> RULE
 %token WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
 %token CAUSING SUPPRESSING
@@ -59,8 +60,8 @@ stmts: list(stmt) EOF { { stmts = $1 } }
 
 stmt:
   | IMPORT import                          { SImport ($1, fst $2, snd $2) }
+  | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, $2, $3) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, "") }
-  | section_kind_and_pos STRING COL STRING { SSection (snd $1, fst $1, $2, $4) }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
   | event_def                              { $1 }
   | srule                                  { $1 }
@@ -71,14 +72,22 @@ import:
   | IDENT DOT import { let (a, b) = $3 in ((snd $1)::a, b) }
 
 section_kind_and_pos:
-  | LAW       { Law, $1 }
-  | TITLE     { Title, $1 }
-  | CHAPTER   { Chapter, $1 }
-  | SECTION   { Section, $1 }
-  | ARTICLE   { Article, $1 }
-  | PARAGRAPH { Paragraph, $1 }
-  | POINT     { Point, $1 }
-  | SUBPOINT  { Subpoint, $1 }
+  | LAW LABEL_LEVEL       { Law $2, $1 }
+  | TITLE LABEL_LEVEL     { Title $2, $1 }
+  | CHAPTER LABEL_LEVEL   { Chapter $2, $1 }
+  | SECTION LABEL_LEVEL   { Section $2, $1 }
+  | ARTICLE LABEL_LEVEL   { Article $2, $1 }
+  | PARAGRAPH LABEL_LEVEL { Paragraph $2, $1 }
+  | POINT LABEL_LEVEL     { Point $2, $1 }
+  | SUBPOINT LABEL_LEVEL  { Subpoint $2, $1 }
+  | LAW                   { Law 0, $1 }
+  | TITLE                 { Title 0, $1 }
+  | CHAPTER               { Chapter 0, $1 }
+  | SECTION               { Section 0, $1 }
+  | ARTICLE               { Article 0, $1 }
+  | PARAGRAPH             { Paragraph 0, $1 }
+  | POINT                 { Point 0, $1 }
+  | SUBPOINT              { Subpoint 0, $1 }
                       
 rule_type:
   | TENFORCEABLE { Enforceable }

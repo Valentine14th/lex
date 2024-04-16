@@ -6,7 +6,15 @@ type typ = TString | TInt
 
 type pol = TCau | TSup | TObs | TCauSup | TInternal
 
-type section_kind = Law | Title | Chapter | Section | Article | Paragraph | Point | Subpoint
+type section_kind =
+  | Law       of int
+  | Title     of int
+  | Chapter   of int
+  | Section   of int
+  | Article   of int
+  | Paragraph of int
+  | Point     of int
+  | Subpoint  of int
 
 type rule =
   | Obligation   of Formula.t list * Formula.t list
@@ -55,15 +63,19 @@ let string_of_pol = function
 let string_of_typed_idents (name, typ) =
   Printf.sprintf "%s : %s" name (string_of_typ typ)
 
+let string_of_label_level = function
+  | 0 -> ""
+  | i -> Printf.sprintf "[%d]" i
+
 let string_of_section_kind = function
-  | Law -> "law"
-  | Title -> "title"
-  | Chapter -> "chapter"
-  | Section -> "section"
-  | Article -> "article"
-  | Paragraph -> "paragraph"
-  | Point -> "point"
-  | Subpoint -> "subpoint"
+  | Law i -> "law" ^ string_of_label_level i
+  | Title i -> "title" ^ string_of_label_level i
+  | Chapter i -> "chapter" ^ string_of_label_level i
+  | Section i -> "section" ^ string_of_label_level i
+  | Article i -> "article" ^ string_of_label_level i
+  | Paragraph i -> "paragraph" ^ string_of_label_level i
+  | Point i -> "point" ^ string_of_label_level i
+  | Subpoint i -> "subpoint" ^ string_of_label_level i
 
 let string_of_rule_type = function
   | Vanilla -> ""

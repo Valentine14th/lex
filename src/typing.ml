@@ -2,70 +2,19 @@ open Core
 
 open Lex
 open Tlex
-
-module Labels = struct
-
-  type t =
-    {
-      law: ident option;
-      title: ident option;
-      chapter: ident option;
-      section: ident option;
-      article: ident option;
-      paragraph: ident option;
-      point: ident option;
-      subpoint: ident option
-    }
-
-  let empty =
-    {
-      law = None;
-      title = None;
-      chapter = None;
-      section = None;
-      article = None;
-      paragraph = None;
-      point = None;
-      subpoint = None
-    }
-
-  let set section_kind label l =
-    match section_kind with
-    | Law       -> { empty with law       = Some label }
-    | Title     -> { l     with title     = Some label; subpoint = None; point = None; paragraph = None; article = None; section = None; chapter = None }
-    | Chapter   -> { l     with chapter   = Some label; subpoint = None; point = None; paragraph = None; article = None; section = None }
-    | Section   -> { l     with section   = Some label; subpoint = None; point = None; paragraph = None; article = None}
-    | Article   -> { l     with article   = Some label; subpoint = None; point = None; paragraph = None }
-    | Paragraph -> { l     with paragraph = Some label; subpoint = None; point = None }
-    | Point     -> { l     with point     = Some label; subpoint = None}
-    | Subpoint  -> { l     with subpoint  = Some label }
-
-  let collect l =
-    let ls = [
-      l.law;
-      l.title;
-      l.chapter;
-      l.section;
-      l.article;
-      l.paragraph;
-      l.point;
-      l.subpoint
-    ] in
-    List.filter_map ls ~f:(fun x -> x)
-
-end
+(* open Label *)
 
 type t =
   {
     tprog: tprog;
-    labels: Labels.t;
+    labels: Label.t;
     exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t
   }
 
 let empty =
   {
     tprog = tempty;
-    labels = Labels.empty;
+    labels = Label.empty;
     exceptions = Map.empty (module String)
   }
 
@@ -82,10 +31,12 @@ let add_exception f ident s =
   { s with exceptions = Map.add_multi s.exceptions ~key:ident ~data:f }
 
 let set_labels section_kind label s =
-  { s with labels = Labels.set section_kind label s.labels }
+  { s with labels = Label.set section_kind label s.labels }
 
 let collect_labels s =
-  Labels.collect s.labels
+  (* Label.collect s.labels *)
+  (* TODO: "create" all labels accepted within scope *)
+  [Label.qualified_name s.labels]
 
 let c = ref 0
 let fresh () = incr c; string_of_int !c
@@ -163,6 +114,9 @@ let type_rule s pos = function
            let vars = Set.elements (Set.union_list (module String) (List.map f ~f:Formula.fv)) in
            let terms = List.map vars ~f:(fun x -> Formula.Term.Var x) in
            let pred = Formula.predicate p_name terms in
+           (* TODO: type check the exception in conjunction with the rule
+                    to which it is an exception *)
+           (* let s' = add_tevent p_name vars Polarity.Positive [] s pos in *)
            add_exception pred ident s, Constitutive (f, [pred]), f
         | Obligation (f1, f2)
         | Permission (f1, f2)
@@ -176,7 +130,7 @@ let type_rule s pos = function
 
 let type_stmt s = function
   | SImport (_, idents, star) -> add_tstmt (TSImport (idents, star)) s
-  | SSection (_, section_kind, label, _) -> set_labels section_kind label s
+  | SSection (_, section_kind, label, description) -> set_labels section_kind (label, Some description) s
   | SRule (pos, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
