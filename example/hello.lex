@@ -120,7 +120,12 @@ Art. 6(1) Processing shall be lawful only if and to the extent that at least one
 enforceable causing lawfulness
        
 article "8" "Conditions applicable to child's consent in relation to information society services"
+article[1] "II" "dummy level to try out sublevels"
+article[2] "A" "dummy level to try out sublevels"
+# article[6] "iv" "dummy level to try out sublevels"
+# article[1] "B" "dummy level to try out sublevels"
 paragraph "1"
 rule 
     whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
-    except "GDPR 2 6(1)(a)"
+    except "GDPR 6(1)(a)"
+    # except "Art. 6(1)(a) GDPR"
