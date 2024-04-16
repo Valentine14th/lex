@@ -31,17 +31,43 @@ let empty =
     subpoint = []
   }
 
-let set section_kind label l =
-  match section_kind with
-  (* | Law 0       -> { empty with law       = [label] } *)
-  | Law i       -> {            law       = Util.take l.law i @ [label];       subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
-  | Title i     -> { l     with title     = Util.take l.title i @ [label];     subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
-  | Chapter i   -> { l     with chapter   = Util.take l.chapter i @ [label];   subpoint = []; point = []; paragraph = []; article = []; section = []}
-  | Section i   -> { l     with section   = Util.take l.section i @ [label];   subpoint = []; point = []; paragraph = []; article = []}
-  | Article i   -> { l     with article   = Util.take l.article i @ [label];   subpoint = []; point = []; paragraph = []}
-  | Paragraph i -> { l     with paragraph = Util.take l.paragraph i @ [label]; subpoint = []; point = []}
-  | Point i     -> { l     with point     = Util.take l.point i @ [label];     subpoint = []}
-  | Subpoint i  -> { l     with subpoint  = Util.take l.subpoint i @ [label]}
+let qualified_name_of_law pos = function
+  | [] -> Util.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos
+  | (name, _) :: _ -> name
+
+
+let rec qualified_name_of_level pos = function
+  | [] -> ""
+  (* | (name, _, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs *)
+  | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level pos xs
+
+let qualified_name_of_article pos = function
+  | [] -> Util.label_error "No 'article section defined (yet). A rule must be inside of a 'article' section" pos
+  | (name, _) :: xs -> name ^ qualified_name_of_level pos xs
+
+let qualified_name pos l =
+  Printf.sprintf "%s %s%s%s%s"
+  (qualified_name_of_law pos l.law)
+  (qualified_name_of_article pos l.article)
+  (qualified_name_of_level pos l.paragraph)
+  (qualified_name_of_level pos l.point)
+  (qualified_name_of_level pos l.subpoint)
+
+
+let set pos section_kind label l =
+  try
+    match section_kind with
+    (* | Law 0       -> { empty with law       = [label] } *)
+    | Law i       -> {            law       = Util.take l.law i @ [label];       subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
+    | Title i     -> { l     with title     = Util.take l.title i @ [label];     subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
+    | Chapter i   -> { l     with chapter   = Util.take l.chapter i @ [label];   subpoint = []; point = []; paragraph = []; article = []; section = []}
+    | Section i   -> { l     with section   = Util.take l.section i @ [label];   subpoint = []; point = []; paragraph = []; article = []}
+    | Article i   -> { l     with article   = Util.take l.article i @ [label];   subpoint = []; point = []; paragraph = []}
+    | Paragraph i -> { l     with paragraph = Util.take l.paragraph i @ [label]; subpoint = []; point = []}
+    | Point i     -> { l     with point     = Util.take l.point i @ [label];     subpoint = []}
+    | Subpoint i  -> { l     with subpoint  = Util.take l.subpoint i @ [label]}
+  with
+  | Invalid_argument _ -> Util.label_error ("wrong sub-level index (" ^ string_of_section_kind section_kind ^ ", " ^ qualified_name pos l ^ ")") pos
 
 let collect l =
   let ls = [
@@ -69,24 +95,6 @@ let collect l =
   ] in
   List.filter_map ls ~f:(fun x -> x) *)
 
-
-(* let string_of_law (name, _, sub_levels) = name (* TODO: decide if ignoring sub levels on the title level is okay for the qualified name *) *)
-let qualified_name_of_law = function
-  | [] -> assert false (* TODO: throw proper error message *)
-  | (name, _) :: _ -> name
-
-let rec qualified_name_of_level = function
-  | [] -> ""
-  (* | (name, _, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs *)
-  | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs
-
-let qualified_name l =
-  Printf.sprintf "%s %s%s%s%s"
-  (qualified_name_of_law l.law)
-  (qualified_name_of_level l.article)
-  (qualified_name_of_level l.paragraph)
-  (qualified_name_of_level l.point)
-  (qualified_name_of_level l.subpoint)
 
 
 

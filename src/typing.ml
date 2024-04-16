@@ -30,13 +30,14 @@ let add_tevent name args pol ds s pos =
 let add_exception f ident s =
   { s with exceptions = Map.add_multi s.exceptions ~key:ident ~data:f }
 
-let set_labels section_kind label s =
-  { s with labels = Label.set section_kind label s.labels }
+let set_labels pos section_kind label s =
+  { s with labels = Label.set pos section_kind label s.labels }
 
-let collect_labels s =
+let collect_labels pos s =
   (* Label.collect s.labels *)
   (* TODO: "create" all labels accepted within scope *)
-  [Label.qualified_name s.labels]
+  print_endline (Label.qualified_name pos s.labels); (* TODO: remove line (only for debugging)*)
+  [Label.qualified_name pos s.labels]
 
 let c = ref 0
 let fresh () = incr c; string_of_int !c
@@ -106,7 +107,7 @@ let type_formulas fs s pos =
 let type_rule s pos = function
   | SRule (_, label, rule, rule_type, rule_constrs, doc_string) -> begin
       let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in
-      let labels = label0 :: (collect_labels s) in
+      let labels = label0 :: (collect_labels pos s) in
       let s, rule, fs = 
         match rule with
         | Exception (f, ident) ->
@@ -130,8 +131,8 @@ let type_rule s pos = function
 
 let type_stmt s = function
   | SImport (_, idents, star) -> add_tstmt (TSImport (idents, star)) s
-  | SSection (_, section_kind, label, title) ->
-     add_tstmt (TSSection (section_kind, label, title)) (set_labels section_kind (label, Some title) s)
+  | SSection (pos, section_kind, label, title) ->
+     add_tstmt (TSSection (section_kind, label, title)) (set_labels pos section_kind (label, Some title) s)
   | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
