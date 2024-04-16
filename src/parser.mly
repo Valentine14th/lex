@@ -60,7 +60,7 @@ stmts: list(stmt) EOF { { stmts = $1 } }
 stmt:
   | IMPORT import                          { SImport ($1, fst $2, snd $2) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, "") }
-  | section_kind_and_pos STRING COL STRING { SSection (snd $1, fst $1, $2, $4) }
+  | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, $2, $3) }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
   | event_def                              { $1 }
   | srule                                  { $1 }

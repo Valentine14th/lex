@@ -1,12 +1,16 @@
+law "GDPR" "REGULATION (EU) 2016/679 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL of 27 April 2016 on the protection of natural persons with regard to the processing of personal data and on the free movement of such data, and repealing Directive 95/46/EC (General Data Protection Regulation)"
+
 import prOnto.*
 import dapreco.*
 import rioOnto.*
 
 type processingid is int
 type processorid is int
+type consentid is int
 type dataid is int
 type userid is int
 type id is int # only a placeholder such that every argument has a type
+type purpose is string
 
 # observable event
 # causable event
@@ -20,17 +24,16 @@ of processing operation {ep}
     x: processorid
     z: dataid
 
-observable event nominates
- """
- """
+observable event Nominates
+"""controller {y} nominates processor {x} to process personal data on {y}'s behalf"""
     # TODO: update types according to intended meaning
     #       of the arguments
-    edp: processorid
     y: processorid
     x: processorid
 
 observable event PersonalData
 """
+{z} is personal data for data subject {w}
 """
     # TODO: update types according to intended meaning
     #       of the arguments
@@ -55,64 +58,59 @@ processing {ep} is transparent
 """
     ep: processingid
 
-observable event isBasedOn
+observable event HasPurpose
 """
-processing {ep} is based on {epu}
+processing operation {ep} has purpose {prp}
 """
     ep: processingid
-    epu: id
+    prp: purpose
 
 observable event GiveConsent
 """
+data subject {w} gives consent {c}
 """
-    ehc: id
-    w: id
-    c: id
+    w: userid
+    c: consentid
 
-observable event AuthorizedBy
-    eau: id
-    epu: id
-    c: id
+observable event Authorizes
+"""
+consent {c} authorizes usage of personal data for purpose {prp}
+"""
+    c: consentid
+    prp: purpose
 
-observable event Purpose
-    epu: id
 
 observable event isMinor
     w: id
 
-law "GDPR"
-chapter "GDPR 2"
-article "GDPR 2 5"
-paragraph "GDPR 2 5(1)"
-point "GDPR 2 5(1)(a)" # labels must currently contain redundant information
+chapter "2" "Principles"
+article "5" "Principles relating to processing of personal data"
+paragraph "1"
+point "a" # labels must currently contain redundant information
     rule whenever
         PersonalDataProcessing(ep, x, z)
-        nominates(edp, y, x) 
-        PersonalData(z, w)
     oblige
         lawfulness(ep)
         fairness(ep)
         transparency(ep)
 enforceable suppressing PersonalDataProcessing 
 
-article "GDPR 2 6"
-paragraph "GDPR 2 6(1)"
-point "GDPR 2 6(1)(a)"
+article "6" "Lawfulness of processing"
+paragraph "1"
+point "a"
 rule
     whenever 
         PersonalDataProcessing(ep, x, z)
-        isBasedOn(ep, epu)
-        (ONCE GiveConsent(ehc, w, c))
-        AuthorizedBy(eau, epu, c)
-        nominates(edp, y, x)
+        HasPurpose(ep, prp)
+        (ONCE GiveConsent(ehc, c) AND Authorizes(c, prp))
+        (ONCE Nominates(y, x))
         PersonalData(z, w)
-        Purpose(epu)
-    constitute 
+    constitute
         lawfulness(ep)
 enforceable causing lawfulness
        
-article "GDPR 2 8"
-paragraph "GDPR 2 8(1)"
+article "8" "Conditions applicable to child's consent in relation to information society services"
+paragraph "1"
 rule 
     whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
     except "GDPR 2 6(1)(a)"

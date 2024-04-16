@@ -76,13 +76,13 @@ let string_of_rule_constr = function
 let string_of_rule_constrs rule_constrs =
   String.concat ~sep:", " (List.map ~f:string_of_rule_constr rule_constrs)
 
+let verb_of_rule = function
+  | Obligation _ -> "oblige"
+  | Permission _ -> "permit"
+  | Constitutive _ -> "constitute"
+  | Exception _ -> "except"
+  
 let string_of_rule i rule =
-  let verb_of_rule = function
-    | Obligation _ -> "oblige"
-    | Permission _ -> "permit"
-    | Constitutive _ -> "constitute"
-    | Exception _ -> "except"
-  in
   let to_string f =
     Etc.tabs (i+1) ^ Formula.to_string f
   in
