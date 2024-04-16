@@ -298,8 +298,11 @@ Except for $\kw{except}$ and $\kw{scope}$ rules,
 every \Lex{} rule declaration represents a statement of the form
 \begin{align*}
   &\kw{FORALL}~ident_{11},\dots,ident_{1n}. \\
-  &\quad\kw{ALWAYS} \left(form_1(expr_{11}~\kw{AND}~\ldots~\kw{AND}~expr_{1k})\rught.\\
-  &\qquad \left\kw{IMPLIES}~form_2(expr_{21}~\kw{AND}~\ldots~\kw{AND}~expr_{2k})\right)
+  &\quad\kw{ALWAYS} (
+    form_1 \left(expr_{11}~\kw{AND}~\ldots~\kw{AND}~expr_{1k}\right)\\
+    &\qquad \kw{IMPLIES}~
+    form_2 \left( expr_{21}~\kw{AND}~\ldots~\kw{AND}~expr_{2k} \right)
+  )
 \end{align*}
 where $form_1$ and $form_2$ are determined by $patt_1$ and $patt_2$, respectively. These options use the following
 grammars for time and time intervals:
