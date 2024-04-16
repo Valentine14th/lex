@@ -89,7 +89,7 @@ paragraph "1"
 point "a" # labels must currently contain redundant information
     rule
 """
-1. Personal data shall be: [...]
+Art. 5(1) Personal data shall be: [...]
 (a) processed lawfully, fairly and in a transparent manner in relation to the
  data subject (‘lawfulness, fairness and transparency’);
 """
@@ -105,6 +105,10 @@ article "6" "Lawfulness of processing"
 paragraph "1"
 point "a"
 rule
+"""
+Art. 6(1) Processing shall be lawful only if and to the extent that at least one of the following applies:
+(a) the data subject has given consent to the processing of his or her personal data for one or more specific purposes;
+"""
     whenever 
         PersonalDataProcessing(ep, x, z)
         HasPurpose(ep, prp)
