@@ -132,7 +132,7 @@ let type_rule s pos = function
 let type_stmt s = function
   | SImport (_, idents, star) -> add_tstmt (TSImport (idents, star)) s
   | SSection (pos, section_kind, label, title) ->
-     add_tstmt (TSSection (section_kind, label, title)) (set_labels pos section_kind (label, Some title) s)
+     add_tstmt (TSSection (section_kind, label, title)) (set_labels pos section_kind (label, title) s)
   | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos

@@ -3,9 +3,9 @@ open Lex
 (* open Util *)
 
 (** First identifier: number, letter, etc. describing
-                      the section in question
-    second identifier: optional, decriptive, title *)
-type label_levels = (ident * ident option) list
+                      the section in question (e.g. "2")
+    second identifier: decriptive, title (e.g. "Material Scope") *)
+type label_levels = (ident * ident) list 
 
 type t =
   {
