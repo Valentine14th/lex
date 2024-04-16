@@ -85,16 +85,5 @@ let collect l =
     | x -> Some x in
   List.filter_map ls ~f:is_empty
 
-(* let collect_qualified_names l =
-  let ls = [
-    l.law;
-    l.article;
-    l.paragraph;
-    l.point;
-    l.subpoint
-  ] in
-  List.filter_map ls ~f:(fun x -> x) *)
-
-
 
 
