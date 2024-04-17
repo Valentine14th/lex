@@ -1,0 +1,134 @@
+.lex-formula-term {
+    color: #e83e8c;
+}
+
+.lex-ident {
+    color: #e83e8c;
+}
+
+.lex-typ {
+    color: #17c274;
+}
+
+.lex-stmt {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(0,0,0,.125);
+}
+
+.lex-keyword {
+    style: inline;
+    color: #9a3ee8;
+    font-weight: bold;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+.lex-section-kind {
+    color: #9a3ee8;
+    padding-right: 5px;
+}
+
+.lex-rule-if {
+    padding-left: 10px;
+}
+
+.lex-rule-if .lex-formula {
+    padding-left: 10px;
+}
+
+.lex-rule-then {
+    padding-left: 10px;
+}
+
+.lex-rule-then .lex-formula {
+    padding-left: 10px;
+}
+
+.col-6 > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.col-12 > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.lex-rule-if > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.lex-rule-then > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.lex-formula > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.lex-keyword + .lex-keyword {
+    padding-left: 0px;
+}
+
+.lex-event-args {
+    padding-left: 10px;
+}
+
+.lex-stmt-section {
+    font-weight: bold;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.lex-stmt-section-law {
+    font-size: 280%;
+    text-align: center;
+}
+
+.lex-section-title {
+    font-size: 80%;
+    font-weight: lighter;
+    padding-bottom: 5px;
+}
+
+.lex-stmt-section-title {
+    font-size: 250%;
+    text-align: center;
+}
+
+.lex-stmt-section-chapter {
+    font-size: 200%;
+    text-align: center;
+}
+
+.lex-stmt-section-article {
+    font-size: 150%;
+    text-align: center;
+}
+
+.lex-stmt-section-paragraph {
+    font-size: 100%;
+}
+
+.lex-stmt-section-point {
+    font-size: 100%;
+}
+
+.lex-stmt-section-subpoint {
+    font-size: 100%;
+}
+
+.lex-reading .card-header {
+    font-size: 75%;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    padding-left: 5px;
+}
+
+.lex-interval {
+    padding-right: 5px;
+}
+
+.lex-docstring-body {
+    font-style: italic;
+}
+/*8ce83e*/
