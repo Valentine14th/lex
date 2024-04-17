@@ -10,12 +10,14 @@ type tstmt =
 
 type tevent = (Lexing.position * ident * ident) list * pol * string option
 
+type var_map = (ident, (ident * typ), Base.String.comparator_witness) Map.t
+
 type tprog =
   {
     tstmts: tstmt list;
     taliases: (ident, typ, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
-    rule_variables: (string, (ident * ident * typ), Base.String.comparator_witness) Map.t; (* maps section labels to variables used in section *)
+    variables: (ident, var_map, Base.String.comparator_witness) Map.t; (* maps section labels to variables used in section *)
     exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t
   }
 
@@ -24,12 +26,11 @@ let tempty =
     tstmts = [];
     taliases = Map.empty (module String);
     tevents = Map.empty (module String);
-    rule_variables = Map.empty (module String); 
+    variables = Map.empty (module String); 
     exceptions = Map.empty (module String)
   }
 
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
-
 
 let add_talias name typ tprog pos =
   (* TODO: allow for overwriting/reusing existing type names *)
@@ -47,6 +48,13 @@ let add_tevent name args pol ds tprog pos =
     with _ -> Util.type_error (Printf.sprintf "event %s already exists" name) pos
   in
   { tprog with tevents = events; tstmts = TSEvent (name, args, pol, ds)::tprog.tstmts}
+
+let add_vars vs names tprog pos =
+  let variables =
+    try List.fold_left ~init:tprog.variables ~f:(fun v_map name -> Map.add_exn v_map ~key:name ~data:vs) names
+    with _ -> Util.label_error ("one of the labels: [" ^ String.concat ~sep:", " names ^ "] has already been defined. (rules must be uniquely identifiable)") pos
+  in
+  { tprog with variables = variables }
 
 let is_trule = function
   | TSRule _ -> true
