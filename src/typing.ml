@@ -8,14 +8,16 @@ type t =
   {
     tprog: tprog;
     labels: Label.t;
-    exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t
+    exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t;
+    rule_labels: (string, Base.String.comparator_witness) Set.t
   }
 
 let empty =
   {
     tprog = tempty;
     labels = Label.empty;
-    exceptions = Map.empty (module String)
+    exceptions = Map.empty (module String);
+    rule_labels = Set.empty (module String)
   }
 
 let add_tstmt tstmt s =
@@ -27,17 +29,28 @@ let add_talias alias typ s pos =
 let add_tevent name args pol ds s pos =
   { s with tprog = Tlex.add_tevent name args pol ds s.tprog pos }
 
+let add_vars vs ls s pos =
+  { s with tprog = Tlex.add_vars vs ls s.tprog pos }
+
+let add_rule_labels ls s pos =
+  let unique_labels = List.fold_left ls ~init:true ~f:(fun b l -> b && (not (Set.mem s.rule_labels l))) in
+  match unique_labels with
+  | true -> {s with rule_labels = s.rule_labels }
+  | false -> Util.label_error ("on of the labels: [" ^ String.concat ~sep:", " ls ^ "] has already been defined. (rules must be uniquely identifiable)") pos
+
 let add_exception f ident s =
   { s with exceptions = Map.add_multi s.exceptions ~key:ident ~data:f }
 
 let set_labels pos section_kind label s =
   { s with labels = Label.set pos section_kind label s.labels }
 
-let collect_labels pos s =
+let collect_labels pos s rule_label =
   (* Label.collect s.labels *)
   (* TODO: "create" all labels accepted within scope *)
-  print_endline (Label.qualified_name pos s.labels); (* TODO: remove line (only for debugging)*)
-  [Label.qualified_name pos s.labels]
+  let qualified_name = Label.qualified_name pos s.labels in
+  match rule_label with
+  | None -> qualified_name :: []
+  | Some s -> (qualified_name ^ "#" ^ s) :: []
 
 let c = ref 0
 let fresh () = incr c; string_of_int !c
@@ -101,13 +114,16 @@ let type_formulas fs s pos =
         | Ok t_vars'' -> t_vars''
         | Unequal_lengths -> Util.type_error ("Number of arguments doesn't match for event \"" ^ event_name ^ "\"") pos
   in
-  List.fold_left predicates ~init:(Map.empty (module String)) ~f:(fun t_vars (n, ts) -> type_vars n ts t_vars)
-  |> ignore
+  let predicate_vars =
+    List.fold_left predicates ~init:(Map.empty (module String)) ~f:(fun t_vars (n, ts) -> type_vars n ts t_vars)
+  in
+  predicate_vars
 
 let type_rule s pos = function
   | SRule (_, label, rule, rule_type, rule_constrs, doc_string) -> begin
-      let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in
-      let labels = label0 :: (collect_labels pos s) in
+      (* let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in *)
+      let label0 = fresh () in (* always use fresh, such that rule labels can repeat and are used in conjunction with the qualified section name *)
+      let labels = label0 :: (collect_labels pos s label) in
       let s, rule, fs = 
         match rule with
         | Exception (f, ident) ->
@@ -124,9 +140,11 @@ let type_rule s pos = function
         | Constitutive (f1, f2) ->
            s, rule, List.concat [f1; f2]
       in
-      type_formulas fs s pos;
-      add_tstmt (TSRule (labels, rule, rule_type, rule_constrs, doc_string)) s
-    end  
+      let vars = type_formulas fs s pos in
+      let s' = add_vars vars labels s pos in
+      let s'' = add_rule_labels labels s' pos in
+      add_tstmt (TSRule (labels, rule, rule_type, rule_constrs, doc_string)) s''
+    end
   | _ -> assert false
 
 let type_stmt s = function
@@ -143,7 +161,7 @@ let do_type tprog =
     tstmts = List.rev s.tprog.tstmts;
     taliases = s.tprog.taliases;
     tevents = s.tprog.tevents;
-    rule_variables = s.tprog.rule_variables;
+    variables = s.tprog.variables;
     exceptions = s.exceptions
   }
 
