@@ -1,13 +1,12 @@
 law "GDPR" "REGULATION (EU) 2016/679 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL of 27 April 2016 on the protection of natural persons with regard to the processing of personal data and on the free movement of such data, and repealing Directive 95/46/EC (General Data Protection Regulation)"
 
-import formex gdpr2
+# import formex gdpr2 # leads to import error
 
 type processingid is int
 type processorid is int
 type consentid is int
 type dataid is int
 type userid is int
-type id is int # only a placeholder such that every argument has a type
 type purpose is string
 
 # observable event
@@ -24,8 +23,6 @@ of processing operation {ep}
 
 observable event Nominates
 """controller {y} nominates processor {x} to process personal data on {y}'s behalf"""
-    # TODO: update types according to intended meaning
-    #       of the arguments
     y: processorid
     x: processorid
 
@@ -33,10 +30,8 @@ observable event PersonalData
 """
 {z} is personal data for data subject {w}
 """
-    # TODO: update types according to intended meaning
-    #       of the arguments
     z: dataid
-    w: id # TODO: what is {w} meant to be?
+    w: userid
 
 internal event lawfulness
 """
@@ -79,12 +74,15 @@ consent {c} authorizes usage of personal data for purpose {prp}
 
 
 observable event isMinor
-    w: id
+"""
+data subject {w} is a minor
+"""
+    w: userid
 
 chapter "2" "Principles"
 article "5" "Principles relating to processing of personal data"
 paragraph "1"
-point "a" # labels must currently contain redundant information
+point "a"
     rule
 """
 Art. 5(1) Personal data shall be: [...]
@@ -118,12 +116,15 @@ Art. 6(1) Processing shall be lawful only if and to the extent that at least one
 enforceable causing lawfulness
        
 article "8" "Conditions applicable to child's consent in relation to information society services"
-article[1] "II" "dummy level to try out sublevels"
-article[2] "A" "dummy level to try out sublevels"
+# article[1] "II" "dummy level to try out sublevels"
+# article[2] "A" "dummy level to try out sublevels"
 # article[6] "iv" "dummy level to try out sublevels"
 # article[1] "B" "dummy level to try out sublevels"
 paragraph "1"
 rule 
     whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
     except "GDPR 6(1)(a)"
+    # except "6(1)"
+    # except "6(1)(a)"
+    # except "7(1)(a)"
     # except "Art. 6(1)(a) GDPR"
