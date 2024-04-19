@@ -122,23 +122,24 @@ let type_formulas fs s pos =
 let type_rule s pos = function
   | SRule (_, label, rule, rule_type, rule_constrs, doc_string) -> begin
       (* let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in *)
-      let label0 = fresh () in (* always use fresh, such that rule labels can repeat and are used in conjunction with the qualified section name *)
-      let labels = label0 :: (collect_labels pos s label) in
+      (* let label0 = fresh () in (* always use fresh, such that rule labels can repeat and are used in conjunction with the qualified section name *) *)
+      (* let labels = label0 :: (collect_labels pos s label) in *)
+      let labels = collect_labels pos s label in
       let s, rule, fs = 
         match rule with
         | Exception (f, ident) ->
-           let p_name = "Exception" ^ label0 in
-           let vars = Set.elements (Set.union_list (module String) (List.map f ~f:Formula.fv)) in
-           let terms = List.map vars ~f:(fun x -> Formula.Term.Var x) in
-           let pred = Formula.predicate p_name terms in
-           (* TODO: type check the exception in conjunction with the rule
-                    to which it is an exception *)
-           (* let s' = add_tevent p_name vars Polarity.Positive [] s pos in *)
-           add_exception pred ident s, Constitutive (f, [pred]), f
-        | Obligation (f1, f2)
-        | Permission (f1, f2)
-        | Constitutive (f1, f2) ->
-           s, rule, List.concat [f1; f2]
+          let p_name = "Exception" ^ fresh () in
+          let vars = Set.elements (Set.union_list (module String) (List.map f ~f:Formula.fv)) in
+          let terms = List.map vars ~f:(fun x -> Formula.Term.Var x) in
+          let pred = Formula.predicate p_name terms in
+          (* TODO: type check the exception in conjunction with the rule
+                  to which it is an exception *)
+          (* let s' = add_tevent p_name vars Polarity.Positive [] s pos in *)
+          let s' = add_exception pred ident s in
+          s', TException (f, ident, pred), f
+        | Obligation (f1, f2) -> s, TObligation (f1, f2), List.concat [f1; f2]
+        | Permission (f1, f2) -> s, TPermission (f1, f2), List.concat [f1; f2]
+        | Constitutive (f1, f2) -> s, TConstitutive (f1, f2), List.concat [f1; f2]
       in
       let vars = type_formulas fs s pos in
       let s' = add_vars vars labels s pos in

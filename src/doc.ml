@@ -36,7 +36,7 @@ let rec html_of_formula_ l = function
 let html_of_formula f =
   div "lex-formula" (html_of_formula_ 0 f)
   
-let html_of_rule rule =
+let html_of_trule trule =
   let string_of_imp_rule verb f g =
     div "lex-rule-if" (
         kw "whenever"
@@ -56,10 +56,12 @@ let html_of_rule rule =
           kw "except" ^ ident id
         )
   in
-  match rule with
-  | Lex.Obligation (f, g) | Permission (f, g) | Constitutive (f, g)
-    -> string_of_imp_rule (Lex.verb_of_rule rule) f g
-  | Exception (f, ident) -> string_of_exc_rule f ident
+  match trule with
+  | TObligation (f, g)
+  | TPermission (f, g)
+  | TConstitutive (f, g)
+    -> string_of_imp_rule (verb_of_trule trule) f g
+  | TException (f, ident, _) -> string_of_exc_rule f ident
 
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
@@ -80,17 +82,17 @@ let html_of_rule_constrs rule_constrs =
       String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
     )
 
-let html_of_rule_reading tprog rule = function
+let html_of_trule_reading tprog trule = function
   | None -> 
      div "lex-rule-reading" (
          div "lex-reading-header" "Reading" 
-         ^ div "lex-reading-body" (Reading.reading_of_rule tprog rule)
+         ^ div "lex-reading-body" (Reading.reading_of_trule tprog trule)
        )
   | Some doc_string ->
      div "lex-rule-reading" (
          div "lex-reading-header" "Reading"
          ^ ul "list-group list-group-flush" (
-               li "list-group-item lex-reading-body" (Reading.reading_of_rule tprog rule)
+               li "list-group-item lex-reading-body" (Reading.reading_of_trule tprog trule)
                ^ li "list-group-item lex-docstring-body" doc_string)
        )
 
@@ -133,11 +135,11 @@ let html_of_tstmt tprog =
              )
            )
        )
-  | TSRule (_, rule, rule_type, rule_constrs, doc_string) ->
+  | TSRule (_, trule, rule_type, rule_constrs, doc_string) ->
      div "lex-stmt-rule" (
          two_column (
              kw "rule"
-             ^ html_of_rule rule
+             ^ html_of_trule trule
              ^ kw (html_of_rule_type rule_type)
              ^ (
                if List.is_empty rule_constrs then
@@ -146,7 +148,7 @@ let html_of_tstmt tprog =
                  html_of_rule_constrs rule_constrs
              )
            )
-           (html_of_rule_reading tprog rule doc_string)
+           (html_of_trule_reading tprog trule doc_string)
        )
   | TSEvent (name, typed_args, pol, doc_string) ->
      let html_of_event =

@@ -1,10 +1,16 @@
 open Core
 open Lex
 
+type trule =
+  | TObligation   of Formula.t list * Formula.t list
+  | TPermission   of Formula.t list * Formula.t list
+  | TConstitutive of Formula.t list * Formula.t list
+  | TException    of Formula.t list * ident * Formula.t
+
 type tstmt =
   | TSImport  of string list * bool
   | TSSection  of section_kind * string * string
-  | TSRule    of string list * rule * rule_type * rule_constr list * string option
+  | TSRule    of string list * trule * rule_type * rule_constr list * string option
   | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
 
@@ -50,8 +56,26 @@ let add_tevent name args pol ds tprog pos =
   { tprog with tevents = events; tstmts = TSEvent (name, args, pol, ds)::tprog.tstmts}
 
 let add_vars vs names tprog pos =
+  (* let union_function ~key:k t1 t2 = 
+    match (t1, t2) with
+    | Some t, None
+    | None, Some t -> Some t
+    | None, None -> None
+    | Some t1', Some t2' ->
+      if fst t1' = fst t2' &&  snd t1' = snd t2' then Some t1'
+      else Util.type_error (Printf.sprintf "variable %s already exists with different type" k) pos
+  in
+  let union vs1 vs2 =
+    Map.merge ~f:union_function vs1 vs2
+  in
+  let update v_map name =
+    Map.update v_map name ~f:(function
+        | None -> vs
+        | Some vs' -> union vs' vs)
+  in *)
   let variables =
     try List.fold_left ~init:tprog.variables ~f:(fun v_map name -> Map.add_exn v_map ~key:name ~data:vs) names
+    (* try List.fold_left ~init:tprog.variables ~f:update names *)
     with _ -> Util.label_error ("one of the labels: [" ^ String.concat ~sep:", " names ^ "] has already been defined. (rules must be uniquely identifiable)") pos
   in
   { tprog with variables = variables }
@@ -59,6 +83,34 @@ let add_vars vs names tprog pos =
 let is_trule = function
   | TSRule _ -> true
   | _ -> false
+
+let verb_of_trule = function
+  | TObligation _ -> "oblige"
+  | TPermission _ -> "permit"
+  | TConstitutive _ -> "constitute"
+  | TException _ -> "except"
+
+let string_of_trule i trule =
+  let to_string f =
+    Etc.tabs (i+1) ^ Formula.to_string f
+  in
+  let string_of_imp_rule verb f g =
+      Etc.tabs i     ^ "whenever"                       ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n"
+    ^ Etc.tabs i     ^ verb                             ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:to_string g)
+  in
+  let string_of_exc_rule f ident =
+      Etc.tabs i     ^ "whenever"          ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n"
+    ^ Etc.tabs i     ^ "except \"" ^ ident ^ "\""
+  in
+  match trule with
+  | TObligation (f, g)
+  | TPermission (f, g)
+  | TConstitutive (f, g)
+    -> string_of_imp_rule (verb_of_trule trule) f g
+  | TException (f, ident, _) -> string_of_exc_rule f ident
 
 let string_of_tstmt ?(i=0) =
   function
@@ -81,7 +133,7 @@ let string_of_tstmt ?(i=0) =
      Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
        (Etc.tabs i)
        (String.concat ~sep:" " labels)
-       (string_of_rule (i+1) rule)
+       (string_of_trule (i+1) rule)
        (Etc.tabs i)
        (string_of_rule_type rule_type)
        (if List.is_empty rule_constrs then

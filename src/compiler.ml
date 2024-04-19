@@ -15,10 +15,10 @@ let compile_imp f g =
 
 let compile_trule tprog =
   let aux f' = function
-    | Obligation (f, g) -> compile_imp (f@f') g
-    | Permission (f, g) -> compile_imp (f@f') g
-    | Constitutive (f, g) -> compile_imp (f@f') g
-    | _ -> assert false
+    | TObligation (f, g) -> compile_imp (f@f') g
+    | TPermission (f, g) -> compile_imp (f@f') g
+    | TConstitutive (f, g) -> compile_imp (f@f') g
+    | TException (f, _, pred) -> compile_imp (f@f') [pred]
   in
   function
   | TSRule (labels, rule, _, _, _) ->
