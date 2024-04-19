@@ -1,6 +1,10 @@
 open Core
 open Lexing
 
+type t =
+  | MLex of Tlex.tprog
+  | MFormex of Formex.t
+
 type import =
   | SILex    of Lexing.position * string list
   | SIFormex of Lexing.position * string list
@@ -91,8 +95,8 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                        (
                          import_string,
                          (match import with
-                          | SILex _    -> do_type lexpath ~seq:seq' filepath' filename'
-                          | SIFormex _ -> assert false)
+                          | SILex _    -> MLex (do_type lexpath ~seq:seq' filepath' filename')
+                          | SIFormex _ -> MFormex (Formex.to_module filepath' filename'))
                        )
                       )
                     ) in
