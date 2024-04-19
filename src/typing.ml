@@ -7,17 +7,18 @@ open Tlex
 type t =
   {
     tprog: tprog;
-    labels: Label.t;
-    exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t;
-    rule_labels: (string, Base.String.comparator_witness) Set.t
+    label: Label.t;
+    (* exceptions: (string, (Label.t * Formula.t), Base.String.comparator_witness) Map.t; *)
+    exceptions: (string * Label.t * Lexing.position * Formula.t) list;
+    rule_labels: (string, Label.t, Base.String.comparator_witness) Map.t
   }
 
 let empty =
   {
     tprog = tempty;
-    labels = Label.empty;
-    exceptions = Map.empty (module String);
-    rule_labels = Set.empty (module String)
+    label = Label.empty;
+    exceptions = [];
+    rule_labels = Map.empty (module String)
   }
 
 let add_tstmt tstmt s =
@@ -32,25 +33,16 @@ let add_tevent name args pol ds s pos =
 let add_vars vs ls s pos =
   { s with tprog = Tlex.add_vars vs ls s.tprog pos }
 
-let add_rule_labels ls s pos =
-  let unique_labels = List.fold_left ls ~init:true ~f:(fun b l -> b && (not (Set.mem s.rule_labels l))) in
-  match unique_labels with
-  | true -> {s with rule_labels = s.rule_labels }
-  | false -> Util.label_error ("on of the labels: [" ^ String.concat ~sep:", " ls ^ "] has already been defined. (rules must be uniquely identifiable)") pos
+let add_rule_labels rule_name label s pos =
+  try { s with rule_labels = Map.add_exn s.rule_labels ~key:rule_name ~data:label }
+  with _ -> Util.label_error ("rule label " ^ rule_name ^ " has already been defined") pos
 
-let add_exception f ident s =
-  { s with exceptions = Map.add_multi s.exceptions ~key:ident ~data:f }
+let add_exception pos f ident s =
+  (* { s with exceptions = Map.add_exn s.exceptions ~key:ident ~data:(s.label, f) } *)
+  { s with exceptions = (ident, s.label, pos, f)::s.exceptions }
 
 let set_labels pos section_kind label s =
-  { s with labels = Label.set pos section_kind label s.labels }
-
-let collect_labels pos s rule_label =
-  (* Label.collect s.labels *)
-  (* TODO: "create" all labels accepted within scope *)
-  let qualified_name = Label.qualified_name pos s.labels in
-  match rule_label with
-  | None -> qualified_name :: []
-  | Some s -> (qualified_name ^ "#" ^ s) :: []
+  { s with label = Label.set pos section_kind label s.label }
 
 let c = ref 0
 let fresh () = incr c; string_of_int !c
@@ -77,7 +69,7 @@ let typ_of_const = function
   | Dom.Str _ -> TString
   | Dom.Float _ -> assert false (* floats are not supported yet *)
 
-(* TODO: currently the error location `pos` is the beginning of the rul
+(* TODO: currently the error location `pos` is the beginning of the rule
          it might be helpful to have pointers inside the rule,
          e.g. to the predicate name, or variable names
          this would require changes to formaula.ml *)
@@ -120,11 +112,9 @@ let type_formulas fs s pos =
   predicate_vars
 
 let type_rule s pos = function
-  | SRule (_, label, rule, rule_type, rule_constrs, doc_string) -> begin
-      (* let label0 = Option.value_map label ~default:(fresh ()) ~f:(fun x -> x) in *)
-      (* let label0 = fresh () in (* always use fresh, such that rule labels can repeat and are used in conjunction with the qualified section name *) *)
-      (* let labels = label0 :: (collect_labels pos s label) in *)
-      let labels = collect_labels pos s label in
+  | SRule (_, rule_id, rule, rule_type, rule_constrs, doc_string) -> begin
+      let label' = Label.set_rule_id rule_id s.label in
+      let label_name = Label.valid_rule_label pos label'; Label.qualified_name label' in
       let s, rule, fs = 
         match rule with
         | Exception (f, ident) ->
@@ -132,19 +122,16 @@ let type_rule s pos = function
           let vars = Set.elements (Set.union_list (module String) (List.map f ~f:Formula.fv)) in
           let terms = List.map vars ~f:(fun x -> Formula.Term.Var x) in
           let pred = Formula.predicate p_name terms in
-          (* TODO: type check the exception in conjunction with the rule
-                  to which it is an exception *)
-          (* let s' = add_tevent p_name vars Polarity.Positive [] s pos in *)
-          let s' = add_exception pred ident s in
+          let s' = add_exception pos pred ident s in
           s', TException (f, ident, pred), f
         | Obligation (f1, f2) -> s, TObligation (f1, f2), List.concat [f1; f2]
         | Permission (f1, f2) -> s, TPermission (f1, f2), List.concat [f1; f2]
         | Constitutive (f1, f2) -> s, TConstitutive (f1, f2), List.concat [f1; f2]
       in
       let vars = type_formulas fs s pos in
-      let s' = add_vars vars labels s pos in
-      let s'' = add_rule_labels labels s' pos in
-      add_tstmt (TSRule (labels, rule, rule_type, rule_constrs, doc_string)) s''
+      let s' = add_vars vars label_name s pos in
+      let s'' = add_rule_labels label_name label' s' pos in
+      add_tstmt (TSRule (pos, label', rule, rule_type, rule_constrs, doc_string)) s''
     end
   | _ -> assert false
 
@@ -156,13 +143,34 @@ let type_stmt s = function
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
 
+let str_of_list l = "[" ^ List.fold l ~init:"" ~f:(fun acc s -> acc ^ "\"" ^ s ^ "\"; ") ^ "]"
+
+let resolve_exception_identifiers s =
+  (* let scope = Label.scope s.label in *)
+  let get_full_name m (ident, label, pos, f) =
+    let possible_names = List.map (Label.prefixes label) ~f:(fun pre -> (Label.qualified_name pre) ^ ident) in
+    let actual_names = List.filter possible_names ~f:(fun n -> Map.mem s.rule_labels n) in
+    let name = match actual_names with
+    | [name] -> name
+    | [] -> Util.label_error ("Exception identifier '" ^ ident ^ "' could not be matched to a rule \n\tknown rules:          " ^ str_of_list (Map.keys s.rule_labels) ^ "\n\tpotential expansions: " ^ str_of_list possible_names) pos
+    | names -> Util.label_error ("Exception identifier '" ^ ident ^ "' is ambiguous, could refer to multiple rules: " ^ str_of_list names) pos
+    in
+    if not (String.equal (Label.qualified_name label) name) then Map.add_multi m ~key:name ~data:f
+    else Util.label_error ("Exception rule '" ^ Label.qualified_name label ^ "' cannot be an exception to itself ('" ^ ident ^ "')") pos
+  in
+  let es = List.fold s.exceptions ~init:(Map.empty (module String)) ~f:get_full_name in
+  (* TODO: type check the exception in conjunction with the rule
+           to which it is an exception *)
+  es
+
 let do_type _ tprog =
   let s = List.fold_left tprog.stmts ~init:empty ~f:type_stmt in
+  let exceptions = resolve_exception_identifiers s in
   {
     tstmts = List.rev s.tprog.tstmts;
     taliases = s.tprog.taliases;
     tevents = s.tprog.tevents;
     variables = s.tprog.variables;
-    exceptions = s.exceptions
+    exceptions = exceptions
   }
 

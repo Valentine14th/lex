@@ -10,7 +10,7 @@ type trule =
 type tstmt =
   | TSImport  of Lexing.position * string list * import_format
   | TSSection of section_kind * string * string
-  | TSRule    of string list * trule * rule_type * rule_constr list * string option
+  | TSRule    of Lexing.position * Label.t * trule * rule_type * rule_constr list * string option
   | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
 
@@ -55,28 +55,10 @@ let add_tevent name args pol ds tprog pos =
   in
   { tprog with tevents = events; tstmts = TSEvent (name, args, pol, ds)::tprog.tstmts}
 
-let add_vars vs names tprog pos =
-  (* let union_function ~key:k t1 t2 = 
-    match (t1, t2) with
-    | Some t, None
-    | None, Some t -> Some t
-    | None, None -> None
-    | Some t1', Some t2' ->
-      if fst t1' = fst t2' &&  snd t1' = snd t2' then Some t1'
-      else Util.type_error (Printf.sprintf "variable %s already exists with different type" k) pos
-  in
-  let union vs1 vs2 =
-    Map.merge ~f:union_function vs1 vs2
-  in
-  let update v_map name =
-    Map.update v_map name ~f:(function
-        | None -> vs
-        | Some vs' -> union vs' vs)
-  in *)
+let add_vars vs name tprog pos =
   let variables =
-    try List.fold_left ~init:tprog.variables ~f:(fun v_map name -> Map.add_exn v_map ~key:name ~data:vs) names
-    (* try List.fold_left ~init:tprog.variables ~f:update names *)
-    with _ -> Util.label_error ("one of the labels: [" ^ String.concat ~sep:", " names ^ "] has already been defined. (rules must be uniquely identifiable)") pos
+    try Map.add_exn (Map.empty (module String)) ~key:name ~data:vs
+    with _ -> Util.label_error ("rule label " ^ name ^ " has already been defined") pos
   in
   { tprog with variables = variables }
 
@@ -123,7 +105,7 @@ let string_of_tstmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
-  | TSRule (labels, rule, rule_type, rule_constrs, doc_string) ->
+  | TSRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
      let description =
           match doc_string with
           | Some s -> "\n" ^ make_doc_string s i
@@ -131,7 +113,7 @@ let string_of_tstmt ?(i=0) =
       in
      Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
        (Etc.tabs i)
-       (String.concat ~sep:" " labels)
+       (Label.qualified_name label)
        (string_of_trule (i+1) rule)
        (Etc.tabs i)
        (string_of_rule_type rule_type)

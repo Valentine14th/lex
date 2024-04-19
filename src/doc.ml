@@ -136,7 +136,7 @@ let html_of_tstmt tprog =
              )
            )
        )
-  | TSRule (_, trule, rule_type, rule_constrs, doc_string) ->
+  | TSRule (_, _, trule, rule_type, rule_constrs, doc_string) ->
      div "lex-stmt-rule" (
          two_column (
              kw "rule"

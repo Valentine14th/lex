@@ -21,10 +21,11 @@ let compile_trule tprog =
     | TException (f, _, pred) -> compile_imp (f@f') [pred]
   in
   function
-  | TSRule (labels, rule, _, _, _) ->
-     let exceptions = List.concat (List.map labels ~f:(Map.find_multi tprog.exceptions)) in
-     let f' = List.map exceptions ~f:neg in
-     aux f' rule
+  | TSRule (_, label, rule, _, _, _) ->
+    let label_name = Label.qualified_name label in
+    let exceptions = Map.find_multi tprog.exceptions label_name in
+    let f' = List.map exceptions ~f:neg in
+    aux f' rule
   | _ -> assert false
 
 let compile_events events aliases =
