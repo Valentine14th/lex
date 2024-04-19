@@ -112,11 +112,12 @@ let html_of_args args =
 
 let html_of_tstmt tprog =
   function
-  | TSImport (idents, star) ->
+  | TSImport (_, idents, import_format) ->
      div "lex-stmt-import" (
          one_column (
-             kw "import" ^ String.concat ~sep:"." (List.map ~f:ident idents)
-             ^ (if star then ".*" else "")
+             kw "import"
+             ^ Lex.string_of_import_format import_format
+             ^ String.concat ~sep:"." (List.map ~f:ident idents)
            )
        )
   | TSSection (section_kind, label, title) ->

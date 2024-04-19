@@ -2,8 +2,8 @@ open Core
 open Lex
 
 type tstmt =
-  | TSImport  of string list * bool
-  | TSSection  of section_kind * string * string
+  | TSImport  of Lexing.position * string list * import_format
+  | TSSection of section_kind * string * string
   | TSRule    of string list * rule * rule_type * rule_constr list * string option
   | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
@@ -62,10 +62,9 @@ let is_trule = function
 
 let string_of_tstmt ?(i=0) =
   function
-  | TSImport (idents, star) ->
-     Printf.sprintf "import %s%s"
+  | TSImport (_, idents, _) ->
+     Printf.sprintf "import %s"
        (String.concat ~sep:"." idents)
-       (if star then ".*" else "")
   | TSSection (section_kind, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"
        (Etc.tabs i)
@@ -113,3 +112,6 @@ let string_of_signature signature =
 let string_of_tprog tprog =
   (* String.concat ~sep:"\n\n" (List.map prog.stmts ~f:string_of_stmt) *)
   String.concat ~sep:"\n" (List.map tprog.tstmts ~f:string_of_tstmt)
+
+let print_tprog tprog =
+  Stdio.printf "%s\n" (string_of_tprog tprog)
