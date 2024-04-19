@@ -1,30 +1,14 @@
 open Core
 open Lex_lib
-open Lexing
-
-let print_position outx lexbuf =
-  let pos = lexbuf.lex_curr_p in
-  fprintf outx "%s\n" (Util.string_of_pos pos)
-
-let parse_with_error lexbuf =
-  try Parser.prog Lexer.read lexbuf with
-  | Lexer.SyntaxError msg ->
-    fprintf stderr "%a: %s\n" print_position lexbuf msg;
-    exit (-1)
-  | Parser.Error ->
-    fprintf stderr "%a: syntax error\n" print_position lexbuf;
-    exit (-1)
 
 let loop filename mode () =
-  let inx = In_channel.create filename in
-  let lexbuf = Lexing.from_channel inx in
-  lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-  let prog = parse_with_error lexbuf in (* program parsed without type information *)
-  let tprog = Typing.do_type prog in (* type check and add type information to program *)
-  In_channel.close inx;
+  let lexpath = Filename.dirname (Sys.get_argv()).(0) in
+  let filepath = Filename.dirname filename
+    and filename = Filename.basename filename in
+  let tprog = Modules.do_type [lexpath] filepath filename  in
   match mode with
   | None | Some "mfotl" -> begin
-      Lex.print_prog prog;
+      Tlex.print_tprog tprog;
       print_endline "#################\n";
       Compiler.compile tprog; (* compile correctly typed program *)
     end

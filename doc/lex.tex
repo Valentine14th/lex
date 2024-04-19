@@ -280,7 +280,7 @@ The syntax of expressions closely follows MFOTL syntax:
   expr ::= &~ \kw{TRUE} \mid \kw{FALSE} \mid pred \mid special\_pred \\
   \mid &~ \kw{NOT}~expr \mid expr_1~(\kw{AND} \mid \kw{OR} \mid \kw{IMPLIES} \mid \kw{EQUIV})~expr_2 \\
   \mid &~ (\kw{EXISTS} \mid \kw{FORALL})~expr \\
-  \mid &~(\kw{ONCE} \mid \kw{EVENTUALLY} \mid \kw{ALWAYS\_PAST} \mid \kw{ALWAYS\_FUTURE})~[expr\_itv]~expr\\
+  \mid &~(\kw{ONCE} \mid \kw{EVENTUALLY} \mid \kw{HISTORICALLY} \mid \kw{ALWAYS})~[expr\_itv]~expr\\
   \mid &~expr_1~(\kw{SINCE} \mid \kw{UNTIL} \mid \kw{TRIGGER} \mid \kw{RELEASE})~[expr\_itv]~expr_2\\
   special\_pred ::= &~ \kw{obliged}(pred) \mid \kw{permitted}(pred) \mid \kw{prohibited}(pred) \\
   \mid&~\kw{applicable}(string) \mid \kw{satisfied}(string) \mid \kw{violated}(string) 
@@ -358,7 +358,19 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
-% todo: more complex terms? access databases? reason about time? complex data structures
+% todo:
+% more complex terms
+% access databases
+% reason about time
+% complex data structures
+% cleanly split typing and rewriting (pb with documentation)
+% points inside rules
+% link to Formex
+% implement temporal patterns
+% Erwägungsgründe
+% module system
+% design survey
+
 
 {%\setlength\bibsep{2pt}
 \small

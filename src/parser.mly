@@ -7,7 +7,7 @@
 %token <Lexing.position * string> IDENT
 %token <int> INT
 %token <string> STRING
-%token LPA RPA COM COL STAR
+%token LPA RPA COM COL
 %token <Lexing.position> IMPORT
 %token EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TENFORCEABLE
 %token IS TTYPE
@@ -41,6 +41,8 @@
 %token RELEASE
 %token TRIGGER
 
+%token FORMEX
+
 %nonassoc INTERVAL
 %right COL
 %right SINCE UNTIL RELEASE TRIGGER
@@ -59,7 +61,8 @@ prog: stmts {$1}
 stmts: list(stmt) EOF { { stmts = $1 } }
 
 stmt:
-  | IMPORT import                          { SImport ($1, fst $2, snd $2) }
+  | IMPORT import                          { SImport ($1, ILex, $2) }
+  | IMPORT FORMEX import                   { SImport ($1, IFormex, $3) }
   | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, $2, $3) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, "") }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
@@ -67,9 +70,8 @@ stmt:
   | srule                                  { $1 }
 
 import:
-  | IDENT            { [snd $1], false }
-  | IDENT DOT STAR   { [snd $1], true }
-  | IDENT DOT import { let (a, b) = $3 in ((snd $1)::a, b) }
+  | IDENT            { [snd $1] }
+  | IDENT DOT import { (snd $1)::$3 }
 
 section_kind_and_pos:
   | LAW LABEL_LEVEL       { Law $2, $1 }

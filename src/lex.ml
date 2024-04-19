@@ -28,8 +28,12 @@ type rule_constr =
   | Suppressing of ident list
   | Causing     of ident list
 
+type import_format =
+  | ILex
+  | IFormex
+
 type stmt =
-  | SImport    of Lexing.position * string list * bool (* location points to beginning of "import" keyword *)
+  | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string (* location points to beginning of section label *)
   | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
@@ -125,12 +129,16 @@ let make_doc_string ds i =
     let indented = List.map lines ~f:(fun l -> Etc.tabs i ^ l) in
     Etc.tabs (i + 1) ^ "\"\"\"" ^ String.concat ~sep:"\n" indented ^ Etc.tabs i ^ "\"\"\"\n"
 
+let string_of_import_format = function
+  | ILex -> ""
+  | IFormex -> "[Formex] "
+
 let string_of_stmt ?(i=0) =
   function
-  | SImport (_, idents, star) ->
+  | SImport (_, import_format, idents) ->
      Printf.sprintf "import %s%s"
+       (string_of_import_format import_format)
        (String.concat ~sep:"." idents)
-       (if star then ".*" else "")
   | SSection (_, section_kind, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"
        (Etc.tabs i)
