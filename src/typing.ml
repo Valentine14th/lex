@@ -164,10 +164,6 @@ let resolve_exception_identifiers s =
 let update_var_ts_with_exceptions vars exceptions =
   let type_exception ~key:name ~data:es vs =
     let existing_vars = try Map.find_exn vs name with _ -> assert false in
-              (* let err_msg = Printf.sprintf
-                    "Rule '%s' is not defined (known rules: %s)"
-                    name (Util.str_of_list (Map.keys vs)) in
-              Util.label_error err_msg Lexing.dummy_pos in *)
     let merge_var_types types (exception_rule_name, _) =
       let exception_vars = try Map.find_exn vs exception_rule_name with _ -> assert false in
       Map.merge types exception_vars ~f:(fun ~key:k -> function
@@ -182,7 +178,9 @@ let update_var_ts_with_exceptions vars exceptions =
           | `Right t -> Some t)
     in
     let new_vars = List.fold es ~init:existing_vars ~f:merge_var_types in
-    Map.update vs name ~f:(fun _ -> new_vars)
+    let exception_rules = try List.map (Map.find_exn exceptions name) ~f:fst with _ -> assert false in
+    let m = List.fold exception_rules ~init:vs ~f:(fun acc value -> Map.update acc value ~f:(fun _ -> new_vars)) in
+    Map.update m name ~f:(fun _ -> new_vars)
   in Map.fold exceptions ~init:vars ~f:type_exception
 
 let do_type _ tprog =
