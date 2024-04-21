@@ -24,7 +24,7 @@ let compile_trule tprog =
   | TSRule (_, label, rule, _, _, _) ->
     let label_name = Label.qualified_name label in
     let exceptions = Map.find_multi tprog.exceptions label_name in
-    let f' = List.map exceptions ~f:neg in
+    let f' = List.map exceptions ~f:(fun x -> neg (snd x)) in
     aux f' rule
   | _ -> assert false
 

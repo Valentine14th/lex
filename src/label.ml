@@ -17,7 +17,7 @@ type t =
     paragraph: label_levels;
     point: label_levels;
     subpoint: label_levels;
-    rule_id: string option
+    rule_id: ident option
   }
 
 let empty =
@@ -95,6 +95,10 @@ let scope l = match l.rule_id with
         | [] -> begin match List.rev l.article with
           | _::xs -> { l with article = List.rev xs }
           | [] -> empty
+          (* | [] -> begin match List.rev l.law with
+            | law::_ -> { l with law = [law] }
+            | [] -> empty
+          end *)
         end
       end
     end
@@ -104,3 +108,36 @@ let rec prefixes l = match scope l with
   | { law = []; title = _; chapter = _; section = _; article = []; paragraph = []; point = []; subpoint = []; rule_id = None } -> [empty]
   | l' -> l' :: prefixes l'
 
+let combine_prefix_with_exception_ident ident prefix = qualified_name prefix ^ ident
+
+(** matches a partial name `ident` (used in exception) 
+    inside a rule at position `pos` with the label `label`
+    and returns the rule_id for which the exception is an 
+    exception of*)
+let get_full_name ident label pos rule_labels=
+  let possible_names = List.map (prefixes label) ~f:(combine_prefix_with_exception_ident ident) in
+  let actual_names = List.filter possible_names ~f:(fun n -> Map.mem rule_labels n) in
+  let name = match actual_names with
+  | [name] -> name
+  | [] ->
+    let err_msg = Printf.sprintf "Exception identifier '%s' could not be matched to a rule \n\tknown rules:          %s\n\tpotential expansions: %s"
+                  (ident)
+                  (Util.str_of_list (Map.keys rule_labels))
+                  (Util.str_of_list possible_names)
+    in
+    Util.label_error err_msg pos
+  | names ->
+    let err_msg = Printf.sprintf "Exception identifier '%s' is ambiguous, could refer to multiple rules: %s"
+                  (ident)
+                  (Util.str_of_list names)
+    in
+    Util.label_error err_msg pos
+  in
+  let exception_name = qualified_name label in
+  if String.equal exception_name name then
+      let err_msg = Printf.sprintf "Exception rule '%s' cannot be an exception to itself ('%s')"
+                    exception_name
+                    name
+      in
+      Util.label_error err_msg pos
+  else name

@@ -19,3 +19,6 @@ let take l n =
     | x::xs, i -> x :: aux (xs, (i - 1))
   in
   aux (l, n)
+
+let str_of_list l = Printf.sprintf "[%s]"
+  (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s;%s" acc s))

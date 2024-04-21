@@ -16,15 +16,15 @@ type tstmt =
 
 type tevent = (Lexing.position * ident * ident) list * pol * string option
 
-type var_map = (ident, (ident * typ), Base.String.comparator_witness) Map.t
+type var_types = (ident, ident, Base.String.comparator_witness) Map.t
 
 type tprog =
   {
     tstmts: tstmt list;
     taliases: (ident, typ, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
-    variables: (ident, var_map, Base.String.comparator_witness) Map.t; (* maps section labels to variables used in section *)
-    exceptions: (string, Formula.t list, Base.String.comparator_witness) Map.t
+    variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
+    exceptions: (ident, (ident * Formula.t) list, Base.String.comparator_witness) Map.t
   }
 
 let tempty =
@@ -57,8 +57,11 @@ let add_tevent name args pol ds tprog pos =
 
 let add_vars vs name tprog pos =
   let variables =
-    try Map.add_exn (Map.empty (module String)) ~key:name ~data:vs
-    with _ -> Util.label_error ("rule label " ^ name ^ " has already been defined") pos
+    try Map.add_exn tprog.variables ~key:name ~data:vs
+    with _ -> let err_msg = Printf.sprintf
+                "rule label '%s' has already been defined"
+                name in
+      Util.label_error err_msg pos
   in
   { tprog with variables = variables }
 
