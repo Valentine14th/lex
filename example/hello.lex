@@ -1,6 +1,6 @@
 law "GDPR" "REGULATION (EU) 2016/679 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL of 27 April 2016 on the protection of natural persons with regard to the processing of personal data and on the free movement of such data, and repealing Directive 95/46/EC (General Data Protection Regulation)"
 
-import formex gdpr2
+import formex gdpr
 
 type processingid is int
 type processorid is int
@@ -101,7 +101,8 @@ enforceable suppressing PersonalDataProcessing
 
 article "6" "Lawfulness of processing"
 paragraph "1"
-point "a"
+point "1"
+subpoint "a"
 rule
 """
 Art. 6(1) Processing shall be lawful only if and to the extent that at least one of the following applies:
