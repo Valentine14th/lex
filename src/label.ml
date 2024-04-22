@@ -16,7 +16,8 @@ type t =
     article: label_levels; (* for qualified name, this must be non-empty *)
     paragraph: label_levels;
     point: label_levels;
-    subpoint: label_levels
+    subpoint: label_levels;
+    rule_id: ident option
   }
 
 let empty =
@@ -28,62 +29,115 @@ let empty =
     article = [];
     paragraph = [];
     point = [];
-    subpoint = []
+    subpoint = [];
+    rule_id = None
   }
 
-let qualified_name_of_law pos = function
-  | [] -> Util.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos
-  | (name, _) :: _ -> name
+let valid_rule_label pos = function
+  | { law = []; _ } -> Util.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos
+  | { article = []; _ } -> Util.label_error "No 'article section defined (yet). A rule must be inside of an 'article' section" pos
+  | _ -> ()
 
-
-let rec qualified_name_of_level pos = function
+let qualified_name_of_law = function
   | [] -> ""
-  (* | (name, _, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs *)
-  | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level pos xs
+  | (name, _) :: _ -> name ^ " "
 
-let qualified_name_of_article pos = function
-  | [] -> Util.label_error "No 'article section defined (yet). A rule must be inside of a 'article' section" pos
-  | (name, _) :: xs -> name ^ qualified_name_of_level pos xs
 
-let qualified_name pos l =
-  Printf.sprintf "%s %s%s%s%s"
-  (qualified_name_of_law pos l.law)
-  (qualified_name_of_article pos l.article)
-  (qualified_name_of_level pos l.paragraph)
-  (qualified_name_of_level pos l.point)
-  (qualified_name_of_level pos l.subpoint)
+let rec qualified_name_of_level = function
+  | [] -> ""
+  | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs
+
+let qualified_name_of_article = function
+  | [] -> ""
+  | (name, _) :: xs -> name ^ qualified_name_of_level xs
+
+let string_of_rule_id = function
+  | None -> ""
+  | Some s -> "#" ^ s
+
+let qualified_name l =
+  Printf.sprintf "%s%s%s%s%s%s"
+  (qualified_name_of_law l.law)
+  (qualified_name_of_article l.article)
+  (qualified_name_of_level l.paragraph)
+  (qualified_name_of_level l.point)
+  (qualified_name_of_level l.subpoint)
+  (string_of_rule_id l.rule_id)
 
 
 let set pos section_kind label l =
   try
     match section_kind with
-    (* | Law 0       -> { empty with law       = [label] } *)
-    | Law i       -> {            law       = Util.take l.law i @ [label];       subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
-    | Title i     -> { l     with title     = Util.take l.title i @ [label];     subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
-    | Chapter i   -> { l     with chapter   = Util.take l.chapter i @ [label];   subpoint = []; point = []; paragraph = []; article = []; section = []}
-    | Section i   -> { l     with section   = Util.take l.section i @ [label];   subpoint = []; point = []; paragraph = []; article = []}
-    | Article i   -> { l     with article   = Util.take l.article i @ [label];   subpoint = []; point = []; paragraph = []}
-    | Paragraph i -> { l     with paragraph = Util.take l.paragraph i @ [label]; subpoint = []; point = []}
-    | Point i     -> { l     with point     = Util.take l.point i @ [label];     subpoint = []}
-    | Subpoint i  -> { l     with subpoint  = Util.take l.subpoint i @ [label]}
+    | Law i       -> {            law       = Util.take l.law i @ [label];       rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
+    | Title i     -> { l     with title     = Util.take l.title i @ [label];     rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
+    | Chapter i   -> { l     with chapter   = Util.take l.chapter i @ [label];   rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []}
+    | Section i   -> { l     with section   = Util.take l.section i @ [label];   rule_id = None; subpoint = []; point = []; paragraph = []; article = []}
+    | Article i   -> { l     with article   = Util.take l.article i @ [label];   rule_id = None; subpoint = []; point = []; paragraph = []}
+    | Paragraph i -> { l     with paragraph = Util.take l.paragraph i @ [label]; rule_id = None; subpoint = []; point = []}
+    | Point i     -> { l     with point     = Util.take l.point i @ [label];     rule_id = None; subpoint = []}
+    | Subpoint i  -> { l     with subpoint  = Util.take l.subpoint i @ [label];  rule_id = None;}
   with
-  | Invalid_argument _ -> Util.label_error ("wrong sub-level index (" ^ string_of_section_kind section_kind ^ ", " ^ qualified_name pos l ^ ")") pos
+  | Invalid_argument _ -> Util.label_error ("wrong sub-level index (" ^ string_of_section_kind section_kind ^ ", " ^ qualified_name l ^ ")") pos
 
-let collect l =
-  let ls = [
-    l.law;
-    l.title;
-    l.chapter;
-    l.section;
-    l.article;
-    l.paragraph;
-    l.point;
-    l.subpoint
-  ] in
-  let is_empty = function
-    | [] -> None
-    | x -> Some x in
-  List.filter_map ls ~f:is_empty
+let set_rule_id rule_id l = { l with rule_id = rule_id }
 
+(* IDEA: remove the lowest level from the label
+         while ignoring label parts that are not
+         used for qualified names *)
+let scope l = match l.rule_id with
+  | Some _ -> { l with rule_id = None }
+  | None -> begin match List.rev l.subpoint with
+    | _::xs -> { l with subpoint = List.rev xs }
+    | [] -> begin match List.rev l.point with
+      | _::xs -> { l with point = List.rev xs }
+      | [] -> begin match List.rev l.paragraph with
+        | _::xs -> { l with paragraph = List.rev xs }
+        | [] -> begin match List.rev l.article with
+          | _::xs -> { l with article = List.rev xs }
+          | [] -> empty
+          (* | [] -> begin match List.rev l.law with
+            | law::_ -> { l with law = [law] }
+            | [] -> empty
+          end *)
+        end
+      end
+    end
+  end
 
+let rec prefixes l = match scope l with
+  | { law = []; title = _; chapter = _; section = _; article = []; paragraph = []; point = []; subpoint = []; rule_id = None } -> [empty]
+  | l' -> l' :: prefixes l'
 
+let combine_prefix_with_exception_ident ident prefix = qualified_name prefix ^ ident
+
+(** matches a partial name `ident` (used in exception) 
+    inside a rule at position `pos` with the label `label`
+    and returns the rule_id for which the exception is an 
+    exception of*)
+let get_full_name ident label pos rule_labels=
+  let possible_names = List.map (prefixes label) ~f:(combine_prefix_with_exception_ident ident) in
+  let actual_names = List.filter possible_names ~f:(fun n -> Map.mem rule_labels n) in
+  let name = match actual_names with
+  | [name] -> name
+  | [] ->
+    let err_msg = Printf.sprintf "Exception identifier '%s' could not be matched to a rule \n\tknown rules:          %s\n\tpotential expansions: %s"
+                  (ident)
+                  (Util.str_of_list (Map.keys rule_labels))
+                  (Util.str_of_list possible_names)
+    in
+    Util.label_error err_msg pos
+  | names ->
+    let err_msg = Printf.sprintf "Exception identifier '%s' is ambiguous, could refer to multiple rules: %s"
+                  (ident)
+                  (Util.str_of_list names)
+    in
+    Util.label_error err_msg pos
+  in
+  let exception_name = qualified_name label in
+  if String.equal exception_name name then
+      let err_msg = Printf.sprintf "Exception rule '%s' cannot be an exception to itself ('%s')"
+                    exception_name
+                    name
+      in
+      Util.label_error err_msg pos
+  else name

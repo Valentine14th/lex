@@ -1,5 +1,5 @@
 open Core
-open Lex
+open Tlex
 open Html
 
 module Placeholders = struct
@@ -155,20 +155,22 @@ let reading_of_rule_except ident =
       "rule " ^ ident ^ " does not apply"
     )
 
-let verb_of_rule = function
-  | Obligation _ -> "must happen"
-  | Permission _ -> "is permitted"
-  | Constitutive _ -> "is constituted"
+let verb_of_trule = function
+  | TObligation _ -> "must happen"
+  | TPermission _ -> "is permitted"
+  | TConstitutive _ -> "is constituted"
   | _ -> assert false
 
-let reading_of_rule tprog rule =
+let reading_of_trule tprog trule =
   let reading_of_imp_rule verb f g =
     reading_of_rule_if tprog f ^ reading_of_rule_then tprog verb g in
   let reading_of_exc_rule f ident =
     reading_of_rule_if tprog f ^ reading_of_rule_except ident in
-  match rule with
-  | Obligation (f, g) | Permission (f, g) | Constitutive (f, g)
-    -> reading_of_imp_rule (verb_of_rule rule) f g
-  | Exception (f, ident) -> reading_of_exc_rule f ident
+  match trule with
+  | TObligation (f, g)
+  | TPermission (f, g)
+  | TConstitutive (f, g)
+    -> reading_of_imp_rule (verb_of_trule trule) f g
+  | TException (f, ident, _) -> reading_of_exc_rule f ident
 
 let reading_of_doc_string = Placeholders.mark_all
