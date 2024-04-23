@@ -10,6 +10,12 @@ and node_t =
   | FormexNode of t list
   | FormexData of string
 
+let rec map_data f t =
+  { t with children = map_node_data f t.children }
+and map_node_data f = function
+  | FormexNode ts -> FormexNode (List.map ts ~f:(map_data f))
+  | FormexData s -> FormexData (f s)
+
 let make_empty_node kind ident title =
   { ident; kind; title; children = FormexNode [] }
 
@@ -26,6 +32,15 @@ let rec to_string t =
 and to_string_node = function
   | FormexNode ts -> "{" ^ String.concat (List.map ~f:to_string ts) ~sep:"; " ^ "}"
   | FormexData s -> s
+
+let rec to_string_structure ?lvl:(lvl=0) t =
+  Util.spaces lvl ^ Lex.string_of_section_kind t.kind ^ " " ^ t.ident
+  ^ to_string_node_structure ~lvl t.children
+
+and to_string_node_structure ?lvl:(lvl=0) = function
+  | FormexNode ts -> String.concat ~sep:"" (List.map ts ~f:(fun t -> "\n" ^ to_string_structure ~lvl:(lvl+1) t))
+  | FormexData _ -> ""
+  
 
 (* XML *)
 
@@ -50,8 +65,10 @@ module XML = struct
   let get_child_by_tag_name tag xml =
     List.find_exn ~f:(fun x -> String.equal (Xml.tag x) tag) (Xml.children xml)
 
-  let find_childs_by_tag_name tag xml =
-    List.filter ~f:(fun x -> String.equal (Xml.tag x) tag) (Xml.children xml)
+  let find_children_by_tag_name tag xml =
+    try
+      List.filter ~f:(fun x -> String.equal (Xml.tag x) tag) (Xml.children xml)
+    with Xml.Not_element _ -> []
 
   let rec text = function
     | Xml.PCData data -> data
@@ -77,19 +94,35 @@ let get_ident tag xml =
 
 let get_idents tag = List.map ~f:(get_ident tag)
 
-let get_title tag xml =
+let get_text tag xml =
   let sti_xml = XML.get_child_by_tag_name tag xml in
   XML.text sti_xml
 
-let get_titles tag = List.map ~f:(get_title tag)
+let get_texts tag = List.map ~f:(get_text tag)
 
 let rec fill_in xml node =
-  (*print_endline (String.sub (Xml.to_string xml) ~pos:0 ~len:64);
-  print_endline (Lex.string_of_section_kind node.kind);*)
+  let fill_in_point xml node kind =
+    let list_xmls = XML.find_children_by_tag_name "LIST" xml in
+     begin
+       if List.length list_xmls > 0 then
+         begin
+           let list_xml = XML.get_child_by_tag_name "LIST" xml in
+           let text = get_text "P" xml in
+           try
+             let t = fill_in_on_tag_name "ITEM" (Some "NP") "NOP"
+                       None kind list_xml node in
+             map_data (fun s -> text ^ "... " ^ s) t
+           with _ -> fill_in_data_self xml node
+         end
+       else
+         fill_in_data_self xml node
+     end
+  in
   match node.kind with
-  | Lex.Law 0 -> fill_in_on_tag_name "DIVISION" (Some "TITLE") "TI" (Some "STI") (Lex.Chapter 0) xml node
+  | Lex.Law 0 ->
+     fill_in_on_tag_name "DIVISION" (Some "TITLE") "TI" (Some "STI") (Lex.Chapter 0) xml node
   | Lex.Chapter 0 ->
-     let section_xmls = XML.find_childs_by_tag_name "DIVISION" xml in
+     let section_xmls = XML.find_children_by_tag_name "DIVISION" xml in
      begin
        if List.length section_xmls > 0 then
          fill_in_on_tag_name "DIVISION" (Some "TITLE") "TI" (Some "STI") (Lex.Section 0) xml node
@@ -99,64 +132,67 @@ let rec fill_in xml node =
   | Lex.Section 0 ->
      fill_in_on_tag_name "ARTICLE" None "TIART" (Some "STIART") (Lex.Article 0) xml node
   | Lex.Article 0 ->
-     let paragraph_xmls = XML.find_childs_by_tag_name "PARAG" xml in
-     let alinea_xmls = XML.find_childs_by_tag_name "ALINEA" xml in
+     let paragraph_xmls = XML.find_children_by_tag_name "PARAG" xml in
+     let alinea_xmls = XML.find_children_by_tag_name "ALINEA" xml in
      begin
        if List.length paragraph_xmls > 0 then
          fill_in_on_tag_name "PARAG" None "NOPARAG" None (Lex.Paragraph 0) xml node
-       else if List.length alinea_xmls > 1 then
+       else if List.length alinea_xmls > 0 then
          fill_in_on_tag_name_implicit "ALINEA" (Lex.Point 0) xml node
-       else if List.length alinea_xmls = 1 then
-         fill_in_data "ALINEA" xml node
        else
-         assert false (*no subdivision of article*)
+         assert false
      end
   | Lex.Paragraph 0 ->
-     let alinea_xmls = XML.find_childs_by_tag_name "ALINEA" xml in
+     let alinea_xmls = XML.find_children_by_tag_name "ALINEA" xml in
      begin
        if List.length alinea_xmls > 1 then
          fill_in_on_tag_name_implicit "ALINEA" (Lex.Point 0) xml node
        else if List.length alinea_xmls = 1 then
-         fill_in_data "ALINEA" xml node
+         fill_in_point (XML.get_child_by_tag_name "ALINEA" xml) node (Lex.Point 0)
        else
          assert false
      end
+  | Lex.Point 0 -> fill_in_point xml node (Lex.Subpoint 0)
+  | Lex.Subpoint 0 -> fill_in_data_self xml node
   | _ -> assert false
 
 and fill_in_on_tag_name tag tag_title' tag_ident tag_title kind xml node =
-  let xmls = XML.find_childs_by_tag_name tag xml in
+  let xmls = XML.find_children_by_tag_name tag xml in
   let xmls' =
     match tag_title' with
     | Some tc -> List.map xmls ~f:(XML.get_child_by_tag_name tc)
     | None -> xmls in
   let idents = get_idents tag_ident xmls' in
   let titles = match tag_title with
-    | Some tt -> List.map ~f:Option.return (get_titles tt xmls')
+    | Some tt -> List.map ~f:Option.return (get_texts tt xmls')
     | None -> List.init (List.length idents) ~f:(fun _ -> None) in
   let nodes = List.map2_exn ~f:(make_empty_node kind) idents titles in
   { node with children = FormexNode (List.map2_exn xmls nodes ~f:fill_in) }
 
 and fill_in_on_tag_name_implicit tag kind xml node =
-  let xmls = XML.find_childs_by_tag_name tag xml in
+  let xmls = XML.find_children_by_tag_name tag xml in
   let idents = List.init (List.length xmls) ~f:(fun i -> string_of_int (i+1)) in
   let titles = List.init (List.length xmls) ~f:(fun _ -> None) in
   let nodes = List.map2_exn ~f:(make_empty_node kind) idents titles in
-  let texts = List.map xmls ~f:XML.text in
-  { node with children = FormexNode (List.map2_exn nodes texts ~f:make_data) }
+  { node with children = FormexNode (List.map2_exn xmls nodes ~f:fill_in) }
 
 and fill_in_data tag xml node =
-  let text = get_title tag xml in
+  let text = get_text tag xml in
   { node with children = FormexData text }
+
+and fill_in_data_self xml node =
+  { node with children = FormexData (XML.text xml) }
 
 let to_module filepath filename =
   let fullname = Filename.concat filepath filename in
   let xml = XML.parse_file fullname in
   let title = get_law_title xml in
-  let initial_node = make_empty_node (Lex.Law 0) (Filename.chop_extension filename) (Some title) in
+  let initial_node = make_empty_node (Lex.Law 0)
+                       (Filename.chop_extension filename) (Some title) in
   let enacting_terms = get_enacting_terms xml in
-  fill_in enacting_terms initial_node
+  let node = fill_in enacting_terms initial_node in
+  (*print_endline (to_string_structure node);*)
+  node
 
 
-
-(* Does not currently support titles *)
-(* Does not currently support lists *)
+(* Does not currently support levels above chapters  *)
