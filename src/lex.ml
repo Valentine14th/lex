@@ -16,6 +16,18 @@ type section_kind =
   | Point     of int
   | Subpoint  of int
 
+let equal_section_kind kind kind' =
+  match kind, kind' with
+  | Law i, Law i'
+  | Title i, Title i'
+  | Chapter i, Chapter i'
+  | Section i, Section i'
+  | Article i, Article i'
+  | Paragraph i, Paragraph i'
+  | Point i, Point i' 
+  | Subpoint i, Subpoint i' when i = i' -> true
+  | _, _ -> false
+
 type rule =
   | Obligation   of Formula.t list * Formula.t list
   | Permission   of Formula.t list * Formula.t list
@@ -34,7 +46,7 @@ type import_format =
 
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
-  | SSection   of Lexing.position * section_kind * string * string (* location points to beginning of section label *)
+  | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
   | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
   | SType      of Lexing.position * ident * typ (* location points to beginning of type identifier *)
@@ -131,7 +143,7 @@ let make_doc_string ds i =
 
 let string_of_import_format = function
   | ILex -> ""
-  | IFormex -> "[Formex] "
+  | IFormex -> " formex "
 
 let string_of_stmt ?(i=0) =
   function
@@ -144,7 +156,7 @@ let string_of_stmt ?(i=0) =
        (Etc.tabs i)
        (string_of_section_kind section_kind)
        label
-       (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
+       (match title with Some title -> Printf.sprintf ": \"%s\"" title | None -> "")
   | SRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
      let description =
        match doc_string with

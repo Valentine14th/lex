@@ -80,6 +80,42 @@ let parse_module filename =
   In_channel.close inx;
   prog
 
+let link_formex_stmt modules = function
+  | Tlex.TSRule (_, _, _, _, _, Some _) as s -> s
+  | TSSection (section_kind, full_label, label, None) ->
+     let f = function
+       | (_, MFormex formex) ->
+          String.equal formex.ident (Label.qualified_name_of_law full_label.law)
+       | _ -> false in
+     let title = begin
+         print_endline (String.concat ~sep:" " (
+                            List.map (Label.full_filters full_label)
+                              ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
+         match List.find modules ~f with
+         | Some (m, MFormex formex) ->
+            Option.map (Formex.find_title formex (List.tl_exn (Label.full_filters full_label)))
+              ~f:(fun x -> Tlex.TAFormex (m, x))
+         | _ -> None
+       end 
+     in TSSection (section_kind, full_label, label, title)
+  | TSRule (pos, label, rule, rule_type, rule_constrs, None) ->
+     let f = function
+       | (_, MFormex formex) ->
+          String.equal formex.ident (Label.qualified_name_of_law label.law)
+       | _ -> false in
+     let doc_string = begin
+         match List.find modules ~f with
+         | Some (m, MFormex formex) ->
+            Option.map (Formex.find_data formex (List.tl_exn (Label.full_filters label)))
+              ~f:(fun x -> Tlex.TAFormex (m, x))
+         | _ -> None
+       end 
+     in TSRule (pos, label, rule, rule_type, rule_constrs, doc_string)
+  | s -> s
+
+let link_formex modules tprog =
+  Tlex.{ tprog with tstmts = List.map tprog.tstmts ~f:(link_formex_stmt modules) }
+
 let rec do_type lexpath ?seq:(seq=[]) filepath filename =
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
@@ -100,4 +136,6 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                        )
                       )
                     ) in
-  Typing.do_type (Map.of_alist_exn (module String) modules) prog
+  let tprog = Typing.do_type (Map.of_alist_exn (module String) modules) prog in
+  let tprog = link_formex modules tprog in
+  tprog

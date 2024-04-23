@@ -35,12 +35,42 @@ and to_string_node = function
 
 let rec to_string_structure ?lvl:(lvl=0) t =
   Util.spaces lvl ^ Lex.string_of_section_kind t.kind ^ " " ^ t.ident
+  ^ (match t.title with Some title -> ": " ^ title  | None -> "")
   ^ to_string_node_structure ~lvl t.children
 
 and to_string_node_structure ?lvl:(lvl=0) = function
   | FormexNode ts -> String.concat ~sep:"" (List.map ts ~f:(fun t -> "\n" ^ to_string_structure ~lvl:(lvl+1) t))
   | FormexData _ -> ""
-  
+
+let rec find_data t filters =
+  match t.children, filters with
+  | FormexData s, [] -> Some s
+  | FormexNode ts, (kind, ident) :: filters ->
+     let matches t =
+       Lex.equal_section_kind t.kind kind && String.equal t.ident ident in
+     let f t =
+       if matches t then
+         find_data t filters
+       else
+         find_data t ((kind, ident) :: filters)
+     in
+     List.find_map ts ~f
+  | _, _ -> None
+
+let rec find_title t filters =
+  match t.children, filters with
+  | _, [] -> t.title
+  | FormexNode ts, (kind, ident) :: filters ->
+     let matches t =
+       Lex.equal_section_kind t.kind kind && String.equal t.ident ident in
+     let f t =
+       if matches t then
+         find_title t filters
+       else
+         find_title t ((kind, ident) :: filters)
+     in
+     List.find_map ts ~f
+  | _, _ -> None
 
 (* XML *)
 
@@ -111,7 +141,7 @@ let rec fill_in xml node =
            try
              let t = fill_in_on_tag_name "ITEM" (Some "NP") "NOP"
                        None kind list_xml node in
-             map_data (fun s -> text ^ "... " ^ s) t
+             map_data (fun s -> text ^ " [...] " ^ s) t
            with _ -> fill_in_data_self xml node
          end
        else
@@ -191,8 +221,9 @@ let to_module filepath filename =
                        (Filename.chop_extension filename) (Some title) in
   let enacting_terms = get_enacting_terms xml in
   let node = fill_in enacting_terms initial_node in
-  (*print_endline (to_string_structure node);*)
+  print_endline (to_string_structure node);
   node
 
+    
 
 (* Does not currently support levels above chapters  *)

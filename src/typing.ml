@@ -142,18 +142,21 @@ let type_rule s pos = function
       let vars = type_formulas fs s pos in
       let s' = add_vars vars label_name s pos in
       let s'' = add_rule_labels label_name label' s' pos in
-      add_tstmt (TSRule (pos, label', rule, rule_type, rule_constrs, doc_string)) s''
+      let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
+      add_tstmt (TSRule (pos, label', rule, rule_type, rule_constrs, doc_string')) s''
     end
   | _ -> assert false
 
 let type_stmt s = function
   | SImport (pos, import_format, idents) -> add_tstmt (TSImport (pos, idents, import_format)) s
   | SSection (pos, section_kind, label, title) ->
-     add_tstmt (TSSection (section_kind, label, title)) (set_labels pos section_kind (label, title) s)
+     let s = set_labels pos section_kind (label, title) s in
+     let title' = Option.map title ~f:(fun x -> TALex x) in
+     add_tstmt (TSSection (section_kind, s.label, label, title')) s
   | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
-
+    
 let resolve_exception_identifiers s =
   let append_exception rule_labels m (ident, label, pos, f) =
     let name = Label.get_full_name ident label pos rule_labels in

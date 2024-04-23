@@ -132,3 +132,12 @@
     font-style: italic;
 }
 /*8ce83e*/
+
+.badge {
+    background-color: #FDE68A;
+    color: black;
+    font-weight: normal;
+    font-style: normal;
+    margin-right: 5px;
+    font-size: 75%;
+}

@@ -82,6 +82,10 @@ let html_of_rule_constrs rule_constrs =
       String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
     )
 
+let html_of_tannot = function
+  | TALex s -> s
+  | TAFormex (m, s) -> Html.formex m ^ s
+
 let html_of_trule_reading tprog trule = function
   | None -> 
      div "lex-rule-reading" (
@@ -93,7 +97,7 @@ let html_of_trule_reading tprog trule = function
          div "lex-reading-header" "Reading"
          ^ ul "list-group list-group-flush" (
                li "list-group-item lex-reading-body" (Reading.reading_of_trule tprog trule)
-               ^ li "list-group-item lex-docstring-body" doc_string)
+               ^ li "list-group-item lex-docstring-body" (html_of_tannot doc_string))
        )
 
 let html_of_doc_string s =
@@ -118,21 +122,20 @@ let html_of_tstmt tprog =
      div "lex-stmt-import" (
          one_column (
              kw "import"
-             ^ Lex.string_of_import_format import_format
+             ^ kw (Lex.string_of_import_format import_format)
              ^ String.concat ~sep:"." (List.map ~f:ident idents)
            )
        )
-  | TSSection (section_kind, label, title) ->
+  | TSSection (section_kind, _, label, title) ->
      let section_class = "lex-stmt-section-" ^ Lex.string_of_section_kind section_kind in
      div section_class (
          one_column (
              span "lex-section-kind" (Lex.string_of_section_kind section_kind)
              ^ span "lex-section-label" label
              ^ (
-               if String.equal title "" then
-                 ""
-               else
-                 div "lex-section-title" title
+               match title with
+               | Some title -> div "lex-section-title" (html_of_tannot title)
+               | None -> ""
              )
            )
        )
@@ -191,4 +194,5 @@ let print input_filename filename tprog =
   let css = In_channel.read_all (
                 Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../assets/lexdoc.css") in
   let html = html_of_tprog ("Lexdoc: " ^ input_filename) css tprog in
+  print_endline filename;
   Out_channel.write_all filename ~data:html

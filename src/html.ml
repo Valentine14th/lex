@@ -57,3 +57,9 @@ let two_column left right =
 
 let one_column html =
   div "row" (div "col-12" html)
+
+let badge html =
+  span "badge" html
+
+let formex html =
+  badge ("Formex: " ^ html)

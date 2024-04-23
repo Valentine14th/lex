@@ -5,7 +5,7 @@ open Lex
 (** First identifier: number, letter, etc. describing
                       the section in question (e.g. "2")
     second identifier: decriptive, title (e.g. "Material Scope") *)
-type label_levels = (ident * ident) list 
+type label_levels = (ident * ident option) list 
 
 type t =
   {
@@ -40,12 +40,18 @@ let valid_rule_label pos = function
 
 let qualified_name_of_law = function
   | [] -> ""
-  | (name, _) :: _ -> name ^ " "
+  | (name, _) :: _ -> name
 
+let qualified_filters_of_law = function
+  | [] -> []
+  | (name, _) :: _ -> [(Law 0, name)]
 
 let rec qualified_name_of_level = function
   | [] -> ""
   | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs
+
+let qualified_filters_of_level kind_fun xs =
+  List.mapi xs ~f:(fun i (name, _) -> (kind_fun i, name))
 
 let qualified_name_of_article = function
   | [] -> ""
@@ -56,7 +62,7 @@ let string_of_rule_id = function
   | Some s -> "#" ^ s
 
 let qualified_name l =
-  Printf.sprintf "%s%s%s%s%s%s"
+  Printf.sprintf "%s %s%s%s%s%s"
   (qualified_name_of_law l.law)
   (qualified_name_of_article l.article)
   (qualified_name_of_level l.paragraph)
@@ -64,6 +70,22 @@ let qualified_name l =
   (qualified_name_of_level l.subpoint)
   (string_of_rule_id l.rule_id)
 
+let qualified_filters l =
+  (qualified_filters_of_law l.law)
+  @ (qualified_filters_of_level (fun i -> Article i) l.article)
+  @ (qualified_filters_of_level (fun i -> Paragraph i) l.paragraph)
+  @ (qualified_filters_of_level (fun i -> Point i) l.point)
+  @ (qualified_filters_of_level (fun i -> Subpoint i) l.subpoint)
+
+let full_filters l =
+  (qualified_filters_of_law l.law)
+  @ (qualified_filters_of_level (fun i -> Title i) l.title)
+  @ (qualified_filters_of_level (fun i -> Chapter i) l.chapter)
+  @ (qualified_filters_of_level (fun i -> Section i) l.section)
+  @ (qualified_filters_of_level (fun i -> Article i) l.article)
+  @ (qualified_filters_of_level (fun i -> Paragraph i) l.paragraph)
+  @ (qualified_filters_of_level (fun i -> Point i) l.point)
+  @ (qualified_filters_of_level (fun i -> Subpoint i) l.subpoint)
 
 let set pos section_kind label l =
   try

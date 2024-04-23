@@ -7,10 +7,18 @@ type trule =
   | TConstitutive of Formula.t list * Formula.t list
   | TException    of Formula.t list * ident * Formula.t
 
+type 'a tannot =
+  | TALex of 'a
+  | TAFormex of string * 'a
+
+let of_annot = function
+  | TALex x -> x
+  | TAFormex (_, x) -> x
+
 type tstmt =
   | TSImport  of Lexing.position * string list * import_format
-  | TSSection of section_kind * string * string
-  | TSRule    of Lexing.position * Label.t * trule * rule_type * rule_constr list * string option
+  | TSSection of section_kind * Label.t * string * string tannot option
+  | TSRule    of Lexing.position * Label.t * trule * rule_type * rule_constr list * string tannot option
   | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
 
@@ -102,16 +110,16 @@ let string_of_tstmt ?(i=0) =
   | TSImport (_, idents, _) ->
      Printf.sprintf "import %s"
        (String.concat ~sep:"." idents)
-  | TSSection (section_kind, label, title) ->
+  | TSSection (section_kind, _, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"
        (Etc.tabs i)
        (string_of_section_kind section_kind)
        label
-       (if String.equal title "" then "" else Printf.sprintf ": \"%s\"" title)
+       (match title with Some title -> Printf.sprintf ": \"%s\"" (of_annot title) | None -> "")
   | TSRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
      let description =
           match doc_string with
-          | Some s -> "\n" ^ make_doc_string s i
+          | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
      Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
