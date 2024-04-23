@@ -34,7 +34,7 @@ type rule =
   | Constitutive of Formula.t list * Formula.t list
   | Exception    of Formula.t list * ident
     
-type rule_type = Vanilla | Enforceable
+type rule_type = Vanilla | Enforceable | Transparent
 
 type rule_constr =
   | Suppressing of ident list
@@ -96,6 +96,7 @@ let string_of_section_kind = function
 let string_of_rule_type = function
   | Vanilla -> ""
   | Enforceable -> "enforceable "
+  | Transparent -> "transparently enforceable "
 
 let string_of_rule_constr = function
   | Suppressing idents -> "suppressing " ^ String.concat ~sep:", " idents

@@ -1,5 +1,45 @@
 open Core
 
+module EnfType = struct
+
+  type t = Non | Cau | Obs | Sup | CauObs | CauSup | Itl [@@deriving compare, sexp_of, hash]
+  
+  let to_string = function
+    | Non    -> ""
+    | Cau    -> "causable"
+    | Obs    -> "observable"
+    | Sup    -> "suppressable"
+    | CauObs -> "causable observable"
+    | CauSup -> "causable suppressable"
+    | Itl    -> "internal"
+
+  let equal a b = match a, b with
+    | Cau, Cau -> true
+    | Sup, Sup -> true
+    | CauSup, CauSup -> true
+    | Obs, Obs -> true
+    | _, _ -> false
+
+  let meet a b = match a, b with
+    | _, _ when equal a b -> a
+    | Cau, Sup | Sup, Cau | CauSup, _ | _, CauSup -> CauSup
+    | Obs, x | x, Obs -> x
+    | _, _ -> Obs
+
+  let join a b = match a, b with
+    | _, _ when equal a b -> a
+    | Cau, Sup | Sup, Cau | Obs, _ | _, Obs -> Obs
+    | Cau, _ | _, Cau -> Cau
+    | _, _ -> Sup
+
+  let leq a b = equal (join a b) a
+  let geq a b = equal (meet a b) b
+
+  let specialize a b = if leq b a then Some b else None
+
+end
+
+
 module Side = struct
 
   type t = N | L | R | LR
@@ -66,6 +106,7 @@ module Term = struct
                            else Printf.sprintf "%s, %s" (Dom.to_string d) (list_to_string trms)
 
 end
+
 
 type ty =
   | Cau
@@ -150,8 +191,6 @@ let rec fv = function
     | Since (_, _, f1, f2)
     | Until (_, _, f1, f2) -> Set.union (fv f1) (fv f2)
 
-let paren h k x = if h>k then "("^^x^^")" else x
-
 let rec collect_predicates l = function
   | TT
     | FF
@@ -180,22 +219,22 @@ let rec to_string_rec l = function
   | EqConst (x, c) -> Printf.sprintf "%s = %s" x (Dom.to_string c)
   | Predicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | Neg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
-  | And (s, f, g) -> Printf.sprintf (paren l 4 "%a ∧%a %a") (fun _ -> to_string_rec 4) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
-  | Or (s, f, g) -> Printf.sprintf (paren l 3 "%a ∨%a %a") (fun _ -> to_string_rec 3) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
-  | Imp (s, f, g) -> Printf.sprintf (paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | Iff (s, t, f, g) -> Printf.sprintf (paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
-  | Exists (x, f) -> Printf.sprintf (paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f
-  | Forall (x, f) -> Printf.sprintf (paren l 5 "∀%s. %a") x (fun _ -> to_string_rec 5) f
-  | Prev (i, f) -> Printf.sprintf (paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | Next (i, f) -> Printf.sprintf (paren l 5 "○%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | Once (i, f) -> Printf.sprintf (paren l 5 "⧫%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | Eventually (i, f) -> Printf.sprintf (paren l 5 "◊%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | Historically (i, f) -> Printf.sprintf (paren l 5 "■%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | Always (i, f) -> Printf.sprintf (paren l 5 "□%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | Since (s, i, f, g) -> Printf.sprintf (paren l 0 "%a S%a%a %a") (fun _ -> to_string_rec 5) f
+  | And (s, f, g) -> Printf.sprintf (Util.paren l 4 "%a ∧%a %a") (fun _ -> to_string_rec 4) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
+  | Or (s, f, g) -> Printf.sprintf (Util.paren l 3 "%a ∨%a %a") (fun _ -> to_string_rec 3) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
+  | Imp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
+  | Iff (s, t, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
+  | Exists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f
+  | Forall (x, f) -> Printf.sprintf (Util.paren l 5 "∀%s. %a") x (fun _ -> to_string_rec 5) f
+  | Prev (i, f) -> Printf.sprintf (Util.paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | Next (i, f) -> Printf.sprintf (Util.paren l 5 "○%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | Once (i, f) -> Printf.sprintf (Util.paren l 5 "⧫%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | Eventually (i, f) -> Printf.sprintf (Util.paren l 5 "◊%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | Historically (i, f) -> Printf.sprintf (Util.paren l 5 "■%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | Always (i, f) -> Printf.sprintf (Util.paren l 5 "□%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | Since (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a S%a%a %a") (fun _ -> to_string_rec 5) f
                           (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | Until (s, i, f, g) -> Printf.sprintf (paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
+  | Until (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
                             (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | Type (f, t) -> Printf.sprintf (paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f
+  | Type (f, t) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f
                             (fun _ -> ty_to_string) t
 let to_string = to_string_rec 0

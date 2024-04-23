@@ -1,6 +1,7 @@
 open Core
-open Tlex
+open Elex
 open Html
+open Tformula
 
 let html_of_trm = function
   | Formula.Term.Var x -> ident x
@@ -11,61 +12,68 @@ let html_of_trms trms =
 
 let paren h k x : string = if h>k then "("^x^")" else x
   
-let rec html_of_formula_ l = function
-  | Formula.TT -> const "true"
-  | FF -> const "false"
-  | EqConst (x, c) -> Printf.sprintf "%s = %s" (ident x) (const (Dom.to_string c))
-  | Predicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
-  | Neg f -> kw "NOT" ^ html_of_formula_ 5 f
-  | And (_, f, g) -> paren l 4 (html_of_formula_ 4 f ^ kw "AND" ^ html_of_formula_ 4 g)
-  | Or (_, f, g) -> paren l 3 (html_of_formula_ 3 f ^ kw "OR" ^ html_of_formula_ 3 g)
-  | Imp (_, f, g) -> paren l 5 (html_of_formula_ 5 f ^ kw "IMPLIES" ^ html_of_formula_ 5 g)
-  | Iff (_, _, f, g) -> paren l 5 (html_of_formula_ 5 f ^ kw "EQUIV" ^ html_of_formula_ 5 g)
-  | Exists (x, f) -> paren l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ 5 f)
-  | Forall (x, f) -> paren l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ 5 f)
-  | Prev (i, f) -> paren l 5  (kw "PREVIOUS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 f)
-  | Next (i, f) -> paren l 5 (kw "NEXT" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 f)
-  | Once (i, f) -> paren l 5 (kw "ONCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 f)
-  | Eventually (i, f) -> paren l 5 (kw "EVENTUALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 f)
-  | Historically (i, f) -> paren l 5 (kw "HISTORICALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 f)
-  | Always (i, f) -> paren l 5 (kw "ALWAYS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 f)
-  | Since (_, i, f, g) -> paren l 0 (html_of_formula_ 5 f ^ kw "SINCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 g)
-  | Until (_, i, f, g) -> paren l 0 (html_of_formula_ 5 f ^ kw "UNTIL" ^ (interval (Interval.to_string i)) ^ html_of_formula_ 5 g)
-  | Type (f, t) -> paren l 0 (html_of_formula_  5 f ^ kw ": " ^ Formula.ty_to_string t)
+let rec html_of_formula_ formula_id l f =
+  let inner_html = 
+    match f.f with
+    | TTT -> const "true"
+    | TFF -> const "false"
+    | TEqConst (x, c) -> Printf.sprintf "%s = %s" (ident x) (const (Dom.to_string c))
+    | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
+    | TNeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
+    | TAnd (_, f, g) -> paren l 4 (html_of_formula_ formula_id 4 f ^ kw "AND" ^ html_of_formula_ formula_id 4 g)
+    | TOr (_, f, g) -> paren l 3 (html_of_formula_ formula_id 3 f ^ kw "OR" ^ html_of_formula_ formula_id 3 g)
+    | TImp (_, f, g) -> paren l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
+    | TIff (_, _, f, g) -> paren l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
+    | TExists (x, f) -> paren l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | TForall (x, f) -> paren l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | TPrev (i, f) -> paren l 5  (kw "PREVIOUS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TNext (i, f) -> paren l 5 (kw "NEXT" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TOnce (i, f) -> paren l 5 (kw "ONCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TEventually (i, _, f) -> paren l 5 (kw "EVENTUALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | THistorically (i, f) -> paren l 5 (kw "HISTORICALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TAlways (i, _, f) -> paren l 5 (kw "ALWAYS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TSince (_, i, f, g) -> paren l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
+    | TUntil (_, i, _, f, g) -> paren l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
+    | TType (f, t) -> paren l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Formula.ty_to_string t) in
+  let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
+  span ~id "lex-subformula" inner_html 
 
-let html_of_formula f =
-  div "lex-formula" (html_of_formula_ 0 f)
+let html_of_formula formula_id f =
+  div "lex-formula" (html_of_formula_ formula_id 0 f)
   
-let html_of_trule trule =
+let html_of_erule rule_id erule =
+  let formula_id infix =
+    Printf.sprintf "%s-%s-%d" rule_id infix in
   let string_of_imp_rule verb f g =
     div "lex-rule-if" (
         kw "whenever"
-        ^ String.concat ~sep:"" (List.map ~f:html_of_formula f)
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
       )
     ^ div "lex-rule-then" (
           kw verb
-          ^ String.concat ~sep:"" (List.map ~f:html_of_formula g)
+          ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
   let string_of_exc_rule f id =
     div "lex-rule-if" (
         kw "whenever"
-        ^ String.concat ~sep:"" (List.map ~f:html_of_formula f)
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
       )
     ^ div "lex-rule-then" (
           kw "except" ^ ident id
         )
   in
-  match trule with
-  | TObligation (f, g)
-  | TPermission (f, g)
-  | TConstitutive (f, g)
-    -> string_of_imp_rule (verb_of_trule trule) f g
-  | TException (f, ident, _) -> string_of_exc_rule f ident
+  match erule with
+  | EObligation (f, g)
+  | EPermission (f, g)
+  | EConstitutive (f, g)
+    -> string_of_imp_rule (verb_of_erule erule) f g
+  | EException (f, ident, _) -> string_of_exc_rule f ident
 
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
   | Enforceable -> "enforceable"
+  | Transparent -> "transparently enforceable"
 
 let html_of_rule_constr_type = function
   | Lex.Suppressing idents -> "suppressing", idents
@@ -83,20 +91,20 @@ let html_of_rule_constrs rule_constrs =
     )
 
 let html_of_tannot = function
-  | TALex s -> s
+  | Tlex.TALex s -> s
   | TAFormex (m, s) -> Html.formex m ^ s
 
-let html_of_trule_reading tprog trule = function
+let html_of_erule_reading rule_id eprog erule = function
   | None -> 
      div "lex-rule-reading" (
          div "lex-reading-header" "Reading" 
-         ^ div "lex-reading-body" (Reading.reading_of_trule tprog trule)
+         ^ div "lex-reading-body" (Reading.reading_of_erule rule_id eprog erule)
        )
   | Some doc_string ->
      div "lex-rule-reading" (
          div "lex-reading-header" "Reading"
          ^ ul "list-group list-group-flush" (
-               li "list-group-item lex-reading-body" (Reading.reading_of_trule tprog trule)
+               li "list-group-item lex-reading-body" (Reading.reading_of_erule rule_id eprog erule)
                ^ li "list-group-item lex-docstring-body" (html_of_tannot doc_string))
        )
 
@@ -116,9 +124,9 @@ let html_of_args args =
       String.concat ~sep:"" (List.map ~f:html_of_arg args)
     )
 
-let html_of_tstmt tprog =
+let html_of_estmt eprog =
   function
-  | TSImport (_, idents, import_format) ->
+  | ESImport (_, idents, import_format) ->
      div "lex-stmt-import" (
          one_column (
              kw "import"
@@ -126,7 +134,7 @@ let html_of_tstmt tprog =
              ^ String.concat ~sep:"." (List.map ~f:ident idents)
            )
        )
-  | TSSection (section_kind, _, label, title) ->
+  | ESSection (section_kind, _, label, title) ->
      let section_class = "lex-stmt-section-" ^ Lex.string_of_section_kind section_kind in
      div section_class (
          one_column (
@@ -139,11 +147,12 @@ let html_of_tstmt tprog =
              )
            )
        )
-  | TSRule (_, _, trule, rule_type, rule_constrs, doc_string) ->
+  | ESRule (_, label, erule, rule_type, rule_constrs, doc_string) ->
+     let rule_id = Label.qualified_id label in
      div "lex-stmt-rule" (
          two_column (
              kw "rule"
-             ^ html_of_trule trule
+             ^ html_of_erule ("lex-subformula-" ^ rule_id) erule
              ^ kw (html_of_rule_type rule_type)
              ^ (
                if List.is_empty rule_constrs then
@@ -152,9 +161,9 @@ let html_of_tstmt tprog =
                  html_of_rule_constrs rule_constrs
              )
            )
-           (html_of_trule_reading tprog trule doc_string)
+           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog erule doc_string)
        )
-  | TSEvent (name, typed_args, pol, doc_string) ->
+  | ESEvent (name, typed_args, pol, doc_string) ->
      let html_of_event =
          kw (Lex.string_of_pol pol)
          ^ kw "event"
@@ -165,7 +174,7 @@ let html_of_tstmt tprog =
        (match doc_string with
         | Some s -> two_column html_of_event (html_of_doc_string s)
         | None   -> one_column html_of_event)
-  | TSType (name, ty) ->
+  | ESType (name, ty) ->
      div "lex-stmt-type" (
          one_column (typ name ^ kw "is" ^ typ (Lex.string_of_typ ty))
        )
@@ -177,22 +186,31 @@ let bootstrap_link =
     "<link href=\"%s\" rel=\"stylesheet\" integrity=\"%s\" crossorigin=\"anonymous\">"
     bootstrap_css_url
     bootstrap_css_integrity
-
-let html_of_tprog title css tprog =
+let jquery_url = "https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"
+let jquery_link =
   Printf.sprintf
-    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>%s</title>%s<style>%s</style></head><body class=\"container\">%s</body></html>"
+    "<script src=\"%s\"></script>"
+    jquery_url
+
+let html_of_eprog title css js eprog =
+  Printf.sprintf
+    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>%s</title>%s<style>%s</style></head><body class=\"container\">%s</body>%s<script>%s</script></html>"
     title
     bootstrap_link
     css
     (
       div "lex-program" (
-          String.concat ~sep:"" (List.map tprog.tstmts ~f:(html_of_tstmt tprog))
+          String.concat ~sep:"" (List.map eprog.estmts ~f:(html_of_estmt eprog))
         )
     )
+    jquery_link
+    js
 
-let print input_filename filename tprog =
+let print input_filename filename eprog =
   let css = In_channel.read_all (
                 Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../assets/lexdoc.css") in
-  let html = html_of_tprog ("Lexdoc: " ^ input_filename) css tprog in
+  let js = In_channel.read_all (
+                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../assets/lexdoc.js") in
+  let html = html_of_eprog ("Lexdoc: " ^ input_filename) css js eprog in
   print_endline filename;
   Out_channel.write_all filename ~data:html

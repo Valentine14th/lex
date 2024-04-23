@@ -1,5 +1,5 @@
 open Core
-open Tlex
+open Elex
 open Html
 
 module Placeholders = struct
@@ -34,120 +34,128 @@ let reading_of_future_interval default = function
   | B (BI (0, j)) -> Printf.sprintf "%s within %d time units" default j
   | B (BI (i, j)) -> Printf.sprintf "%s in between %d and %d time units" default i j
     
-let rec reading_of_formula tprog = function
-  | Formula.TT -> const "true"
-  | FF -> const "false"
-  | EqConst (x, d) -> ident x ^ " is equal to " ^ const (Dom.to_string d)
-  | Predicate (name, trms) as f ->
-    (match Map.find Tlex.(tprog.tevents) name with
-     | Some (args, _, doc_string) -> 
-        let names = List.map ~f:(fun (_, name, _) -> name) args in
-        (match doc_string with
-         | None   -> Formula.to_string f
-         | Some s -> Placeholders.replace_all names (List.map ~f:reading_of_term trms) s)
-     | None -> Formula.to_string f)
-  | Neg f ->
-     "the following is not the case: "
-     ^ (ul "lex-reading-neg"
-          (li "lex-reading-neg-li" (reading_of_formula tprog f)))
-  | And (_, f, g) ->
-     "all of the following are the case:"
-     ^ (ul "lex-reading-and"
-          ((li "lex-reading-and-li" (reading_of_formula tprog f))
-           ^ (li "lex-reading-and-li" (reading_of_formula tprog g))))
-  | Or (_, f, g) ->
-     "at least one of the following is the case:"
-     ^ (ul "lex-reading-or"
-          ((li "lex-reading-or-li" (reading_of_formula tprog f))
-           ^ (li "lex-reading-or-li" (reading_of_formula tprog g))))
-  | Imp (_, f, g) ->
-     "if the following is the case:"
-     ^ (ul "lex-reading-imp-left"
-          (li "lex-reading-imp-left-li" (reading_of_formula tprog f)))
-     ^ "then the following is the case:"
-     ^ (ul "lex-reading-imp-right"
-          (li "lex-reading-imp-right-li" (reading_of_formula tprog g)))
-  | Iff (_, _, f, g) ->
-     "the following is the case:"
-     ^ (ul "lex-reading-iff-left"
-          (li "lex-reading-iff-left-li" (reading_of_formula tprog f)))
-     ^ "if, and only if, the following is the case:"
-     ^ (ul "lex-reading-iff-right"
-          (li "lex-reading-iff-right-li" (reading_of_formula tprog g)))
-  | Exists (x, f) ->
-     "there exists " ^ ident x ^ " such that the following is the case:"
-     ^ (ul "lex-reading-exists"
-          (li "lex-reading-exists-li" (reading_of_formula tprog f)))
-  | Forall (x, f) ->
-     "for all " ^ ident x ^ ", the following is the case:"
-     ^ (ul "lex-reading-forall"
-          (li "lex-reading-forall-li" (reading_of_formula tprog f)))
-  | Prev (i, f) ->
-     reading_of_past_interval "at the previous time point" i
-     ^ ", the following happened:"
-     ^ (ul "lex-reading-prev"
-          (li "lex-reading-prev-li" (reading_of_formula tprog f)))
-  | Next (i, f) ->
-     reading_of_future_interval "at the next time point" i
-     ^ ", the following will happen:"
-     ^ (ul "lex-reading-next"
-          (li "lex-reading-next-li" (reading_of_formula tprog f)))
-  | Once (i, f) ->
-     reading_of_past_interval "at some point" i
-     ^ ", the following happened: "
-     ^ (ul "lex-reading-once"
-          (li "lex-reading-once-li" (reading_of_formula tprog f)))
-  | Eventually (i, f) ->
-     reading_of_future_interval "at some point" i
-     ^ ", the following will happen: "
-     ^ (ul "lex-reading-eventually"
-          (li "lex-reading-eventually-li" (reading_of_formula tprog f)))
-  | Historically (i, f) ->
-     reading_of_past_interval "at all time points" i
-     ^ ", the following happened: "
-     ^ (ul "lex-reading-historically"
-          (li "lex-reading-historically-li" (reading_of_formula tprog f)))
-  | Always (i, f) ->
-     reading_of_future_interval "at all time points" i
-     ^ ", the following happened: "
-     ^ (ul "lex-reading-always"
-          (li "lex-reading-always-li" (reading_of_formula tprog f)))
-  | Since (_, i, f, g) ->
-     reading_of_past_interval "at some point" i
-     ^ ", the following happened: "
-     ^ (ul "lex-reading-since-left"
-          (li "lex-reading-since-left-li" (reading_of_formula tprog f)))
-     ^ "and since then the following has always been the case:"
-     ^ ", the following happened: "
-     ^ (ul "lex-reading-since-right"
-          (li "lex-reading-since-right-li" (reading_of_formula tprog g)))
-  | Until (_, i, f, g) ->
-     reading_of_future_interval "at some point" i
-     ^ ", the following will happen: "
-     ^ (ul "lex-reading-until-left"
-          (li "lex-reading-until-left-li" (reading_of_formula tprog f)))
-     ^ "and until then the following will always be the case:"
-     ^ ", the following happened: "
-     ^ (ul "lex-reading-until-right"
-          (li "lex-reading-until-right-li" (reading_of_formula tprog g)))
-  | f -> Formula.to_string f
+let rec reading_of_formula formula_id eprog f =
+  let inner_html = 
+    match Tformula.(f.f) with
+    | Tformula.TTT -> const "true"
+    | TFF -> const "false"
+    | TEqConst (x, d) -> ident x ^ " is equal to " ^ const (Dom.to_string d)
+    | TPredicate (name, trms) as f ->
+       (match Map.find Elex.(eprog.eevents) name with
+        | Some (args, _, doc_string) -> 
+           let names = List.map ~f:(fun (_, name, _) -> name) args in
+           (match doc_string with
+            | None   -> Tformula.to_string_core f
+            | Some s -> Placeholders.replace_all names (List.map ~f:reading_of_term trms) s)
+        | None -> Tformula.to_string_core f)
+    | TNeg f ->
+       "the following is not the case: "
+       ^ (ul "lex-reading-neg"
+            (li "lex-reading-neg-li" (reading_of_formula formula_id eprog f)))
+    | TAnd (_, f, g) ->
+       "all of the following are the case:"
+       ^ (ul "lex-reading-and"
+            ((li "lex-reading-and-li" (reading_of_formula formula_id eprog f))
+             ^ (li "lex-reading-and-li" (reading_of_formula formula_id eprog g))))
+    | TOr (_, f, g) ->
+       "at least one of the following is the case:"
+       ^ (ul "lex-reading-or"
+            ((li "lex-reading-or-li" (reading_of_formula formula_id eprog f))
+             ^ (li "lex-reading-or-li" (reading_of_formula formula_id eprog g))))
+    | TImp (_, f, g) ->
+       "if the following is the case:"
+       ^ (ul "lex-reading-imp-left"
+            (li "lex-reading-imp-left-li" (reading_of_formula formula_id eprog f)))
+       ^ "then the following is the case:"
+       ^ (ul "lex-reading-imp-right"
+            (li "lex-reading-imp-right-li" (reading_of_formula formula_id eprog g)))
+    | TIff (_, _, f, g) ->
+       "the following is the case:"
+       ^ (ul "lex-reading-iff-left"
+            (li "lex-reading-iff-left-li" (reading_of_formula formula_id eprog f)))
+       ^ "if, and only if, the following is the case:"
+       ^ (ul "lex-reading-iff-right"
+            (li "lex-reading-iff-right-li" (reading_of_formula formula_id eprog g)))
+    | TExists (x, f) ->
+       "there exists " ^ ident x ^ " such that the following is the case:"
+       ^ (ul "lex-reading-exists"
+            (li "lex-reading-exists-li" (reading_of_formula formula_id eprog f)))
+    | TForall (x, f) ->
+       "for all " ^ ident x ^ ", the following is the case:"
+       ^ (ul "lex-reading-forall"
+            (li "lex-reading-forall-li" (reading_of_formula formula_id eprog f)))
+    | TPrev (i, f) ->
+       reading_of_past_interval "at the previous time point" i
+       ^ ", the following happened:"
+       ^ (ul "lex-reading-prev"
+            (li "lex-reading-prev-li" (reading_of_formula formula_id eprog f)))
+    | TNext (i, f) ->
+       reading_of_future_interval "at the next time point" i
+       ^ ", the following will happen:"
+       ^ (ul "lex-reading-next"
+            (li "lex-reading-next-li" (reading_of_formula formula_id eprog f)))
+    | TOnce (i, f) ->
+       reading_of_past_interval "at some point" i
+       ^ ", the following happened: "
+       ^ (ul "lex-reading-once"
+            (li "lex-reading-once-li" (reading_of_formula formula_id eprog f)))
+    | TEventually (i, _, f) ->
+       reading_of_future_interval "at some point" i
+       ^ ", the following will happen: "
+       ^ (ul "lex-reading-eventually"
+            (li "lex-reading-eventually-li" (reading_of_formula formula_id eprog f)))
+    | THistorically (i, f) ->
+       reading_of_past_interval "at all time points" i
+       ^ ", the following happened: "
+       ^ (ul "lex-reading-historically"
+            (li "lex-reading-historically-li" (reading_of_formula formula_id eprog f)))
+    | TAlways (i, _, f) ->
+       reading_of_future_interval "at all time points" i
+       ^ ", the following happened: "
+       ^ (ul "lex-reading-always"
+            (li "lex-reading-always-li" (reading_of_formula formula_id eprog f)))
+    | TSince (_, i, f, g) ->
+       reading_of_past_interval "at some point" i
+       ^ ", the following happened: "
+       ^ (ul "lex-reading-since-left"
+            (li "lex-reading-since-left-li" (reading_of_formula formula_id eprog f)))
+       ^ "and since then the following has always been the case:"
+       ^ ", the following happened: "
+       ^ (ul "lex-reading-since-right"
+            (li "lex-reading-since-right-li" (reading_of_formula formula_id eprog g)))
+    | TUntil (_, i, _, f, g) ->
+       reading_of_future_interval "at some point" i
+       ^ ", the following will happen: "
+       ^ (ul "lex-reading-until-left"
+            (li "lex-reading-until-left-li" (reading_of_formula formula_id eprog f)))
+       ^ "and until then the following will always be the case:"
+       ^ ", the following happened: "
+       ^ (ul "lex-reading-until-right"
+            (li "lex-reading-until-right-li" (reading_of_formula formula_id eprog g)))
+    | f -> Tformula.to_string_core f in
+  let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
+  div ~id "lex-subformula-reading" inner_html 
 
-let reading_of_rule_if tprog g =
-  let f g = li "lex-reading-if-formula" (reading_of_formula tprog g) in
-    p "lex-reading-if" (
-        "Whenever all of the following happen:"
-        ^ ul "lex-reading-if-formulae"
-            (String.concat ~sep:"" (List.map ~f g))
-      )
+let reading_of_rule_if prefix_id eprog g =
+  let formula_id = Printf.sprintf "%s-%d" prefix_id in
+  let f i g =
+    li "lex-reading-if-formula" (reading_of_formula (formula_id i) eprog g) in
+  p "lex-reading-if" (
+      "Whenever all of the following happen:"
+      ^ ul "lex-reading-if-formulae"
+          (String.concat ~sep:"" (List.mapi ~f g))
+    )
 
-let reading_of_rule_then tprog verb g =
-  let f g = li "lex-reading-then-formula" (reading_of_formula tprog g) in
+let reading_of_rule_then prefix_id eprog verb g =
+  let formula_id = Printf.sprintf "%s-%d" prefix_id in
+  let f i g =
+    li "lex-reading-then-formula" (reading_of_formula (formula_id i) eprog g) in
   p "lex-reading-then" (
       "Then the following "
       ^ strong "lex-reading-verb" verb
       ^ ":"
       ^ ul "lex-reading-then-formulae"
-          (String.concat ~sep:"" (List.map ~f g))
+          (String.concat ~sep:"" (List.mapi ~f g))
     )
 
 let reading_of_rule_except ident =
@@ -155,22 +163,25 @@ let reading_of_rule_except ident =
       "rule " ^ ident ^ " does not apply"
     )
 
-let verb_of_trule = function
-  | TObligation _ -> "must happen"
-  | TPermission _ -> "is permitted"
-  | TConstitutive _ -> "is constituted"
+let verb_of_erule = function
+  | EObligation _ -> "must happen"
+  | EPermission _ -> "is permitted"
+  | EConstitutive _ -> "is constituted"
   | _ -> assert false
 
-let reading_of_trule tprog trule =
+let reading_of_erule rule_id eprog erule =
+  let prefix_id = Printf.sprintf "%s-%s" rule_id in
   let reading_of_imp_rule verb f g =
-    reading_of_rule_if tprog f ^ reading_of_rule_then tprog verb g in
+    reading_of_rule_if (prefix_id "if") eprog f
+    ^ reading_of_rule_then (prefix_id "then") eprog verb g in
   let reading_of_exc_rule f ident =
-    reading_of_rule_if tprog f ^ reading_of_rule_except ident in
-  match trule with
-  | TObligation (f, g)
-  | TPermission (f, g)
-  | TConstitutive (f, g)
-    -> reading_of_imp_rule (verb_of_trule trule) f g
-  | TException (f, ident, _) -> reading_of_exc_rule f ident
+    reading_of_rule_if (prefix_id "if") eprog f
+    ^ reading_of_rule_except ident in
+  match erule with
+  | EObligation (f, g)
+  | EPermission (f, g)
+  | EConstitutive (f, g)
+    -> reading_of_imp_rule (verb_of_erule erule) f g
+  | EException (f, ident, _) -> reading_of_exc_rule f ident
 
 let reading_of_doc_string = Placeholders.mark_all

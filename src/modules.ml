@@ -2,7 +2,7 @@ open Core
 open Lexing
 
 type t =
-  | MLex of Tlex.tprog
+  | MLex of Elex.eprog
   | MFormex of Formex.t
 
 type import =
@@ -83,31 +83,25 @@ let parse_module filename =
 let link_formex_stmt modules = function
   | Tlex.TSRule (_, _, _, _, _, Some _) as s -> s
   | TSSection (section_kind, full_label, label, None) ->
-     let f = function
-       | (_, MFormex formex) ->
-          String.equal formex.ident (Label.qualified_name_of_law full_label.law)
-       | _ -> false in
+     let law = Label.qualified_name_of_law full_label.law in
      let title = begin
          print_endline (String.concat ~sep:" " (
                             List.map (Label.full_filters full_label)
                               ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
-         match List.find modules ~f with
-         | Some (m, MFormex formex) ->
+         match Map.find modules law with
+         | Some (MFormex formex) ->
             Option.map (Formex.find_title formex (List.tl_exn (Label.full_filters full_label)))
-              ~f:(fun x -> Tlex.TAFormex (m, x))
+              ~f:(fun x -> Tlex.TAFormex (law, x))
          | _ -> None
        end 
      in TSSection (section_kind, full_label, label, title)
   | TSRule (pos, label, rule, rule_type, rule_constrs, None) ->
-     let f = function
-       | (_, MFormex formex) ->
-          String.equal formex.ident (Label.qualified_name_of_law label.law)
-       | _ -> false in
+     let law = Label.qualified_name_of_law label.law in
      let doc_string = begin
-         match List.find modules ~f with
-         | Some (m, MFormex formex) ->
+         match Map.find modules law with
+         | Some (MFormex formex) ->
             Option.map (Formex.find_data formex (List.tl_exn (Label.full_filters label)))
-              ~f:(fun x -> Tlex.TAFormex (m, x))
+              ~f:(fun x -> Tlex.TAFormex (law, x))
          | _ -> None
        end 
      in TSRule (pos, label, rule, rule_type, rule_constrs, doc_string)
@@ -136,6 +130,9 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                        )
                       )
                     ) in
-  let tprog = Typing.do_type (Map.of_alist_exn (module String) modules) prog in
+  let modules = Map.of_alist_exn (module String) modules in
+  let tprog = Typing.do_type modules prog in
   let tprog = link_formex modules tprog in
-  tprog
+  let eprog = Enforceability.do_type modules tprog in 
+  eprog
+

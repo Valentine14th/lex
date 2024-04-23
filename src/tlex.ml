@@ -44,6 +44,9 @@ let tempty =
     exceptions = Map.empty (module String)
   }
 
+let pol_map tprog =
+  Map.map tprog.tevents ~f:(fun (_, pol, _) -> pol)
+
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
 let add_talias name typ tprog pos =
@@ -88,15 +91,19 @@ let string_of_trule i trule =
     Etc.tabs (i+1) ^ Formula.to_string f
   in
   let string_of_imp_rule verb f g =
-      Etc.tabs i     ^ "whenever"                       ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n"
-    ^ Etc.tabs i     ^ verb                             ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:to_string g)
+    Printf.sprintf "%swhenever\n%s\n%s%s\n%s"
+      (Etc.tabs i)
+      (String.concat ~sep:"\n" (List.map ~f:to_string f))
+      (Etc.tabs i)
+      verb
+      (String.concat ~sep:"\n" (List.map ~f:to_string g))
   in
   let string_of_exc_rule f ident =
-      Etc.tabs i     ^ "whenever"          ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n"
-    ^ Etc.tabs i     ^ "except \"" ^ ident ^ "\""
+    Printf.sprintf "%swhenever\n%s\n%sexcept \"%s\""
+      (Etc.tabs i)
+      (String.concat ~sep:"\n" (List.map ~f:to_string f))
+      (Etc.tabs i)
+      ident
   in
   match trule with
   | TObligation (f, g)

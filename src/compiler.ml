@@ -1,30 +1,33 @@
 open Core
 
 open Formula
+open Tformula
 open Lex
-open Tlex
+open Elex
 
 let compile_imp f g =
   let vars =
     Set.elements
       (Set.union_list (module String)
          (List.map f ~f:fv @ List.map g ~f:fv)) in
-  Always
+  make (TAlways
     (Interval.full,
-     bigforall vars (Imp (N, bigconj f, bigconj g)))
+     true,
+     tbigcauforall vars ((make (TImp (N, tbigcauconj f, tbigcauconj g)) Non 0))))
+    Non 0
 
-let compile_trule tprog =
+let compile_erule eprog =
   let aux f' = function
-    | TObligation (f, g) -> compile_imp (f@f') g
-    | TPermission (f, g) -> compile_imp (f@f') g
-    | TConstitutive (f, g) -> compile_imp (f@f') g
-    | TException (f, _, pred) -> compile_imp (f@f') [pred]
+    | EObligation (f, g) -> compile_imp (f@f') g
+    | EPermission (f, g) -> compile_imp (f@f') g
+    | EConstitutive (f, g) -> compile_imp (f@f') g
+    | EException (f, _, pred) -> compile_imp (f@f') [pred]
   in
   function
-  | TSRule (_, label, rule, _, _, _) ->
+  | ESRule (_, label, rule, _, _, _) ->
     let label_name = Label.qualified_name label in
-    let exceptions = Map.find_multi tprog.exceptions label_name in
-    let f' = List.map exceptions ~f:(fun x -> neg (snd x)) in
+    let exceptions = Map.find_multi eprog.exceptions label_name in
+    let f' = List.map exceptions ~f:(fun x -> make (tneg (snd x)) Non 0) in
     aux f' rule
   | _ -> assert false
 
@@ -52,8 +55,8 @@ let compile_exception_signature exceptions aliases variables =
   let exceptions_list = List.concat (Map.data exceptions) in
   let compile_exception_predicate (rule_name, pred) =
     let var_types = try Map.find_exn variables rule_name with _ -> assert false in
-    let pred_name_and_terms = match pred with
-      | Formula.Predicate (n, ts) -> (n, ts)
+    let pred_name_and_terms = match pred.f with
+      | Tformula.TPredicate (n, ts) -> (n, ts)
       | _ -> assert false
     in
     let terms = snd pred_name_and_terms in
@@ -95,11 +98,11 @@ let string_of_signatures signatures =
   let signature_strs = List.map signatures ~f:string_of_signature in
   String.concat ~sep:"\n" signature_strs
 
-let compile tprog =
-  let rules = List.filter tprog.tstmts ~f:is_trule in
-  let formulae = List.map rules ~f:(compile_trule tprog) in
-  let phi = bigconj formulae in
-  let signatures = compile_signature tprog.tevents tprog.taliases tprog.variables tprog.exceptions in
+let compile eprog =
+  let rules = List.filter eprog.estmts ~f:is_erule in
+  let formulae = List.map rules ~f:(compile_erule eprog) in
+  let phi = tbigcauconj formulae in
+  let signatures = compile_signature eprog.eevents eprog.ealiases eprog.variables eprog.exceptions in
   Printf.printf "Signature:\n%s\n\nFormula:\n%s\n"
     (string_of_signatures signatures)
-    (Formula.to_string phi)
+    (Tformula.to_string phi)

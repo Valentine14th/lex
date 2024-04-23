@@ -35,6 +35,7 @@ rule read =
   | "causable"     { TCAUSABLE }
   | "suppressable" { TSUPPRESSABLE }
   | "observable"   { TOBSERVABLE }
+  | "transparently"{ TTRANSPARENTLY }
   | "enforceable"  { TENFORCEABLE }
   | "internal"     { TINTERNAL }
   | "law"          { LAW lexbuf.lex_start_p }

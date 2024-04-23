@@ -216,12 +216,15 @@ for $1 \leq i \leq k$. The capabilities associated to an event are organized int
     \node[text depth=0.1cm] (sup) at (4,-1) {\kw{suppressable}};
     \node[text depth=0.1cm] (obs) at (4,-2) {\kw{observable}};
     \node[text depth=0.1cm] (int) at (6,0) {\kw{internal}};
+    \node[text depth=0.1cm] (bot) at (0,-3) {$\bot$};
     \draw[->] (cau) -- (cau_sup);
     \draw[->] (sup) -- (cau_sup);
     \draw[->] (obs) -- (sup);
     \draw[->] (cau_obs) -- (cau_sup);
     \draw[->] (cau) -- (cau_obs);
     \draw[->] (obs) -- (cau_obs);
+    \draw[->] (bot) -- (cau);
+    \draw[->] (bot) -- (obs);
   \end{tikzpicture}
   \caption{Capability lattice}
 \end{figure}

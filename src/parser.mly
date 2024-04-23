@@ -9,7 +9,7 @@
 %token <string> STRING
 %token LPA RPA COM COL
 %token <Lexing.position> IMPORT
-%token EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TENFORCEABLE
+%token EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IS TTYPE
 %token <string> DOCSTRING
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
@@ -93,6 +93,7 @@ section_kind_and_pos:
                       
 rule_type:
   | TENFORCEABLE { Enforceable }
+  | TTRANSPARENTLY TENFORCEABLE { Transparent }
   |              { Vanilla }
 
 pol:

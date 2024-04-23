@@ -50,6 +50,8 @@ let rec qualified_name_of_level = function
   | [] -> ""
   | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs
 
+let qualified_name_of_level_simple xs = String.concat ~sep:"_" (List.map ~f:fst xs)
+
 let qualified_filters_of_level kind_fun xs =
   List.mapi xs ~f:(fun i (name, _) -> (kind_fun i, name))
 
@@ -68,6 +70,15 @@ let qualified_name l =
   (qualified_name_of_level l.paragraph)
   (qualified_name_of_level l.point)
   (qualified_name_of_level l.subpoint)
+  (string_of_rule_id l.rule_id)
+
+let qualified_id l =
+  Printf.sprintf "%s-%s-%s-%s-%s-%s"
+  (qualified_name_of_law l.law)
+  (qualified_name_of_article l.article)
+  (qualified_name_of_level_simple l.paragraph)
+  (qualified_name_of_level_simple l.point)
+  (qualified_name_of_level_simple l.subpoint)
   (string_of_rule_id l.rule_id)
 
 let qualified_filters l =

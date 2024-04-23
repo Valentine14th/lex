@@ -187,7 +187,9 @@ let update_var_ts_with_exceptions vars exceptions =
   in Map.fold exceptions ~init:vars ~f:type_exception
 
 let do_type _ tprog =
+  (* First pass: type statements *)
   let s = List.fold tprog.stmts ~init:empty ~f:type_stmt in
+  (* Second pass: exceptions *)
   let exceptions = resolve_exception_identifiers s in
   let variables = update_var_ts_with_exceptions s.tprog.variables exceptions in
   {
@@ -197,4 +199,5 @@ let do_type _ tprog =
     variables = variables;
     exceptions = exceptions
   }
+
 

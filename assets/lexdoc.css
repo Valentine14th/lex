@@ -141,3 +141,12 @@
     margin-right: 5px;
     font-size: 75%;
 }
+
+.lex-subformula-active {
+    background-color: rgba(252,209,38,.2);
+}
+
+.lex-subformula-reading-active {
+    background-color: rgba(252,209,38,.2);
+}
+

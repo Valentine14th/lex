@@ -16,15 +16,19 @@ let class_list = [
 
 let class_map = Map.of_alist_exn (module String) class_list
 
-let tag name class_ html =
+let tag name ?id:(id=None) class_ html =
   let classes = match Map.find class_map class_ with
     | Some c -> c
     | None -> class_ in
-  Printf.sprintf "<%s class=\"%s\">%s</%s>" name classes html name
+  let id_html = match id with
+    | None -> ""
+    | Some i -> " id=\"" ^ i ^ "\"" in
+  Printf.sprintf "<%s class=\"%s\"%s>%s</%s>"
+    name classes id_html html name
 
-let span = tag "span" 
+let span ?id:(id=None) = tag "span" ~id 
 
-let div = tag "div"
+let div ?id:(id=None) = tag "div" ~id 
 
 let p = tag "p"
 
