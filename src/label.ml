@@ -4,7 +4,7 @@ open Lex
 
 (** First identifier: number, letter, etc. describing
                       the section in question (e.g. "2")
-    second identifier: decriptive, title (e.g. "Material Scope") *)
+    second identifier: descriptive, title (e.g. "Material Scope") *)
 type label_levels = (ident * ident option) list 
 
 type t =
@@ -63,7 +63,7 @@ let string_of_rule_id = function
   | None -> ""
   | Some s -> "#" ^ s
 
-let qualified_name l =
+let qualified_name l = match
   Printf.sprintf "%s %s%s%s%s%s"
   (qualified_name_of_law l.law)
   (qualified_name_of_article l.article)
@@ -71,6 +71,9 @@ let qualified_name l =
   (qualified_name_of_level l.point)
   (qualified_name_of_level l.subpoint)
   (string_of_rule_id l.rule_id)
+  with
+  | " " -> ""
+  | s -> s
 
 let qualified_id l =
   Printf.sprintf "%s-%s-%s-%s-%s-%s"

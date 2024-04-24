@@ -21,7 +21,7 @@ let take l n =
   aux (l, n)
 
 let str_of_list l = Printf.sprintf "[%s]"
-                      (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s;%s" acc s))
+                      (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s;\"%s\"" acc s))
 
 let spaces i = String.init i ~f:(fun _ -> ' ')
   
