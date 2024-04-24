@@ -144,9 +144,11 @@
 
 .lex-subformula-active {
     background-color: rgba(252,209,38,.2);
+    border: 1px solid rgba(0,0,0,.125);
 }
 
 .lex-subformula-reading-active {
     background-color: rgba(252,209,38,.2);
+    border: 1px solid rgba(0,0,0,.125);
 }
 
