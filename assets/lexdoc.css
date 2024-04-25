@@ -53,17 +53,18 @@
     padding-left: 0px;
 }
 
-.lex-rule-if > .lex-keyword:first-child {
+.lex-subformula > .lex-keyword:first-child {
     padding-left: 0px;
 }
 
+/*
 .lex-rule-then > .lex-keyword:first-child {
     padding-left: 0px;
 }
 
 .lex-formula > .lex-keyword:first-child {
     padding-left: 0px;
-}
+}*/
 
 .lex-keyword + .lex-keyword {
     padding-left: 0px;
@@ -97,6 +98,11 @@
 
 .lex-stmt-section-chapter {
     font-size: 200%;
+    text-align: center;
+}
+
+.lex-stmt-section-section {
+    font-size: 175%;
     text-align: center;
 }
 
@@ -140,6 +146,14 @@
     font-style: normal;
     margin-right: 5px;
     font-size: 75%;
+}
+
+.lex-subformula {
+    border: 1px solid transparent;
+}
+
+.lex-subformula-reading {
+    border: 1px solid transparent;
 }
 
 .lex-subformula-active {

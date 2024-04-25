@@ -157,7 +157,7 @@ let string_of_stmt ?(i=0) =
        (Etc.tabs i)
        (string_of_section_kind section_kind)
        label
-       (match title with Some title -> Printf.sprintf ": \"%s\"" title | None -> "")
+       (match title with Some title -> Printf.sprintf " \"%s\"" title | None -> "")
   | SRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
      let description =
        match doc_string with
@@ -202,6 +202,9 @@ let string_of_prog prog =
       
 let print_prog prog =
   Stdio.printf "%s\n" (string_of_prog prog)
+
+let prog_to_file filename prog =
+  Out_channel.write_all filename ~data:(string_of_prog prog)
 
 (*
   missing: algebraic data types

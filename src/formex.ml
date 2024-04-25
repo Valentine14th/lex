@@ -213,7 +213,7 @@ and fill_in_data tag xml node =
 and fill_in_data_self xml node =
   { node with children = FormexData (XML.text xml) }
 
-let to_module filepath filename =
+let read_file filepath filename =
   let fullname = Filename.concat filepath filename in
   let xml = XML.parse_file fullname in
   let title = get_law_title xml in
@@ -223,7 +223,18 @@ let to_module filepath filename =
   let node = fill_in enacting_terms initial_node in
   print_endline (to_string_structure node);
   node
+  
+let rec to_lex_sections t =
+  Lex.SSection (Lexing.dummy_pos, t.kind, t.ident, None) :: to_lex_node_sections t.children
 
+and to_lex_node_sections = function
+  | FormexNode ts -> List.concat_map ts ~f:to_lex_sections
+  | FormexData _ -> []
+
+let to_lex name t =
+  let sections = to_lex_sections t in
+  let stmts = (Lex.SImport (Lexing.dummy_pos, Lex.IFormex, name)) :: sections in
+  Lex.{stmts}
     
 
 (* Does not currently support levels above chapters  *)

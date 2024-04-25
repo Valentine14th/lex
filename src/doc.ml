@@ -206,7 +206,7 @@ let html_of_eprog title css js eprog =
     jquery_link
     js
 
-let print input_filename filename eprog =
+let to_file input_filename filename eprog =
   let css = In_channel.read_all (
                 Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../assets/lexdoc.css") in
   let js = In_channel.read_all (

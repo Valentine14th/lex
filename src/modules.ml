@@ -126,7 +126,7 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                          import_string,
                          (match import with
                           | SILex _    -> MLex (do_type lexpath ~seq:seq' filepath' filename')
-                          | SIFormex _ -> MFormex (Formex.to_module filepath' filename'))
+                          | SIFormex _ -> MFormex (Formex.read_file filepath' filename'))
                        )
                       )
                     ) in

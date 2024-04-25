@@ -1,6 +1,5 @@
 law "GDPR"
 
-
 import formex GDPR
 
 type processingid is int
@@ -102,7 +101,7 @@ rule
     whenever 
         PersonalDataProcessing(ep, x, z)
         HasPurpose(ep, prp)
-        (ONCE GiveConsent(ehc, c) AND Authorizes(c, prp))
+        (ONCE GiveConsent(w, c) AND Authorizes(c, prp))
         (ONCE Nominates(y, x))
         PersonalData(z, w)
     constitute
@@ -114,11 +113,11 @@ article "8"
 # article[2] "A" "dummy level to try out sublevels"
 # article[6] "iv" "dummy level to try out sublevels"
 # article[1] "B" "dummy level to try out sublevels"
-#paragraph "1"
-#rule 
-#    whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
-#    except "GDPR 6(1)(a)"
-    # except "6(1)"
+paragraph "1"
+rule 
+    whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
+    except "6(1)(1)(a)"
+    #except "6(1)"
     # except "6(1)(a)"
     # except "7(1)(a)"
     # except "Art. 6(1)(a) GDPR"

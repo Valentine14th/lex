@@ -158,9 +158,12 @@ let reading_of_rule_then prefix_id eprog verb g =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let reading_of_rule_except ident =
+let reading_of_rule_except ident_ =
   p "lex-reading-then" (
-      "rule " ^ ident ^ " does not apply"
+      "Then "
+      ^ ident ident_
+      ^ " "
+      ^ strong "lex-reading-verb" "does not apply"
     )
 
 let verb_of_erule = function
