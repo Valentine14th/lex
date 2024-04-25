@@ -27,6 +27,7 @@ rule read =
   | "\"\"\""       { read_docstring (Buffer.create 17) lexbuf }
   | "import"       { IMPORT lexbuf.lex_start_p }
   | "formex"       { FORMEX }
+  | "akomaNtoso"   { AKOMANTOSO }
   | "event"        { EVENT }
   | "string"       { TSTRING }
   | "int"          { TINT }

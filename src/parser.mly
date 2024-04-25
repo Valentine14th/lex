@@ -41,7 +41,7 @@
 %token RELEASE
 %token TRIGGER
 
-%token FORMEX
+%token FORMEX AKOMANTOSO
 
 %nonassoc INTERVAL
 %right COL
@@ -62,7 +62,7 @@ stmts: list(stmt) EOF { { stmts = $1 } }
 
 stmt:
   | IMPORT import                          { SImport ($1, ILex, $2) }
-  | IMPORT FORMEX import                   { SImport ($1, IFormex, $3) }
+  | IMPORT import_option import            { SImport ($1, $2, $3) }
   | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, $2, Some $3) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, None) }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
@@ -72,6 +72,10 @@ stmt:
 import:
   | IDENT            { [snd $1] }
   | IDENT DOT import { (snd $1)::$3 }
+
+import_option:
+  | AKOMANTOSO       { IAkomaNtoso }
+  | FORMEX           { IFormex }
 
 section_kind_and_pos:
   | LAW LABEL_LEVEL       { Law $2, $1 }

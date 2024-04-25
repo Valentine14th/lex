@@ -3,27 +3,32 @@ open Lexing
 
 type t =
   | MLex of Elex.eprog
-  | MFormex of Formex.t
+  | MLegalXml of LegalXml.t
 
 type import =
-  | SILex    of Lexing.position * string list
-  | SIFormex of Lexing.position * string list
+  | SILex        of Lexing.position * string list
+  | SIFormex     of Lexing.position * string list
+  | SIAkomaNtoso of Lexing.position * string list
 
 let string_of_import = function
   | SILex (_, idents) -> String.concat ~sep:"." idents
   | SIFormex (_, idents) -> String.concat ~sep:"." idents
+  | SIAkomaNtoso (_, idents) -> String.concat ~sep:"." idents
 
 let pos_of_import = function
   | SILex (pos, _) -> pos
   | SIFormex (pos, _) -> pos
+  | SIAkomaNtoso (pos, _) -> pos
 
 let idents_of_import = function
   | SILex (_, idents) -> idents
   | SIFormex (_, idents) -> idents
+  | SIAkomaNtoso (_, idents) -> idents
 
 let extension_of_import = function
   | SILex _ -> ".lex"
   | SIFormex _ -> ".xml"
+  | SIAkomaNtoso _ -> ".xml"
 
 let concat_all = function
   | [] -> ""
@@ -33,6 +38,7 @@ let list_imports prog =
   let f = function
     | Lex.SImport (pos, ILex, idents)    -> Some (SILex (pos, idents))
     | Lex.SImport (pos, IFormex, idents) -> Some (SIFormex (pos, idents))
+    | Lex.SImport (pos, IAkomaNtoso, idents) -> Some (SIAkomaNtoso (pos, idents))
     | _ -> None
   in List.filter_map ~f Lex.(prog.stmts)
 
@@ -89,8 +95,8 @@ let link_formex_stmt modules = function
                             List.map (Label.full_filters full_label)
                               ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
          match Map.find modules law with
-         | Some (MFormex formex) ->
-            Option.map (Formex.find_title formex (List.tl_exn (Label.full_filters full_label)))
+         | Some (MLegalXml xml) ->
+            Option.map (LegalXml.find_title xml (List.tl_exn (Label.full_filters full_label)))
               ~f:(fun x -> Tlex.TAFormex (law, x))
          | _ -> None
        end 
@@ -99,8 +105,8 @@ let link_formex_stmt modules = function
      let law = Label.qualified_name_of_law label.law in
      let doc_string = begin
          match Map.find modules law with
-         | Some (MFormex formex) ->
-            Option.map (Formex.find_data formex (List.tl_exn (Label.full_filters label)))
+         | Some (MLegalXml xml) ->
+            Option.map (LegalXml.find_data xml (List.tl_exn (Label.full_filters label)))
               ~f:(fun x -> Tlex.TAFormex (law, x))
          | _ -> None
        end 
@@ -126,7 +132,8 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                          import_string,
                          (match import with
                           | SILex _    -> MLex (do_type lexpath ~seq:seq' filepath' filename')
-                          | SIFormex _ -> MFormex (Formex.read_file filepath' filename'))
+                          | SIFormex _ -> MLegalXml (Formex.read_file filepath' filename')
+                          | SIAkomaNtoso _ -> MLegalXml (AkomaNtoso.read_file filepath' filename'))
                        )
                       )
                     ) in

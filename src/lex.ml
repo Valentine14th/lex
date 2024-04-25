@@ -43,6 +43,7 @@ type rule_constr =
 type import_format =
   | ILex
   | IFormex
+  | IAkomaNtoso
 
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
@@ -145,6 +146,7 @@ let make_doc_string ds i =
 let string_of_import_format = function
   | ILex -> ""
   | IFormex -> " formex "
+  | IAkomaNtoso -> " akomaNtoso "
 
 let string_of_stmt ?(i=0) =
   function
