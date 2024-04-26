@@ -70,6 +70,10 @@
     padding-left: 0px;
 }
 
+.lex-string {
+    font-style: italic;
+}
+
 .lex-event-args {
     padding-left: 10px;
 }

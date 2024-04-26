@@ -109,8 +109,8 @@ module XML = struct
          ~f:(fun (key', value) -> if String.equal key key' then Some value else None)
 
   let rec text = function
-    | Xml.PCData data -> data
-    | Xml.Element (_, _, xmls) -> String.concat ~sep:" " (List.map ~f:String.strip (List.map ~f:text xmls))
+    | Xml.PCData data -> String.strip data
+    | Xml.Element (_, _, xmls) -> String.strip (String.concat ~sep:" " (List.map ~f:String.strip (List.map ~f:text xmls)))
 
   let tag = Xml.tag
 
@@ -123,7 +123,7 @@ let rec to_lex_sections t =
 
 and to_lex_node_sections = function
   | FormexNode ts -> List.concat_map ts ~f:to_lex_sections
-  | FormexData _ -> []
+  | FormexData s -> [Lex.SNote (Lexing.dummy_pos, s)]
 
 let to_lex format name t =
   let sections = to_lex_sections t in

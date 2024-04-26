@@ -9,6 +9,8 @@ type dataid is int
 type userid is int
 type purpose is string
 
+note "This is a test file"
+
 # observable event
 # causable event
 # internal event

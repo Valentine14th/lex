@@ -178,6 +178,10 @@ let html_of_estmt eprog =
      div "lex-stmt-type" (
          one_column (typ name ^ kw "is" ^ typ (Lex.string_of_typ ty))
        )
+  | ESNote text ->
+     div "lex-stmt-note" (
+         one_column (kw "note" ^ string text)
+       )
 
 let bootstrap_css_url = "https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
 let bootstrap_css_integrity = "sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"

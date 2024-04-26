@@ -156,6 +156,7 @@ let type_stmt s = function
   | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
+  | SNote (_, text) -> add_tstmt (TSNote text) s
     
 let resolve_exception_identifiers s =
   let append_exception rule_labels m (ident, label, pos, f) =

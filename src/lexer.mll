@@ -48,6 +48,7 @@ rule read =
   | "point"        { POINT lexbuf.lex_start_p }
   | "subpoint"     { SUBPOINT lexbuf.lex_start_p }
   | "rule"         { RULE lexbuf.lex_start_p }
+  | "note"         { NOTE lexbuf.lex_start_p }
   | "[" (int as i) "]" { LABEL_LEVEL (int_of_string i) }
   | "whenever"     { WHENEVER }
   | "oblige"       { OBLIGE }

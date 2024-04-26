@@ -505,6 +505,7 @@ let type_tstmt pols = function
   | TSEvent (name, typed_args, pol, doc_string) ->
      ESEvent (name, typed_args, pol, doc_string)
   | TSType (name, typ) -> ESType (name, typ)
+  | TSNote text -> ESNote text
 
 let type_exception _ (ident, f) =
   (ident, Tformula.of_formula f)

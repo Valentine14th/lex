@@ -14,6 +14,7 @@ type estmt =
   | ESRule    of Lexing.position * Label.t * erule * rule_type * rule_constr list * string tannot option
   | ESEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | ESType    of ident * typ
+  | ESNote    of string
 
 type var_types = (ident, ident, Base.String.comparator_witness) Map.t
 
@@ -112,6 +113,7 @@ let string_of_estmt ?(i=0) =
           description
           (string_of_args typed_args i)
   | ESType (name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | ESNote text -> "note \"" ^ text ^ "\""
     
 let string_of_eprog eprog =
   (* String.concat ~sep:"\n\n" (List.map prog.stmts ~f:string_of_stmt) *)

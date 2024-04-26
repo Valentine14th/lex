@@ -6,6 +6,7 @@ let class_list = [
     ("lex-stmt-type", "lex-stmt lex-stmt-type");
     ("lex-stmt-event", "lex-stmt lex-stmt-event");
     ("lex-stmt-rule", "lex-stmt lex-stmt-rule");
+    ("lex-stmt-note", "lex-stmt lex-stmt-note");
     ("lex-event-reading", "lex-reading card");
     ("lex-rule-reading", "lex-reading card");
     ("lex-reading-header", "card-header");
@@ -55,6 +56,9 @@ let ident html =
 
 let typ html =
   span "lex-typ" html
+
+let string html =
+  kw "\"" ^ span "lex-string" html ^ kw "\""
 
 let two_column left right =
   div "row" (div "col-6" left ^ div "col-6" right)

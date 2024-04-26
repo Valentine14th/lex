@@ -21,6 +21,7 @@ type tstmt =
   | TSRule    of Lexing.position * Label.t * trule * rule_type * rule_constr list * string tannot option
   | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
+  | TSNote    of string
 
 type tevent = (Lexing.position * ident * ident) list * pol * string option
 
@@ -153,6 +154,7 @@ let string_of_tstmt ?(i=0) =
           description
           (string_of_args typed_args i)
   | TSType (name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | TSNote text -> "note \"" ^ text ^ "\""
 
 let string_of_signature signature =
   match signature with

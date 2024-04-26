@@ -51,6 +51,7 @@ type stmt =
   | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
   | SType      of Lexing.position * ident * typ (* location points to beginning of type identifier *)
+  | SNote      of Lexing.position * string
 
 type signature = ident * (ident * typ) list
 
@@ -190,6 +191,7 @@ let string_of_stmt ?(i=0) =
           description
           (string_of_args typed_args i)
   | SType (_, name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | SNote (_, text) -> "note \"" ^ text ^ "\""
 
 let string_of_signature signature =
   match signature with

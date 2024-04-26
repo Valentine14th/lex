@@ -15,6 +15,7 @@
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
 %token <int> LABEL_LEVEL
 %token <Lexing.position> RULE
+%token <Lexing.position> NOTE
 %token WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
 %token CAUSING SUPPRESSING
 
@@ -67,6 +68,8 @@ stmt:
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, None) }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
   | event_def                              { $1 }
+  | NOTE STRING                            { SNote ($1, $2) }
+  | NOTE DOCSTRING                         { SNote ($1, $2) }
   | srule                                  { $1 }
 
 import:

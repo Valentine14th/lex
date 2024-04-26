@@ -102,6 +102,20 @@ object logic and $\Models$ is the set of models, such that
 
 \subsection{Modules}
 
+Every \Lex{} file defines a module, while folders containing \Lex{} files define groups of modules. The syntax of module imports is as follows:
+\begin{align*}
+  import ::=&~\kw{import}~[\kw{formex} \mid \kw{akomaNtoso}]~idents\\
+  idents ::=&~ ident \mid idents\kw{.}ident
+\end{align*}
+The special flags \kw{formex} and \kw{akomaNtoso} instruct the \Lex{} compiler to load the
+corresponding modules as XML files containing a machine-readable version of the law, rather than
+\Lex{} files. Two formats are supported: FORMEX (the standard EU format for machine-readable
+legal documents) and Akoma Ntoso (an international standard used, e.g., in Switzerland).
+
+When the target module is a \Lex{} module, the sequence $ident_1\kw{.}\dots\kw{.} ident_n$ refers
+to the file \texttt{$ident_1$/\dots/$ident_n$.lex}; if the target module is an XML module in
+FORMEX or Akoma Ntoso format, the file is \texttt{$ident_1$/\dots/$ident_n$.xml}.
+
 \subsection{Labels}
 
 Labels are used to capture the structure of the law. Their syntax is as follows:
@@ -152,6 +166,7 @@ if applicable within the current scope.
     Label level & Number unique within & Part of qualified name & Required \\
     \hline
     \kw{law} & -- & $\checkmark$ & $\checkmark$ \\
+    \kw{title} & \kw{law} \\
     \kw{chapter} & \kw{law}\\
     \kw{section} & \kw{law} \\
     \kw{article} & \kw{law} & $\checkmark$ & $\checkmark$ \\
@@ -364,15 +379,14 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % todo:
 % more complex terms
 % access databases
-% reason about time
+% reason about time explicitly
 % complex data structures
 % points inside rules
 % implement temporal patterns
 % Erwägungsgründe
-% module system
 % design survey
-% template generation from formex
 % predicate vs. event
+% comments / notes (including for templates)
 
 
 {%\setlength\bibsep{2pt}
