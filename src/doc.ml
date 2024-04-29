@@ -161,22 +161,24 @@ let html_of_estmt eprog =
            )
        )
   | ESRule (_, label, type_fixes, erule, rule_type, rule_constrs, doc_string) ->
-     let rule_id = Label.qualified_id label in
-     div "lex-stmt-rule" (
-         two_column (
-             kw "rule"
-             ^ html_of_type_fixes ("lex-subformula-" ^ rule_id) type_fixes
-             ^ html_of_erule ("lex-subformula-" ^ rule_id) erule
-             ^ kw (html_of_rule_type rule_type)
-             ^ (
-               if List.is_empty rule_constrs then
-                 ""
-               else
-                 html_of_rule_constrs rule_constrs
-             )
-           )
-           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog type_fixes erule doc_string)
-       )
+    let module Convention = (val eprog.labelconvention : Label.LabelConvention) in
+    let qualified_id = Convention.convention.qualified_id in
+    let rule_id = qualified_id label in
+    div "lex-stmt-rule" (
+        two_column (
+            kw "rule"
+            ^ html_of_type_fixes ("lex-subformula-" ^ rule_id) type_fixes
+            ^ html_of_erule ("lex-subformula-" ^ rule_id) erule
+            ^ kw (html_of_rule_type rule_type)
+            ^ (
+              if List.is_empty rule_constrs then
+                ""
+              else
+                html_of_rule_constrs rule_constrs
+            )
+          )
+          (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog type_fixes erule doc_string)
+      )
   | ESEvent (event_type, name, typed_args, pol, doc_string) ->
      let html_of_event =
          kw (Lex.string_of_pol pol)

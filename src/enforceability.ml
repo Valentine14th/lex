@@ -544,6 +544,7 @@ let do_type _ tprog =
     ealiases   = tprog.taliases;
     eevents    = tprog.tevents;
     variables  = tprog.variables;
-    exceptions = Map.map tprog.exceptions ~f:(type_exceptions pols)
+    exceptions = Map.map tprog.exceptions ~f:(type_exceptions pols);
+    labelconvention = tprog.labelconvention
   }
 

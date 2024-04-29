@@ -1,20 +1,24 @@
 open Core
 open Lex_lib
 
-let loop filename mode f o () =
+let loop filename mode label f o () =
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
   let filepath = Filename.dirname filename
   and basename = Filename.basename filename in
 
+  let labelconvention = match label with
+    | None | Some "standard" -> (module Label.StandardConvention : Label.LabelConvention)
+    | Some _ -> assert false in
+
   match mode with
   | None | Some "mfotl" -> begin
-      let eprog = Modules.do_type [lexpath] filepath basename  in
+      let eprog = Modules.do_type [lexpath] filepath basename labelconvention in
       Elex.print_eprog eprog;
       print_endline "#################\n";
       Compiler.compile eprog (* compile correctly typed program *)
     end
   | Some "doc" -> begin
-      let eprog = Modules.do_type [lexpath] filepath basename  in
+      let eprog = Modules.do_type [lexpath] filepath basename labelconvention in
       let outname = Option.fold o ~init:(filename ^ "_doc.html") ~f:(fun _ x -> x) in
       Doc.to_file basename outname eprog
     end
@@ -35,6 +39,7 @@ let () =
     Command.Spec.(empty
                   +> anon ("filename" %: string)
                   +> flag "-mode" (optional string) ~doc:"mode options: mfotl (default), doc, template"
+                  +> flag "-label" (optional string) ~doc:"label conventions: standard (default)"
                   +> flag "-f" (optional string) ~doc:"input format options: formex (default), akomaNtoso"
                   +> flag "-o" (optional string) ~doc:"output file")
     loop

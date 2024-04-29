@@ -86,37 +86,43 @@ let parse_module filename =
   In_channel.close inx;
   prog
 
-let link_formex_stmt modules = function
+let link_formex_stmt modules c = function
   | Tlex.TSRule (_, _, _, _, _, _, Some _) as s -> s
   | TSSection (section_kind, full_label, label, None) ->
-     let law = Label.qualified_name_of_law full_label.law in
-     let title = begin
-         print_endline (String.concat ~sep:" " (
-                            List.map (Label.full_filters full_label)
-                              ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
-         match Map.find modules law with
-         | Some (MLegalXml xml) ->
-            Option.map (LegalXml.find_title xml (List.tl_exn (Label.full_filters full_label)))
-              ~f:(fun x -> Tlex.TAFormex (law, x))
-         | _ -> None
-       end 
-     in TSSection (section_kind, full_label, label, title)
+    let module Convention = (val c : Label.LabelConvention) in
+    let qualified_name_of_law = Convention.convention.qualified_name_of_law in
+    let full_filters = Convention.convention.full_filters in
+    let law = qualified_name_of_law full_label.law in
+    let title = begin
+        print_endline (String.concat ~sep:" " (
+                          List.map (full_filters full_label)
+                            ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
+        match Map.find modules law with
+        | Some (MLegalXml xml) ->
+          Option.map (LegalXml.find_title xml (List.tl_exn (full_filters full_label)))
+            ~f:(fun x -> Tlex.TAFormex (law, x))
+        | _ -> None
+      end 
+    in TSSection (section_kind, full_label, label, title)
   | TSRule (pos, label, type_fixes, rule, rule_type, rule_constrs, None) ->
-     let law = Label.qualified_name_of_law label.law in
-     let doc_string = begin
-         match Map.find modules law with
-         | Some (MLegalXml xml) ->
-            Option.map (LegalXml.find_data xml (List.tl_exn (Label.full_filters label)))
-              ~f:(fun x -> Tlex.TAFormex (law, x))
-         | _ -> None
-       end 
+    let module Convention = (val c : Label.LabelConvention) in
+    let qualified_name_of_law = Convention.convention.qualified_name_of_law in
+    let full_filters = Convention.convention.full_filters in
+    let law = qualified_name_of_law label.law in
+    let doc_string = begin
+        match Map.find modules law with
+        | Some (MLegalXml xml) ->
+          Option.map (LegalXml.find_data xml (List.tl_exn (full_filters label)))
+            ~f:(fun x -> Tlex.TAFormex (law, x))
+        | _ -> None
+      end 
      in TSRule (pos, label, type_fixes, rule, rule_type, rule_constrs, doc_string)
   | s -> s
 
 let link_formex modules tprog =
-  Tlex.{ tprog with tstmts = List.map tprog.tstmts ~f:(link_formex_stmt modules) }
+  Tlex.{ tprog with tstmts = List.map tprog.tstmts ~f:(link_formex_stmt modules tprog.labelconvention) }
 
-let rec do_type lexpath ?seq:(seq=[]) filepath filename =
+let rec do_type lexpath ?seq:(seq=[]) filepath filename labelconvention =
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
   let prog      = parse_module fullname in
@@ -131,14 +137,14 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                        (
                          import_string,
                          (match import with
-                          | SILex _    -> MLex (do_type lexpath ~seq:seq' filepath' filename')
+                          | SILex _    -> MLex (do_type lexpath ~seq:seq' filepath' filename' labelconvention)
                           | SIFormex _ -> MLegalXml (Formex.read_file filepath' filename')
                           | SIAkomaNtoso _ -> MLegalXml (AkomaNtoso.read_file filepath' filename'))
                        )
                       )
                     ) in
   let modules = Map.of_alist_exn (module String) modules in
-  let tprog = Typing.do_type modules prog in
+  let tprog = Typing.do_type modules prog labelconvention in
   let tprog = link_formex modules tprog in
   let eprog = Enforceability.do_type modules tprog in 
   eprog
