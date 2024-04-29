@@ -12,7 +12,7 @@ type estmt =
   | ESImport  of Lexing.position * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
   | ESRule    of Lexing.position * Label.t * erule * rule_type * rule_constr list * string tannot option
-  | ESEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
+  | ESEvent   of event_type * ident * (Lexing.position * ident * ident) list * pol * string option
   | ESType    of ident * typ
   | ESNote    of string
 
@@ -100,15 +100,16 @@ let string_of_estmt ?(i=0) =
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
        description
-  | ESEvent (name, typed_args, pol, doc_string) ->
+  | ESEvent (event_type, name, typed_args, pol, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s event %s\n%s%s"
+      Printf.sprintf "%s%s %s %s\n%s%s"
           (Etc.tabs i)
           (string_of_pol pol)
+          (string_of_event_type event_type)
           name
           description
           (string_of_args typed_args i)

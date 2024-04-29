@@ -26,3 +26,4 @@ let str_of_list l = Printf.sprintf "[%s]"
 let spaces i = String.init i ~f:(fun _ -> ' ')
   
 let paren h k x = if h>k then "("^^x^^")" else x
+let paren_string h k x = if h>k then "("^x^")" else x

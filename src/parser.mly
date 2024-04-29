@@ -9,7 +9,7 @@
 %token <string> STRING
 %token LPA RPA COM COL
 %token <Lexing.position> IMPORT
-%token EVENT TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token EVENT PREDICATE TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IS TTYPE
 %token <string> DOCSTRING
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
@@ -139,13 +139,20 @@ srule:
   | RULE STRING rule rule_type rule_constrs           { SRule ($1, Some $2, $3, $4, $5, None) }
 
 event_def:
-  | pol EVENT IDENT list(arg) { SEvent (fst $3, snd $3, $4, $1, None) }
-  | pol EVENT IDENT DOCSTRING list(arg) { SEvent (fst $3, snd $3, $5, $1, Some $4) }
+  | pol event_type IDENT list(arg) { SEvent (fst $3, $2, snd $3, $4, $1, None) }
+  | pol event_type IDENT DOCSTRING list(arg) { SEvent (fst $3, $2, snd $3, $5, $1, Some $4) }
+
+event_type:
+  | EVENT     { Lex.Event }
+  | PREDICATE { Lex.Predicate }
 
 arg:
   | IDENT COL IDENT { (fst $1, snd $1, snd $3) }
 
 e:
+| ee                                   { flatten_assoc $1 }
+
+ee:
 | LPA e RPA                            { $2 }
 | TRUE                                 { tt }
 | FALSE                                { ff }

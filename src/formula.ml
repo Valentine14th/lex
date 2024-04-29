@@ -122,8 +122,8 @@ type t =
   | EqConst of string * Dom.t
   | Predicate of string * Term.t list
   | Neg of t
-  | And of Side.t * t * t
-  | Or of Side.t * t * t
+  | And of Side.t * (t list)
+  | Or of Side.t * (t list)
   | Imp of Side.t * t * t
   | Iff of Side.t * Side.t * t * t
   | Exists of string * t
@@ -143,8 +143,10 @@ let ff = FF
 let eqconst x d = EqConst (x, d)
 let predicate p_name trms = Predicate (p_name, trms)
 let neg f = Neg f
-let conj s f g = And (s, f, g)
-let disj s f g = Or (s, f, g)
+let conj s f g = And (s, [f; g])
+let disj s f g = Or (s, [f; g])
+let conj' s fs = And (s, fs)
+let disj' s fs = Or (s, fs)
 let imp s f g = Imp (s, f, g)
 let iff s t f g = Iff (s, t, f, g)
 let exists x f = Exists (x, f)
@@ -184,12 +186,36 @@ let rec fv = function
     | Always (_, f)
     | Next (_, f)
     | Type (f, _) -> fv f
-  | And (_, f1, f2)
-    | Or (_, f1, f2)
     | Imp (_, f1, f2)
     | Iff (_, _, f1, f2)
     | Since (_, _, f1, f2)
     | Until (_, _, f1, f2) -> Set.union (fv f1) (fv f2)
+  | And (_, fs)
+    | Or (_, fs) ->
+     let f x g = Set.union x (fv g) in
+     List.fold_left fs ~init:(Set.empty (module String)) ~f
+
+let rec deg = function
+  | TT
+    | FF
+    | EqConst _ 
+    | Predicate _ -> 2
+  | Neg f 
+    | Exists (_, f)
+    | Forall (_, f)
+    | Prev (_, f)
+    | Next (_, f)
+    | Once (_, f)
+    | Eventually (_, f)
+    | Historically (_, f)
+    | Always (_, f)
+    | Type (f, _) -> deg f
+    | Imp (_, f, g)
+    | Iff (_, _, f, g)
+    | Since (_, _, f, g)
+    | Until (_, _, f, g) -> max 2 (max (deg f) (deg g))
+    | And (_, fs)
+    | Or (_, fs) -> List.fold_left (List.map fs ~f:deg) ~init:1 ~f:max
 
 let rec collect_predicates l = function
   | TT
@@ -205,13 +231,36 @@ let rec collect_predicates l = function
     | Eventually (_, f)
     | Historically (_, f)
     | Always(_, f) -> collect_predicates l f
-  | And (_, f, g)
-    | Or (_, f, g)
     | Imp (_, f, g)
     | Iff (_, _, f, g)
     | Since (_, _, f, g)
     | Until (_, _, f, g) -> collect_predicates (collect_predicates l f) g
   | Type (f, _) -> collect_predicates l f
+  | And (_, fs)
+    | Or (_, fs) -> List.fold_left fs ~init:l ~f:collect_predicates
+
+let rec flatten_assoc f = match f with
+  | TT | FF | EqConst _ | Predicate _ -> f
+  | Neg f -> Neg (flatten_assoc f)
+  | Exists (x, f) -> Exists (x, flatten_assoc f)
+  | Forall (x, f) -> Forall (x, flatten_assoc f)
+  | Prev (i, f) -> Prev (i, flatten_assoc f)
+  | Next (i, f) -> Next (i, flatten_assoc f)
+  | Once (i, f) -> Once (i, flatten_assoc f)
+  | Eventually (i, f) -> Once (i, flatten_assoc f)
+  | Historically (i, f) -> Historically (i, flatten_assoc f)
+  | Always(i, f) -> Always (i, flatten_assoc f)
+  | Imp (s, f, g) -> Imp (s, flatten_assoc f, flatten_assoc g)
+  | Iff (s, t, f, g) -> Iff (s, t, flatten_assoc f, flatten_assoc g)
+  | Since (s, i, f, g) -> Since (s, i, flatten_assoc f, flatten_assoc g)
+  | Until (s, i, f, g) -> Until (s, i, flatten_assoc f, flatten_assoc g)
+  | Type (f, ty) -> Type (flatten_assoc f, ty)
+  | And (s, fs) when Side.equal s L || Side.equal s N ->
+     And (s, List.concat (List.map fs ~f:(fun f -> match f with And (_, fs) -> fs | _ -> [f])))
+  | And (s, fs) -> And (s, List.map fs ~f:flatten_assoc)
+  | Or (s, fs) when Side.equal s L || Side.equal s N ->
+     Or (s, List.concat (List.map fs ~f:(fun f -> match f with Or (_, fs) -> fs | _ -> [f])))
+  | Or (s, fs) -> Or (s, List.map fs ~f:flatten_assoc)
 
 let rec to_string_rec l = function
   | TT -> Printf.sprintf "⊤"
@@ -219,8 +268,14 @@ let rec to_string_rec l = function
   | EqConst (x, c) -> Printf.sprintf "%s = %s" x (Dom.to_string c)
   | Predicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | Neg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
-  | And (s, f, g) -> Printf.sprintf (Util.paren l 4 "%a ∧%a %a") (fun _ -> to_string_rec 4) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
-  | Or (s, f, g) -> Printf.sprintf (Util.paren l 3 "%a ∨%a %a") (fun _ -> to_string_rec 3) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
+  | And (s, fs) ->
+     let sep = "∧" ^ Side.to_string s in
+     let strings = List.map fs ~f:(to_string_rec 4) in
+     Util.paren_string l 4 (String.concat ~sep strings)
+  | Or (s, fs) ->
+     let sep = "∨" ^ Side.to_string s in
+     let strings = List.map fs ~f:(to_string_rec 4) in
+     Util.paren_string l 3 (String.concat ~sep strings)
   | Imp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | Iff (s, t, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
   | Exists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f

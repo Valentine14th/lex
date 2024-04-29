@@ -45,11 +45,13 @@ type import_format =
   | IFormex
   | IAkomaNtoso
 
+type event_type = Event | Predicate
+
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
   | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
-  | SEvent     of Lexing.position * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
+  | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
   | SType      of Lexing.position * ident * typ (* location points to beginning of type identifier *)
   | SNote      of Lexing.position * string
 
@@ -149,6 +151,10 @@ let string_of_import_format = function
   | IFormex -> " formex "
   | IAkomaNtoso -> " akomaNtoso "
 
+let string_of_event_type = function
+  | Event -> "event"
+  | Predicate -> "predicate"
+
 let string_of_stmt ?(i=0) =
   function
   | SImport (_, import_format, idents) ->
@@ -178,15 +184,16 @@ let string_of_stmt ?(i=0) =
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
        description
-  | SEvent (_, name, typed_args, pol, doc_string) ->
+  | SEvent (_, event_type, name, typed_args, pol, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s event %s\n%s%s"
+      Printf.sprintf "%s%s %s %s\n%s%s"
           (Etc.tabs i)
           (string_of_pol pol)
+          (string_of_event_type event_type)
           name
           description
           (string_of_args typed_args i)

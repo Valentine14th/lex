@@ -10,8 +10,6 @@ let html_of_trm = function
 let html_of_trms trms =
   String.concat ~sep:", " (List.map ~f:html_of_trm trms)
 
-let paren h k x : string = if h>k then "("^x^")" else x
-  
 let rec html_of_formula_ formula_id l f =
   let inner_html = 
     match f.f with
@@ -20,21 +18,23 @@ let rec html_of_formula_ formula_id l f =
     | TEqConst (x, c) -> Printf.sprintf "%s = %s" (ident x) (const (Dom.to_string c))
     | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
     | TNeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
-    | TAnd (_, f, g) -> paren l 4 (html_of_formula_ formula_id 4 f ^ kw "AND" ^ html_of_formula_ formula_id 4 g)
-    | TOr (_, f, g) -> paren l 3 (html_of_formula_ formula_id 3 f ^ kw "OR" ^ html_of_formula_ formula_id 3 g)
-    | TImp (_, f, g) -> paren l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
-    | TIff (_, _, f, g) -> paren l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
-    | TExists (x, f) -> paren l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
-    | TForall (x, f) -> paren l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
-    | TPrev (i, f) -> paren l 5  (kw "PREVIOUS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TNext (i, f) -> paren l 5 (kw "NEXT" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TOnce (i, f) -> paren l 5 (kw "ONCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TEventually (i, _, f) -> paren l 5 (kw "EVENTUALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | THistorically (i, f) -> paren l 5 (kw "HISTORICALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TAlways (i, _, f) -> paren l 5 (kw "ALWAYS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TSince (_, i, f, g) -> paren l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
-    | TUntil (_, i, _, f, g) -> paren l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
-    | TType (f, t) -> paren l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Formula.ty_to_string t) in
+    | TAnd (_, fs) -> Util.paren_string l 4 (
+                          String.concat ~sep:(kw "AND") (List.map fs ~f:(html_of_formula_ formula_id 4)))
+    | TOr (_, fs) -> Util.paren_string l 3 (
+                         String.concat ~sep:(kw "OR") (List.map fs ~f:(html_of_formula_ formula_id 3)))
+    | TImp (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
+    | TIff (_, _, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
+    | TExists (x, f) -> Util.paren_string l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | TForall (x, f) -> Util.paren_string l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | TPrev (i, f) -> Util.paren_string l 5  (kw "PREVIOUS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TNext (i, f) -> Util.paren_string l 5 (kw "NEXT" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TOnce (i, f) -> Util.paren_string l 5 (kw "ONCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TEventually (i, _, f) -> Util.paren_string l 5 (kw "EVENTUALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | THistorically (i, f) -> Util.paren_string l 5 (kw "HISTORICALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TAlways (i, _, f) -> Util.paren_string l 5 (kw "ALWAYS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | TSince (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
+    | TUntil (_, i, _, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
+    | TType (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Formula.ty_to_string t) in
   let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
   span ~id "lex-subformula" inner_html 
 
@@ -73,7 +73,7 @@ let html_of_erule rule_id erule =
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
   | Enforceable -> "enforceable"
-  | Transparent -> "transparently enforceable"
+  | Transparent -> "transUtil.paren_stringtly enforceable"
 
 let html_of_rule_constr_type = function
   | Lex.Suppressing idents -> "suppressing", idents
@@ -163,10 +163,10 @@ let html_of_estmt eprog =
            )
            (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog erule doc_string)
        )
-  | ESEvent (name, typed_args, pol, doc_string) ->
+  | ESEvent (event_type, name, typed_args, pol, doc_string) ->
      let html_of_event =
          kw (Lex.string_of_pol pol)
-         ^ kw "event"
+         ^ kw (Lex.string_of_event_type event_type)
          ^ ident name
          ^ html_of_args typed_args
      in

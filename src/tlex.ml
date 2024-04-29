@@ -19,7 +19,7 @@ type tstmt =
   | TSImport  of Lexing.position * string list * import_format
   | TSSection of section_kind * Label.t * string * string tannot option
   | TSRule    of Lexing.position * Label.t * trule * rule_type * rule_constr list * string tannot option
-  | TSEvent   of ident * (Lexing.position * ident * ident) list * pol * string option
+  | TSEvent   of event_type * ident * (Lexing.position * ident * ident) list * pol * string option
   | TSType    of ident * typ
   | TSNote    of string
 
@@ -58,14 +58,14 @@ let add_talias name typ tprog pos =
   in
   { tprog with taliases = aliases; tstmts = TSType (name, typ)::tprog.tstmts }
 
-let add_tevent name args pol ds tprog pos =
+let add_tevent event_type name args pol ds tprog pos =
   let event = (args, pol, ds) in
   (* TODO: allow for overwriting/reusing event names *)
   let events =
     try Map.add_exn tprog.tevents ~key:name ~data:event
     with _ -> Util.type_error (Printf.sprintf "event %s already exists" name) pos
   in
-  { tprog with tevents = events; tstmts = TSEvent (name, args, pol, ds)::tprog.tstmts}
+  { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, pol, ds)::tprog.tstmts}
 
 let add_vars vs name tprog pos =
   let variables =
@@ -141,15 +141,16 @@ let string_of_tstmt ?(i=0) =
         else
           Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
        description
-  | TSEvent (name, typed_args, pol, doc_string) ->
+  | TSEvent (event_type, name, typed_args, pol, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s event %s\n%s%s"
+      Printf.sprintf "%s%s %s %s\n%s%s"
           (Etc.tabs i)
           (string_of_pol pol)
+          (string_of_event_type event_type)
           name
           description
           (string_of_args typed_args i)

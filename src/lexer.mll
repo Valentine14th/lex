@@ -29,6 +29,7 @@ rule read =
   | "formex"       { FORMEX }
   | "akomaNtoso"   { AKOMANTOSO }
   | "event"        { EVENT }
+  | "predicate"    { PREDICATE }
   | "string"       { TSTRING }
   | "int"          { TINT }
   | "type"         { TTYPE }

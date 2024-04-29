@@ -70,4 +70,4 @@ let badge html =
   span "badge" html
 
 let formex html =
-  badge ("Formex: " ^ html)
+  badge ("XML: " ^ html)

@@ -20,10 +20,10 @@ let rec is_past_guarded x p f =
   | EqConst (y, _) -> p && String.equal x y
   | Predicate (_, ts) -> List.exists ~f:(Term.equal (Term.Var x)) ts
   | Neg f -> is_past_guarded x (not p) f
-  | And (_, f, g) when p -> is_past_guarded x p f || is_past_guarded x p g
-  | And (_, f, g) -> is_past_guarded x p f && is_past_guarded x p g
-  | Or (_, f, g) when p -> is_past_guarded x p f && is_past_guarded x p g
-  | Or (_, f, g) -> is_past_guarded x p f || is_past_guarded x p g
+  | And (_, fs) when p -> List.exists fs ~f:(is_past_guarded x p)
+  | And (_, fs) -> List.for_all fs ~f:(is_past_guarded x p)
+  | Or (_, fs) when p -> List.for_all fs ~f:(is_past_guarded x p)
+  | Or (_, fs) -> List.exists fs ~f:(is_past_guarded x p)
   | Imp (_, f, g) when p -> is_past_guarded x (not p) f && is_past_guarded x p g
   | Imp (_, f, g) -> is_past_guarded x (not p) f || is_past_guarded x p g
   | Iff (_, _, f, g) when p -> is_past_guarded x (not p) f && is_past_guarded x p g
@@ -160,10 +160,12 @@ let rec types pols t f =
       | TT -> Possible CTT
       | Predicate (e, _) -> types_predicate pols Cau e
       | Neg f -> types pols Sup f
-      | And (_, f, g) -> conj (types pols Cau f) (types pols Cau g)
-      | Or (L, f, _) -> types pols Cau f
-      | Or (R, _, g) -> types pols Cau g
-      | Or (_, f, g) -> disj (types pols Cau f) (types pols Cau g)
+      | And (_, fs) ->
+         List.fold_left (List.map fs ~f:(types pols Cau)) ~init:(Possible CTT) ~f:conj
+      | Or (L, fs) -> types pols Cau (List.hd_exn fs)
+      | Or (R, fs) -> types pols Cau (List.last_exn fs)
+      | Or (_, fs) ->
+         List.fold_left (List.map fs ~f:(types pols Cau)) ~init:(Possible CTT) ~f:disj
       | Imp (L, f, _) -> types pols Sup f
       | Imp (R, _, g) -> types pols Cau g
       | Imp (_, f, g) -> disj (types pols Sup f) (types pols Cau g)
@@ -192,10 +194,12 @@ let rec types pols t f =
       | FF -> Possible CTT
       | Predicate (e, _) -> types_predicate pols Sup e
       | Neg f -> types pols Cau f
-      | And (L, f, _) -> types pols Sup f
-      | And (R, _, g) -> types pols Sup g
-      | And (_, f, g) -> disj (types pols Sup f) (types pols Sup g)
-      | Or (_, f, g) -> conj (types pols Sup f) (types pols Sup g)
+      | And (L, fs) -> types pols Sup (List.hd_exn fs)
+      | And (R, fs) -> types pols Sup (List.last_exn fs)
+      | And (_, fs) ->
+         List.fold_left (List.map fs ~f:(types pols Cau)) ~init:(Possible CTT) ~f:disj
+      | Or (_, fs) ->
+         List.fold_left (List.map fs ~f:(types pols Cau)) ~init:(Possible CTT) ~f:conj
       | Imp (_, f, g) -> conj (types pols Cau f) (types pols Sup g)
       | Iff (L, _, f, g) -> conj (types pols Cau f) (types pols Sup g)
       | Iff (R, _, f, g) -> conj (types pols Sup f) (types pols Cau g)
@@ -234,16 +238,22 @@ let rec convert (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Tformula.t opti
         | TT -> Some (Tformula.TTT)
         | Predicate (e, t) when EnfType.equal (Map.find_exn pols e) Cau -> Some (Tformula.TPredicate (e, t))
         | Neg f -> (convert Sup f) >>| (fun f' -> Tformula.TNeg f')
-        | And (s, f, g) ->
+        | And (s, fs) ->
+           Option.all (List.map fs ~f:(convert Cau))
+           >>| (fun fs' -> Tformula.TAnd (default_L s, fs'))
+        | Or (L, f :: fs) ->
            (convert Cau f)
-           >>= (fun f' -> (convert Cau g) >>| (fun g' -> Tformula.TAnd (default_L s, f', g')))
-        | Or (L, f, g) -> (convert Cau f) >>| (fun f' -> Tformula.TOr(L, f', Tformula.of_formula g))
-        | Or (R, f, g) -> (convert Cau g) >>| (fun g' -> Tformula.TOr(R, Tformula.of_formula f, g'))
-        | Or (_, f, g) ->
+           >>| (fun f' -> Tformula.TOr(L, f' :: (Tformula.of_formulas fs)))
+        | Or (R, fs) ->
+           let f, fs = List.last_exn fs, List.drop_last_exn fs in
+           (convert Cau f) >>| (fun f' -> Tformula.TOr(R, (Tformula.of_formulas fs) @ [f']))
+        | Or (_, fs) ->
            begin
-             match convert Cau f with
-             | Some f' -> Some (Tformula.TOr (L, f', Tformula.of_formula g))
-             | None    -> (convert Cau g) >>| (fun g' -> Tformula.TOr (R, Tformula.of_formula f, g'))
+             match convert Cau (List.hd_exn fs) with
+             | Some f' -> Some (Tformula.TOr (L, f' :: (Tformula.of_formulas fs)))
+             | None    ->
+                let f, fs = List.last_exn fs, List.drop_last_exn fs in
+                (convert Cau f) >>| (fun f' -> Tformula.TOr (R, (Tformula.of_formulas fs) @ [f']))
            end
         | Imp (L, f, g) -> (convert Sup f) >>| (fun f' -> Tformula.TImp(L, f', Tformula.of_formula g))
         | Imp (R, f, g) -> (convert Cau g) >>| (fun g' -> Tformula.TImp(R, Tformula.of_formula f, g'))
@@ -297,16 +307,21 @@ let rec convert (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Tformula.t opti
         | FF -> Some (Tformula.TFF)
         | Predicate (e, t) when EnfType.equal (Map.find_exn pols e) Sup -> Some (Tformula.TPredicate (e, t))
         | Neg f -> (convert Cau f) >>| (fun f' -> Tformula.TNeg f')
-        | And (L, f, g) -> (convert Sup f) >>| (fun f' -> Tformula.TAnd (L, f', Tformula.of_formula g))
-        | And (R, f, g) -> (convert Sup g) >>| (fun g' -> Tformula.TAnd (R, Tformula.of_formula f, g'))
-        | And (_, f, g) ->
+        | And (L, f :: fs) -> (convert Sup f) >>| (fun f' -> Tformula.TAnd (L, f' :: (Tformula.of_formulas fs)))
+        | And (R, fs) ->
+           let f, fs = List.last_exn fs, List.drop_last_exn fs in
+           (convert Sup f) >>| (fun f' -> Tformula.TAnd (R, (Tformula.of_formulas fs) @ [f']))
+        | And (_, fs) ->
            begin
-              match convert Sup f with
-             | Some f' -> Some (Tformula.TAnd (L, f', Tformula.of_formula g))
-             | None    -> (convert Sup g) >>| (fun g' -> Tformula.TAnd (R, Tformula.of_formula f, g'))
+              match convert Sup (List.hd_exn fs) with
+             | Some f' -> Some (Tformula.TAnd (L, f' :: (Tformula.of_formulas (List.tl_exn fs))))
+             | None    ->
+                let f, fs = List.last_exn fs, List.drop_last_exn fs in
+                (convert Sup f) >>| (fun f' -> Tformula.TAnd (R, (Tformula.of_formulas fs) @ [f']))
            end
-        | Or (s, f, g) -> (convert Sup f) >>= (fun f' -> (convert Sup g)
-                                                         >>| (fun g' -> Tformula.TOr (default_L s, f', g')))
+        | Or (s, fs) ->
+           Option.all (List.map fs ~f:(convert Sup))
+           >>| (fun fs' -> Tformula.TOr (default_L s, fs'))
         | Imp (s, f, g) -> (convert Cau f) >>= (fun f' -> (convert Sup g)
                                                           >>| (fun g' -> Tformula.TImp (default_L s, f', g')))
         | Iff (L, _, f, g) -> (convert Cau f) >>= (fun f' -> (convert Sup g)
@@ -381,7 +396,9 @@ let rec relative_interval (f: Tformula.t) =
   match f.f with
   | TTT | TFF | TEqConst (_, _) | TPredicate (_, _) -> Zinterval.singleton 0
   | TNeg f | TExists (_, f) | TForall (_, f) -> relative_interval f
-  | TAnd (_, f1, f2) | TOr (_, f1, f2) | TImp (_, f1, f2) | TIff (_, _, f1, f2)
+  | TAnd (_, fs) | TOr (_, fs)
+    -> List.fold_left (List.map fs ~f:relative_interval) ~init:Zinterval.full ~f:Zinterval.lub
+  | TImp (_, f1, f2) | TIff (_, _, f1, f2)
     -> Zinterval.lub (relative_interval f1) (relative_interval f2)
   | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
     -> let i' = Zinterval.inv (Zinterval.of_interval i) in
@@ -405,8 +422,10 @@ let strict f =
     || (match f.f with
         | TTT | TFF | TEqConst (_, _) | TPredicate _ -> false
         | TNeg f | TExists (_, f) | TForall (_, f) -> _strict itv fut f
-        | TAnd (_, f1, f2) | TOr (_, f1, f2) | TImp (_, f1, f2) | TIff (_, _, f1, f2)
+        | TImp (_, f1, f2) | TIff (_, _, f1, f2)
           -> (_strict itv fut f1) || (_strict itv fut f2)
+        | TAnd (_, fs) | TOr (_, fs)
+          -> List.exists fs ~f:(_strict itv fut)
         | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
           -> _strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f
         | TNext (i, f) | TEventually (i, _, f) | TAlways (i, _, f)
@@ -436,12 +455,16 @@ let is_transparent (f: Tformula.t) =
           | TOnce (_, f) | TNext (_, f) | THistorically (_, f)
            | TAlways (_, _, f) -> aux f
         | TEventually (_, b, f) -> b && aux f
-        | TOr (L, f, g) | TImp (L, f, g) | TIff (L, L, f, g)
+        | TImp (L, f, g) | TIff (L, L, f, g)
           -> aux f && strictly_relative_past g
-        | TOr (R, f, g) | TImp (R, f, g) | TIff (R, R, f, g)
-          -> aux g && strictly_relative_past f
-        | TAnd (_, f, g) | TIff (_, _, f, g)
-          -> aux f && aux g
+        | TOr (L, f :: fs)
+          -> aux f && List.for_all fs ~f:strictly_relative_past
+        | TImp (R, f, g) | TIff (R, R, f, g)
+           -> aux g && strictly_relative_past f
+        | TOr (R, fs)
+          -> aux (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
+        | TAnd (_, fs) -> List.for_all fs ~f:aux
+        | TIff (_, _, f, g) -> aux f && aux g
         | TSince (_, _, f, g) -> aux f && strictly_relative_past g
         | TUntil (R, _, b, f, g) -> b && aux f && strictly_relative_past g
         | TUntil (LR, _, b, f, g) -> b && aux f && aux g
@@ -454,12 +477,13 @@ let is_transparent (f: Tformula.t) =
           | TOnce (_, f) | TNext (_, f) | THistorically (_, f)
           | TEventually (_, _, f) -> aux f
         | TAlways (_, b, f) -> b && aux f
-        | TAnd (L, f, g) | TIff (L, L, f, g)
-          -> aux f && strictly_relative_past g
-        | TAnd (R, f, g) | TIff (R, R, f, g)
+        | TAnd (L, f :: fs) -> aux f  && List.for_all fs ~f:strictly_relative_past
+        | TIff (L, L, f, g) -> aux f && strictly_relative_past g
+        | TIff (R, R, f, g)
           -> aux g && strictly_relative_past f
-        | TOr (_, f, g) | TIff (_, _, f, g)
-          -> aux f && aux g
+        | TAnd (R, fs) -> aux (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
+        | TIff (_, _, f, g) -> aux f && aux g
+        | TOr (_, fs) -> List.for_all fs ~f:aux
         | TSince (L, _, f, g) -> aux f && strictly_relative_past g
         | TSince (R, _, f, g) -> aux f && aux g
         | TUntil (R, _, _, f, g) -> aux f && strictly_relative_past g
@@ -502,8 +526,8 @@ let type_tstmt pols = function
   | TSSection (section_kind, full_label, label, title) -> 
      ESSection (section_kind, full_label, label, title)
   | TSRule _ as trule -> type_trule pols trule
-  | TSEvent (name, typed_args, pol, doc_string) ->
-     ESEvent (name, typed_args, pol, doc_string)
+  | TSEvent (event_type, name, typed_args, pol, doc_string) ->
+     ESEvent (event_type, name, typed_args, pol, doc_string)
   | TSType (name, typ) -> ESType (name, typ)
   | TSNote text -> ESNote text
 

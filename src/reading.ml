@@ -52,16 +52,18 @@ let rec reading_of_formula formula_id eprog f =
        "the following is not the case: "
        ^ (ul "lex-reading-neg"
             (li "lex-reading-neg-li" (reading_of_formula formula_id eprog f)))
-    | TAnd (_, f, g) ->
+    | TAnd (_, fs) ->
        "all of the following are the case:"
        ^ (ul "lex-reading-and"
-            ((li "lex-reading-and-li" (reading_of_formula formula_id eprog f))
-             ^ (li "lex-reading-and-li" (reading_of_formula formula_id eprog g))))
-    | TOr (_, f, g) ->
+            (String.concat
+               (List.map fs ~f:(fun f -> 
+                    ((li "lex-reading-and-li" (reading_of_formula formula_id eprog f)))))))
+    | TOr (_, fs) ->
        "at least one of the following is the case:"
        ^ (ul "lex-reading-or"
-            ((li "lex-reading-or-li" (reading_of_formula formula_id eprog f))
-             ^ (li "lex-reading-or-li" (reading_of_formula formula_id eprog g))))
+            (String.concat
+               (List.map fs ~f:(fun f -> 
+                    ((li "lex-reading-and-li" (reading_of_formula formula_id eprog f)))))))
     | TImp (_, f, g) ->
        "if the following is the case:"
        ^ (ul "lex-reading-imp-left"

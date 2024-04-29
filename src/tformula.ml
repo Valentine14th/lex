@@ -16,8 +16,8 @@ type core_t =
   | TEqConst of string * Dom.t
   | TPredicate of string * Term.t list
   | TNeg of t
-  | TAnd of Side.t * t * t
-  | TOr of Side.t * t * t
+  | TAnd of Side.t * (t list)
+  | TOr of Side.t * (t list)
   | TImp of Side.t * t * t
   | TIff of Side.t * Side.t * t * t
   | TExists of string * t
@@ -41,8 +41,8 @@ let fff = TFF
 let teqconst x d = TEqConst (x, d)
 let tpredicate p_name trms = TPredicate (p_name, trms)
 let tneg f = TNeg f
-let tconj s f g = TAnd (s, f, g)
-let tdisj s f g = TOr (s, f, g)
+let tconj s f g = TAnd (s, [f; g])
+let tdisj s f g = TOr (s, [f; g])
 let timp s f g = TImp (s, f, g)
 let tiff s t f g = TIff (s, t, f, g)
 let texists x f = TExists (x, f)
@@ -64,17 +64,18 @@ let tbigcauconj = function
 let tbigcauforall vars f =
   List.fold_right vars ~init:f ~f:(fun x f -> make (tforall x f) Non 0)
 
-let rec core_of_formula ?id:(id=1) =
-  let lof_formula = of_formula ~id:(2*id)
-  and rof_formula = of_formula ~id:(2*id+1) in
+let rec core_of_formula ?id:(id=1) d = 
+  let lof_formula = of_formula ~id:(d*id)
+  and rof_formula = of_formula ~id:(d*id+1)
+  and iof_formula i = of_formula ~id:(d*id+i) in
   function
   | TT -> TTT
   | FF -> TFF
   | EqConst (x, v) -> TEqConst (x, v)
   | Predicate (e, t) -> TPredicate (e, t)
   | Neg f -> TNeg (lof_formula f)
-  | And (s, f, g) -> TAnd (s, lof_formula f, rof_formula g)
-  | Or (s, f, g) -> TOr (s, lof_formula f, rof_formula g)
+  | And (s, fs) -> TAnd (s, List.mapi ~f:iof_formula fs)
+  | Or (s, fs) -> TOr (s, List.mapi ~f:iof_formula fs)
   | Imp (s, f, g) -> TImp (s, lof_formula f, rof_formula g)
   | Iff (s, t, f, g) -> TIff (s, t, lof_formula f, rof_formula g)
   | Exists (x, f) -> TExists (x, lof_formula f)
@@ -89,7 +90,11 @@ let rec core_of_formula ?id:(id=1) =
   | Until (s, i, f, g) -> TUntil (s, i, true, lof_formula f, rof_formula g)
   | Type (f, ty) -> TType (lof_formula f, ty)
 
-and of_formula ?id:(id=1) f = { f = core_of_formula ~id f; enftype = EnfType.Obs; id }
+and of_formula ?id:(id=1) f =
+  let d = deg f in
+  { f = core_of_formula ~id d f; enftype = EnfType.Obs; id }
+
+let of_formulas = List.map ~f:of_formula
 
 let rec fv f = match f.f with
   | TTT | TFF -> Set.empty (module String)
@@ -105,12 +110,14 @@ let rec fv f = match f.f with
     | TAlways (_, _, f)
     | TNext (_, f)
     | TType (f, _) -> fv f
-  | TAnd (_, f1, f2)
-    | TOr (_, f1, f2)
     | TImp (_, f1, f2)
     | TIff (_, _, f1, f2)
     | TSince (_, _, f1, f2)
     | TUntil (_, _, _, f1, f2) -> Set.union (fv f1) (fv f2)
+  | TAnd (_, fs)
+    | TOr (_, fs) ->
+     let f x g = Set.union x (fv g) in
+     List.fold_left fs ~init:(Set.empty (module String)) ~f
 
 let rec rank = function
   | TTT | TFF -> 0
@@ -126,12 +133,12 @@ let rec rank = function
     | THistorically (_, f)
     | TAlways (_, _, f)
     | TType (f, _) -> rank f.f
-  | TAnd (_, f, g)
-    | TOr (_, f, g)
     | TImp (_, f, g)
     | TIff (_, _, f, g)
     | TSince (_, _, f, g)
     | TUntil (_, _, _, f, g) -> rank f.f + rank g.f
+  | TAnd (_, fs)
+    | TOr (_, fs) -> List.fold_left (List.map fs ~f:(fun f -> rank f.f)) ~init:0 ~f:(+) 
 
 let fix_side s f g =
   match s with
@@ -145,8 +152,10 @@ let rec to_formula f = match f.f with
   | TEqConst (x, v) -> EqConst (x, v)
   | TPredicate (e, t) -> Predicate (e, t)
   | TNeg f -> Neg (to_formula f)
-  | TAnd (s, f, g) -> And (fix_side s f.f g.f, to_formula f, to_formula g)
-  | TOr (s, f, g) -> Or (fix_side s f.f g.f, to_formula f, to_formula g)
+  | TAnd (s, fs) -> And (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
+                         List.map fs ~f:to_formula)
+  | TOr (s, fs) -> Or (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
+                       List.map fs ~f:to_formula)
   | TImp (s, f, g) -> Imp (fix_side s f.f g.f, to_formula f, to_formula g)
   | TIff (s, t, f, g) -> Iff (fix_side s f.f g.f, fix_side t f.f g.f, to_formula f, to_formula g)
   | TExists (x, f) -> Exists (x, to_formula f)
@@ -167,8 +176,8 @@ let rec op_to_string_core = function
   | TEqConst _ -> Printf.sprintf "="
   | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | TNeg _ -> Printf.sprintf "¬"
-  | TAnd (_, _, _) -> Printf.sprintf "∧"
-  | TOr (_, _, _) -> Printf.sprintf "∨"
+  | TAnd (_, _) -> Printf.sprintf "∧"
+  | TOr (_, _) -> Printf.sprintf "∨"
   | TImp (_, _, _) -> Printf.sprintf "→"
   | TIff (_, _, _, _) -> Printf.sprintf "↔"
   | TExists (x, _) -> Printf.sprintf "∃ %s." x
@@ -191,8 +200,14 @@ let rec to_string_core_rec l = function
   | TEqConst (x, c) -> Printf.sprintf "%s = %s" x (Dom.to_string c)
   | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | TNeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
-  | TAnd (s, f, g) -> Printf.sprintf (Util.paren l 4 "%a ∧%a %a") (fun _ -> to_string_rec 4) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
-  | TOr (s, f, g) -> Printf.sprintf (Util.paren l 3 "%a ∨%a %a") (fun _ -> to_string_rec 3) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 4) g
+  | TAnd (s, fs) ->
+     let sep = "∧" ^ Side.to_string s in
+     let strings = List.map fs ~f:(to_string_rec 4) in
+     Util.paren_string l 4 (String.concat ~sep strings)
+  | TOr (s, fs) ->
+     let sep = "∨" ^ Side.to_string s in
+     let strings = List.map fs ~f:(to_string_rec 4) in
+     Util.paren_string l 3 (String.concat ~sep strings)
   | TImp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | TIff (s, t, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
   | TExists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f

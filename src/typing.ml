@@ -25,8 +25,8 @@ let add_tstmt tstmt s =
 let add_talias alias typ s pos =
   { s with tprog = Tlex.add_talias alias typ s.tprog pos }
 
-let add_tevent name args pol ds s pos =
-  { s with tprog = Tlex.add_tevent name args pol ds s.tprog pos }
+let add_tevent event_type name args pol ds s pos =
+  { s with tprog = Tlex.add_tevent event_type name args pol ds s.tprog pos }
 
 let add_vars vs ls s pos =
   { s with tprog = Tlex.add_vars vs ls s.tprog pos }
@@ -154,7 +154,7 @@ let type_stmt s = function
      let title' = Option.map title ~f:(fun x -> TALex x) in
      add_tstmt (TSSection (section_kind, s.label, label, title')) s
   | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
-  | SEvent (pos, name, args, pol, ds) -> add_tevent name args pol ds s pos
+  | SEvent (pos, event_type, name, args, pol, ds) -> add_tevent event_type name args pol ds s pos
   | SType (pos, name, typ) -> add_talias name typ s pos
   | SNote (_, text) -> add_tstmt (TSNote text) s
     
