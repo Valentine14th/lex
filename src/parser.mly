@@ -16,7 +16,7 @@
 %token <int> LABEL_LEVEL
 %token <Lexing.position> RULE
 %token <Lexing.position> NOTE
-%token WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
+%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
 %token CAUSING SUPPRESSING
 
 %token DOT
@@ -66,7 +66,8 @@ stmt:
   | IMPORT import_option import            { SImport ($1, $2, $3) }
   | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, $2, Some $3) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, None) }
-  | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4) }
+  | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4, None) }
+  | TTYPE IDENT IS typ DOCSTRING           { SType (fst $2, snd $2, $4, Some $5) }
   | event_def                              { $1 }
   | NOTE STRING                            { SNote ($1, $2) }
   | NOTE DOCSTRING                         { SNote ($1, $2) }
@@ -132,11 +133,18 @@ rule_constr:
 rule_constrs:
   | separated_list(COM, rule_constr) { $1 }
 
+type_fix:
+  | IDENT COL IDENT { (snd $1, snd $3) }
+
+type_fixes:
+  | { [] }
+  | FIX list(type_fix) { $2 }
+
 srule:
-  | RULE DOCSTRING rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, Some $2) }
-  | RULE STRING DOCSTRING rule rule_type rule_constrs { SRule ($1, Some $2, $4, $5, $6, Some $3) }
-  | RULE rule rule_type rule_constrs                  { SRule ($1, None, $2, $3, $4, None) }
-  | RULE STRING rule rule_type rule_constrs           { SRule ($1, Some $2, $3, $4, $5, None) }
+  | RULE DOCSTRING type_fixes rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, $6, Some $2) }
+  | RULE STRING DOCSTRING type_fixes rule rule_type rule_constrs { SRule ($1, Some $2, $4, $5, $6, $7, Some $3) }
+  | RULE type_fixes rule rule_type rule_constrs                  { SRule ($1, None, $2, $3, $4, $5, None) }
+  | RULE STRING type_fixes rule rule_type rule_constrs           { SRule ($1, Some $2, $3, $4, $5, $6, None) }
 
 event_def:
   | pol event_type IDENT list(arg) { SEvent (fst $3, $2, snd $3, $4, $1, None) }

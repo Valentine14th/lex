@@ -168,19 +168,40 @@ let reading_of_rule_except ident_ =
       ^ strong "lex-reading-verb" "does not apply"
     )
 
+let reading_of_type_fixes eprog rule_id type_fixes =
+  let f i (ident_, typ_) =
+    let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
+    let fix_html =
+      match Map.find Elex.(eprog.ealiases) typ_ with
+     | Some (_, Some doc_string) -> ident ident_ ^ doc_string
+     | Some (_, None) -> ident ident_ ^ " of type " ^ typ typ_
+     | None -> assert false
+    in li ~id "lex-reading-type-fix" fix_html in
+  match type_fixes with
+  | [] -> ""
+  | _ -> 
+     p "lex-reading-fix" (
+         "Consider:"
+         ^ ul "lex-reading-type-fixes"
+             (String.concat ~sep:"" (List.mapi ~f type_fixes))
+       )
+
 let verb_of_erule = function
   | EObligation _ -> "must happen"
   | EPermission _ -> "is permitted"
   | EConstitutive _ -> "is constituted"
   | _ -> assert false
 
-let reading_of_erule rule_id eprog erule =
+
+let reading_of_erule rule_id eprog type_fixes erule =
   let prefix_id = Printf.sprintf "%s-%s" rule_id in
   let reading_of_imp_rule verb f g =
-    reading_of_rule_if (prefix_id "if") eprog f
+    reading_of_type_fixes eprog rule_id type_fixes
+    ^ reading_of_rule_if (prefix_id "if") eprog f
     ^ reading_of_rule_then (prefix_id "then") eprog verb g in
   let reading_of_exc_rule f ident =
-    reading_of_rule_if (prefix_id "if") eprog f
+    reading_of_type_fixes eprog rule_id type_fixes
+    ^ reading_of_rule_if (prefix_id "if") eprog f
     ^ reading_of_rule_except ident in
   match erule with
   | EObligation (f, g)

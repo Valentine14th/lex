@@ -50,9 +50,9 @@ type event_type = Event | Predicate
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
-  | SRule      of Lexing.position * string option * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
+  | SRule      of Lexing.position * string option * (ident * ident) list * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
-  | SType      of Lexing.position * ident * typ (* location points to beginning of type identifier *)
+  | SType      of Lexing.position * ident * typ * string option (* location points to beginning of type identifier *)
   | SNote      of Lexing.position * string
 
 type signature = ident * (ident * typ) list
@@ -155,6 +155,15 @@ let string_of_event_type = function
   | Event -> "event"
   | Predicate -> "predicate"
 
+let string_of_type_fixes i = function
+  | [] -> ""
+  | type_fixes ->
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident typ in
+     Printf.sprintf "%sfix\n%s%s\n"
+       (Etc.tabs i)
+       (Etc.tabs (i+1))
+       (String.concat (List.map type_fixes ~f) ~sep:("\n" ^ Etc.tabs (i+1)))
+
 let string_of_stmt ?(i=0) =
   function
   | SImport (_, import_format, idents) ->
@@ -167,15 +176,16 @@ let string_of_stmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf " \"%s\"" title | None -> "")
-  | SRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
-     let description =
+  | SRule (_, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
+     let description = 
        match doc_string with
        | Some s -> "\n" ^ make_doc_string s i
        | None -> ""
       in
-     Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
+     Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
        (Etc.tabs i)
        (Option.value_map label ~default:"" ~f:(fun label -> " " ^ label))
+       (string_of_type_fixes (i+1) type_fixes)
        (string_of_rule (i+1) rule)
        (Etc.tabs i)
        (string_of_rule_type rule_type)
@@ -197,7 +207,14 @@ let string_of_stmt ?(i=0) =
           name
           description
           (string_of_args typed_args i)
-  | SType (_, name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | SType (_, name, typ, doc_string) ->
+     let description =
+       match doc_string with
+       | Some s -> "\n" ^ make_doc_string s i
+       | None -> ""
+     in
+     Printf.sprintf "type %s is %s%s"
+       name (string_of_typ typ) description
   | SNote (_, text) -> "note \"" ^ text ^ "\""
 
 let string_of_signature signature =

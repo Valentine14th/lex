@@ -29,6 +29,14 @@
     padding-right: 5px;
 }
 
+.lex-rule-fixes {
+    padding-left: 10px;
+}
+
+.lex-rule-fixes .lex-rule-fix {
+    padding-left: 10px;
+}
+
 .lex-rule-if {
     padding-left: 10px;
 }

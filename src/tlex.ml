@@ -18,9 +18,9 @@ let of_annot = function
 type tstmt =
   | TSImport  of Lexing.position * string list * import_format
   | TSSection of section_kind * Label.t * string * string tannot option
-  | TSRule    of Lexing.position * Label.t * trule * rule_type * rule_constr list * string tannot option
+  | TSRule    of Lexing.position * Label.t * (ident * ident) list * trule * rule_type * rule_constr list * string tannot option
   | TSEvent   of event_type * ident * (Lexing.position * ident * ident) list * pol * string option
-  | TSType    of ident * typ
+  | TSType    of ident * typ * string option
   | TSNote    of string
 
 type tevent = (Lexing.position * ident * ident) list * pol * string option
@@ -30,7 +30,7 @@ type var_types = (ident, ident, Base.String.comparator_witness) Map.t
 type tprog =
   {
     tstmts: tstmt list;
-    taliases: (ident, typ, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    taliases: (ident, typ * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
     exceptions: (ident, (ident * Formula.t) list, Base.String.comparator_witness) Map.t
@@ -50,13 +50,13 @@ let pol_map tprog =
 
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
-let add_talias name typ tprog pos =
+let add_talias name typ doc_string tprog pos =
   (* TODO: allow for overwriting/reusing existing type names *)
   let aliases =
-    try Map.add_exn tprog.taliases ~key:name ~data:typ 
+    try Map.add_exn tprog.taliases ~key:name ~data:(typ, doc_string)
     with _ -> Util.type_error (Printf.sprintf "type alias %s already exists" name) pos
   in
-  { tprog with taliases = aliases; tstmts = TSType (name, typ)::tprog.tstmts }
+  { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
 
 let add_tevent event_type name args pol ds tprog pos =
   let event = (args, pol, ds) in
@@ -124,15 +124,16 @@ let string_of_tstmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf ": \"%s\"" (of_annot title) | None -> "")
-  | TSRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
+  | TSRule (_, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
      let description =
           match doc_string with
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-     Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
+     Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
        (Etc.tabs i)
        (Label.qualified_name label)
+       (string_of_type_fixes (i+1) type_fixes)
        (string_of_trule (i+1) rule)
        (Etc.tabs i)
        (string_of_rule_type rule_type)
@@ -154,7 +155,14 @@ let string_of_tstmt ?(i=0) =
           name
           description
           (string_of_args typed_args i)
-  | TSType (name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | TSType (name, typ, doc_string) ->
+      let description =
+          match doc_string with
+          | Some s -> make_doc_string s i
+          | None -> ""
+      in
+     Printf.sprintf "type %s is %s%s"
+       name (string_of_typ typ) description
   | TSNote text -> "note \"" ^ text ^ "\""
 
 let string_of_signature signature =

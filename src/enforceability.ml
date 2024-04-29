@@ -504,7 +504,7 @@ let convert_transparently_enforceable pols f b pos =
     Util.type_error err_msg pos
 
 let type_trule _ = function
-  | TSRule (pos, rule_id, rule, rule_type, rule_constrs, doc_string) -> begin
+  | TSRule (pos, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let rule =  (*[FH] todo, filler code!*) 
         match rule with
         | TException (f1, ident, f2) -> 
@@ -516,7 +516,7 @@ let type_trule _ = function
         | TConstitutive (f1, f2) ->
            EConstitutive (List.map f1 ~f:Tformula.of_formula, List.map f2 ~f:Tformula.of_formula)
       in
-      ESRule (pos, rule_id, rule, rule_type, rule_constrs, doc_string)
+      ESRule (pos, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string)
     end
   | _ -> assert false
 
@@ -528,7 +528,7 @@ let type_tstmt pols = function
   | TSRule _ as trule -> type_trule pols trule
   | TSEvent (event_type, name, typed_args, pol, doc_string) ->
      ESEvent (event_type, name, typed_args, pol, doc_string)
-  | TSType (name, typ) -> ESType (name, typ)
+  | TSType (name, typ, doc_string) -> ESType (name, typ, doc_string)
   | TSNote text -> ESNote text
 
 let type_exception _ (ident, f) =

@@ -94,17 +94,17 @@ let html_of_tannot = function
   | Tlex.TALex s -> s
   | TAFormex (m, s) -> Html.formex m ^ s
 
-let html_of_erule_reading rule_id eprog erule = function
+let html_of_erule_reading rule_id eprog type_fixes erule = function
   | None -> 
      div "lex-rule-reading" (
          div "lex-reading-header" "Reading" 
-         ^ div "lex-reading-body" (Reading.reading_of_erule rule_id eprog erule)
+         ^ div "lex-reading-body" (Reading.reading_of_erule rule_id eprog type_fixes erule)
        )
   | Some doc_string ->
      div "lex-rule-reading" (
          div "lex-reading-header" "Reading"
          ^ ul "list-group list-group-flush" (
-               li "list-group-item lex-reading-body" (Reading.reading_of_erule rule_id eprog erule)
+               li "list-group-item lex-reading-body" (Reading.reading_of_erule rule_id eprog type_fixes erule)
                ^ li "list-group-item lex-docstring-body" (html_of_tannot doc_string))
        )
 
@@ -119,10 +119,23 @@ let html_of_arg (_, id, ty) =
       ident id ^ ": " ^ typ ty
     )
 
+let html_of_type_fix rule_id i (ident_, typ_) =
+  let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
+  div ~id "lex-rule-fix" (
+      ident ident_ ^ ": " ^ typ typ_
+    )
+
 let html_of_args args =
   div "lex-event-args" (
       String.concat ~sep:"" (List.map ~f:html_of_arg args)
     )
+
+let html_of_type_fixes rule_id = function
+  | [] -> ""
+  | type_fixes -> 
+     div "lex-rule-fixes" (
+         kw "fix" ^ String.concat ~sep:"" (List.mapi ~f:(html_of_type_fix rule_id) type_fixes)
+       )
 
 let html_of_estmt eprog =
   function
@@ -147,11 +160,12 @@ let html_of_estmt eprog =
              )
            )
        )
-  | ESRule (_, label, erule, rule_type, rule_constrs, doc_string) ->
+  | ESRule (_, label, type_fixes, erule, rule_type, rule_constrs, doc_string) ->
      let rule_id = Label.qualified_id label in
      div "lex-stmt-rule" (
          two_column (
              kw "rule"
+             ^ html_of_type_fixes rule_id type_fixes
              ^ html_of_erule ("lex-subformula-" ^ rule_id) erule
              ^ kw (html_of_rule_type rule_type)
              ^ (
@@ -161,7 +175,7 @@ let html_of_estmt eprog =
                  html_of_rule_constrs rule_constrs
              )
            )
-           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog erule doc_string)
+           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog type_fixes erule doc_string)
        )
   | ESEvent (event_type, name, typed_args, pol, doc_string) ->
      let html_of_event =
@@ -174,10 +188,12 @@ let html_of_estmt eprog =
        (match doc_string with
         | Some s -> two_column html_of_event (html_of_doc_string s)
         | None   -> one_column html_of_event)
-  | ESType (name, ty) ->
-     div "lex-stmt-type" (
-         one_column (typ name ^ kw "is" ^ typ (Lex.string_of_typ ty))
-       )
+  | ESType (name, ty, doc_string) ->
+     let html_of_type = typ name ^ kw "is" ^ typ (Lex.string_of_typ ty) in
+     div "lex-stmt-type"
+       (match doc_string with
+        | Some s -> two_column html_of_type (html_of_doc_string s)
+        | None   -> one_column html_of_type)
   | ESNote text ->
      div "lex-stmt-note" (
          one_column (kw "note" ^ string text)

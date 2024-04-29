@@ -7,8 +7,8 @@ type recht is string
 type gericht is string
 type gebiet is string
 type gegenstand is string
-type beschwerde is int
-type akt is int
+type beschwerde is int """ eine Beschwerde """
+type akt is int """ ein Akt """
 type person is string
 type staat is string
 
@@ -93,6 +93,9 @@ paragraph "1"
 point "a"
 
 rule
+  fix
+    b : beschwerde
+    a : akt
   whenever
     anfechtungsObjekt(b, a)
     oeffentlichesRecht(a)

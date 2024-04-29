@@ -22,8 +22,8 @@ let empty =
 let add_tstmt tstmt s =
   { s with tprog = Tlex.add_tstmt tstmt s.tprog }
 
-let add_talias alias typ s pos =
-  { s with tprog = Tlex.add_talias alias typ s.tprog pos }
+let add_talias alias typ doc_string s pos =
+  { s with tprog = Tlex.add_talias alias typ doc_string s.tprog pos }
 
 let add_tevent event_type name args pol ds s pos =
   { s with tprog = Tlex.add_tevent event_type name args pol ds s.tprog pos }
@@ -65,7 +65,7 @@ let typ_of_const = function
 
 let type_var (pos, v, t_alias) typed_vars taliases =
   let t = match Map.find taliases t_alias with
-    | Some typ -> typ
+    | Some (typ, _) -> typ
     | None -> let err_msg =
         Printf.sprintf "Type alias '%s' is undefined" t_alias in
       Util.type_error err_msg pos
@@ -113,17 +113,17 @@ let type_vars event_name vars t_vars pos tevents taliases =
          it might be helpful to have pointers inside the rule,
          e.g. to the predicate name, or variable names
          this would require changes to formaula.ml *)
-let type_formulas fs s pos =
+let type_formulas t_vars fs s pos =
   let acc_function1 f = Formula.collect_predicates [] f in
   let acc_function2 l ps = List.concat [l; ps] in
   let predicates = List.fold (List.map fs ~f:acc_function1) ~init:[] ~f:acc_function2 in
   let acc_function3 t_vars (n, ts) =
     type_vars n ts t_vars pos s.tprog.tevents s.tprog.taliases
   in
-  List.fold predicates ~init:(Map.empty (module String)) ~f:acc_function3
+  List.fold predicates ~init:t_vars ~f:acc_function3
 
 let type_rule s pos = function
-  | SRule (_, rule_id, rule, rule_type, rule_constrs, doc_string) -> begin
+  | SRule (_, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let label' = Label.set_rule_id rule_id s.label in
       let label_name = Label.valid_rule_label pos label'; Label.qualified_name label' in
       let s, rule, fs = 
@@ -139,11 +139,12 @@ let type_rule s pos = function
         | Permission (f1, f2) -> s, TPermission (f1, f2), List.concat [f1; f2]
         | Constitutive (f1, f2) -> s, TConstitutive (f1, f2), List.concat [f1; f2]
       in
-      let vars = type_formulas fs s pos in
+      let t_vars = Map.of_alist_exn (module String) type_fixes in
+      let vars = type_formulas t_vars fs s pos in
       let s' = add_vars vars label_name s pos in
       let s'' = add_rule_labels label_name label' s' pos in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
-      add_tstmt (TSRule (pos, label', rule, rule_type, rule_constrs, doc_string')) s''
+      add_tstmt (TSRule (pos, label', type_fixes, rule, rule_type, rule_constrs, doc_string')) s''
     end
   | _ -> assert false
 
@@ -153,9 +154,9 @@ let type_stmt s = function
      let s = set_labels pos section_kind (label, title) s in
      let title' = Option.map title ~f:(fun x -> TALex x) in
      add_tstmt (TSSection (section_kind, s.label, label, title')) s
-  | SRule (pos, _, _, _, _, _) as rule -> type_rule s pos rule
+  | SRule (pos, _, _, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, event_type, name, args, pol, ds) -> add_tevent event_type name args pol ds s pos
-  | SType (pos, name, typ) -> add_talias name typ s pos
+  | SType (pos, name, typ, doc_string) -> add_talias name typ doc_string s pos
   | SNote (_, text) -> add_tstmt (TSNote text) s
     
 let resolve_exception_identifiers s =

@@ -51,6 +51,7 @@ rule read =
   | "rule"         { RULE lexbuf.lex_start_p }
   | "note"         { NOTE lexbuf.lex_start_p }
   | "[" (int as i) "]" { LABEL_LEVEL (int_of_string i) }
+  | "fix"          { FIX }
   | "whenever"     { WHENEVER }
   | "oblige"       { OBLIGE }
   | "permit"       { PERMIT }

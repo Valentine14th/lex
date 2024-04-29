@@ -24,7 +24,7 @@ let compile_erule eprog =
     | EException (f, _, pred) -> compile_imp (f@f') [pred]
   in
   function
-  | ESRule (_, label, rule, _, _, _) ->
+  | ESRule (_, label, _, rule, _, _, _) ->
     let label_name = Label.qualified_name label in
     let exceptions = Map.find_multi eprog.exceptions label_name in
     let f' = List.map exceptions ~f:(fun x -> make (tneg (snd x)) Non 0) in
@@ -35,7 +35,7 @@ let compile_events events aliases =
   let event_list = Map.to_alist events in
   let compile_event (name, (args, pol, _)) =
     let type_args (_, name, typ_alias) =
-      let typ = Map.find_exn aliases typ_alias in
+      let typ = fst (Map.find_exn aliases typ_alias) in
       (name, typ)
     in
     let typed_args = List.map args ~f:type_args in
@@ -63,7 +63,7 @@ let compile_exception_signature exceptions aliases variables =
     let type_term = function
       | Term.Var v -> let a = try Map.find_exn var_types v with _ -> assert false in
                       let t = try Map.find_exn aliases a with _ -> assert false in
-                      (v, t)
+                      (v, fst t)
       (* TODO: constants are not actually possible to be part of an exception predicate *)
       | Term.Const (Int _) -> (fresh_var (), TInt)
       | Term.Const (Str _) -> (fresh_var (), TString)

@@ -11,9 +11,9 @@ type erule =
 type estmt =
   | ESImport  of Lexing.position * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
-  | ESRule    of Lexing.position * Label.t * erule * rule_type * rule_constr list * string tannot option
+  | ESRule    of Lexing.position * Label.t * (ident * ident) list * erule * rule_type * rule_constr list * string tannot option
   | ESEvent   of event_type * ident * (Lexing.position * ident * ident) list * pol * string option
-  | ESType    of ident * typ
+  | ESType    of ident * typ * string option
   | ESNote    of string
 
 type var_types = (ident, ident, Base.String.comparator_witness) Map.t
@@ -21,7 +21,7 @@ type var_types = (ident, ident, Base.String.comparator_witness) Map.t
 type eprog =
   {
     estmts: estmt list;
-    ealiases: (ident, typ, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    ealiases: (ident, typ * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
     exceptions: (ident, (ident * Tformula.t) list, Base.String.comparator_witness) Map.t
@@ -83,15 +83,16 @@ let string_of_estmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf ": \"%s\"" (of_annot title) | None -> "")
-  | ESRule (_, label, rule, rule_type, rule_constrs, doc_string) ->
+  | ESRule (_, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
      let description =
           match doc_string with
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-     Printf.sprintf "%srule%s\n%s\n%s%s%s%s"
+     Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
        (Etc.tabs i)
        (Label.qualified_name label)
+       (string_of_type_fixes (i+1) type_fixes)
        (string_of_erule (i+1) rule)
        (Etc.tabs i)
        (string_of_rule_type rule_type)
@@ -113,7 +114,14 @@ let string_of_estmt ?(i=0) =
           name
           description
           (string_of_args typed_args i)
-  | ESType (name, typ) -> "type " ^ name ^ " is " ^ (string_of_typ typ)
+  | ESType (name, typ, doc_string) ->
+      let description =
+          match doc_string with
+          | Some s -> make_doc_string s i
+          | None -> ""
+      in
+     Printf.sprintf "type %s is %s%s"
+       name (string_of_typ typ) description
   | ESNote text -> "note \"" ^ text ^ "\""
     
 let string_of_eprog eprog =
