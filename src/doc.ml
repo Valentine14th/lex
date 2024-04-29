@@ -121,8 +121,8 @@ let html_of_arg (_, id, ty) =
 
 let html_of_type_fix rule_id i (ident_, typ_) =
   let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
-  div ~id "lex-rule-fix" (
-      ident ident_ ^ ": " ^ typ typ_
+  div "lex-type-fix-outer" (
+      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ typ_)
     )
 
 let html_of_args args =
@@ -133,7 +133,7 @@ let html_of_args args =
 let html_of_type_fixes rule_id = function
   | [] -> ""
   | type_fixes -> 
-     div "lex-rule-fixes" (
+     div "lex-type-fixes" (
          kw "fix" ^ String.concat ~sep:"" (List.mapi ~f:(html_of_type_fix rule_id) type_fixes)
        )
 
@@ -165,7 +165,7 @@ let html_of_estmt eprog =
      div "lex-stmt-rule" (
          two_column (
              kw "rule"
-             ^ html_of_type_fixes rule_id type_fixes
+             ^ html_of_type_fixes ("lex-subformula-" ^ rule_id) type_fixes
              ^ html_of_erule ("lex-subformula-" ^ rule_id) erule
              ^ kw (html_of_rule_type rule_type)
              ^ (

@@ -29,11 +29,11 @@
     padding-right: 5px;
 }
 
-.lex-rule-fixes {
+.lex-type-fixes {
     padding-left: 10px;
 }
 
-.lex-rule-fixes .lex-rule-fix {
+.lex-type-fixes .lex-type-fix-outer {
     padding-left: 10px;
 }
 
@@ -160,11 +160,11 @@
     font-size: 75%;
 }
 
-.lex-subformula {
+.lex-subformula, .lex-type-fix {
     border: 1px solid transparent;
 }
 
-.lex-subformula-reading {
+.lex-subformula-reading, .lex-type-fix-reading {
     border: 1px solid transparent;
 }
 

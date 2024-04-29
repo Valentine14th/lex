@@ -176,13 +176,13 @@ let reading_of_type_fixes eprog rule_id type_fixes =
      | Some (_, Some doc_string) -> ident ident_ ^ doc_string
      | Some (_, None) -> ident ident_ ^ " of type " ^ typ typ_
      | None -> assert false
-    in li ~id "lex-reading-type-fix" fix_html in
+    in li ~id "lex-type-fix-reading" fix_html in
   match type_fixes with
   | [] -> ""
   | _ -> 
-     p "lex-reading-fix" (
-         "Consider:"
-         ^ ul "lex-reading-type-fixes"
+     p "lex-fix-reading" (
+         "Fix:"
+         ^ ul "lex-type-fixes-reading"
              (String.concat ~sep:"" (List.mapi ~f type_fixes))
        )
 
