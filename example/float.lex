@@ -12,10 +12,7 @@ observable event action
     i: id
     f: value
 
-chapter "II"
-article "5"
-paragraph "1"
-point "a"
+article "1"
 rule
     whenever
         action(a, 0.2)
@@ -25,4 +22,4 @@ rule
         cause(a)
         cause(b)
         cause(c)
-enforceable suppressing PersonalDataProcessing 
+enforceable suppressing action
