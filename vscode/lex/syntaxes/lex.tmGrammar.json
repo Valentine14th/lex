@@ -37,7 +37,7 @@
 					"name": "keyword.operator"
 				},
 				{
-					"match": "\\b(whenever|oblige|permit|constitute|except|let)\\b",
+					"match": "\\b(fix|whenever|oblige|permit|constitute|except|scope|let)\\b",
 					"name": "keyword.control"
 				},
 				{
