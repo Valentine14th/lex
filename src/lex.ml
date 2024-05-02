@@ -2,7 +2,7 @@ open Core
 
 type ident = string
 
-type typ = TString | TInt
+type typ = TString | TInt | TFloat
 
 type pol = TCau | TSup | TObs | TCauSup | TInternal
 
@@ -61,8 +61,9 @@ type prog = { stmts: stmt list }
 
 let compare_typs t1 t2 =
   match t1, t2 with
-  | TString, TString -> true
-  | TInt, TInt -> true
+  | TString, TString
+  | TInt, TInt
+  | TFloat, TFloat -> true
   | _ -> false
 
 let is_rule = function
@@ -72,6 +73,7 @@ let is_rule = function
 let string_of_typ = function
   | TString -> "string"
   | TInt -> "int"
+  | TFloat -> "float"
 
 let string_of_pol = function
   | TCau -> "causable"

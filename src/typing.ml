@@ -53,8 +53,8 @@ let fresh () = incr c; string_of_int !c
 
 let type_check_constant c t = match (c, t) with
   | Dom.Int _, TInt
-  | Dom.Str _, TString -> true
-  | Dom.Float _, _ -> false (* floats aren't yet supported by "lex"*)
+  | Dom.Str _, TString
+  | Dom.Float _, TFloat -> true
   | _, _ -> false
 
 let string_of_const = function
@@ -65,7 +65,7 @@ let string_of_const = function
 let typ_of_const = function
   | Dom.Int _ -> TInt
   | Dom.Str _ -> TString
-  | Dom.Float _ -> assert false (* floats are not supported yet *)
+  | Dom.Float _ -> TFloat
 
 let type_var (pos, v, t_alias) typed_vars taliases =
   let t = match Map.find taliases t_alias with

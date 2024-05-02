@@ -6,10 +6,11 @@
 %token EOF
 %token <Lexing.position * string> IDENT
 %token <int> INT
+%token <float> FLOAT
 %token <string> STRING
 %token LPA RPA COM COL
 %token <Lexing.position> IMPORT
-%token EVENT PREDICATE TSTRING TINT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token EVENT PREDICATE TSTRING TINT TFLOAT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IS TTYPE
 %token <string> DOCSTRING
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
@@ -116,6 +117,7 @@ pol:
 typ:
   | TSTRING { TString }
   | TINT    { TInt }
+  | TFLOAT  { TFloat }
 
 rule:
   | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)      { Obligation ($2, $4) }
@@ -220,6 +222,7 @@ term:
 const:
 | INT                                  { Term.Const (Int $1) }
 | STRING                               { Term.Const (Str $1) }
+| FLOAT                                { Term.Const (Float $1) }
 
 terms:
 | trms=separated_list(COM, term)      { trms }

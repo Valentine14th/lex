@@ -13,8 +13,9 @@ let loop filename mode label f o () =
   match mode with
   | None | Some "mfotl" -> begin
       let eprog = Modules.do_type [lexpath] filepath basename labelconvention in
+      print_endline "Parsed and typed:\n";
       Elex.print_eprog eprog;
-      print_endline "#################\n";
+      print_endline "Compiled:\n";
       Compiler.compile eprog (* compile correctly typed program *)
     end
   | Some "doc" -> begin

@@ -69,7 +69,7 @@ let compile_exception_signature exceptions aliases variables =
       (* TODO: constants are not actually possible to be part of an exception predicate *)
       | Term.Const (Int _) -> (fresh_var (), TInt)
       | Term.Const (Str _) -> (fresh_var (), TString)
-      | Term.Const (Float _) -> assert false (* TODO: floats not supported yet *)
+      | Term.Const (Float _) -> (fresh_var (), TFloat)
     in
     let typed_terms = List.map terms ~f:type_term in
     (fst pred_name_and_terms, Lex.TInternal, typed_terms)

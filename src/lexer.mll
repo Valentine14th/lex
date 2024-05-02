@@ -13,6 +13,8 @@ let comment = '#' [^ '\r' '\n']*
 
 let ident = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 let int = ['0'-'9']*
+let float1 = ['0'-'9']+ '.' ['0'-'9']*
+let float2 = '.' ['0'-'9']+
 
 rule read =
   parse
@@ -32,6 +34,7 @@ rule read =
   | "predicate"    { PREDICATE }
   | "string"       { TSTRING }
   | "int"          { TINT }
+  | "float"        { TFLOAT }
   | "type"         { TTYPE }
   | "is"           { IS }
   | "causable"     { TCAUSABLE }
@@ -82,6 +85,7 @@ rule read =
   | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)
                    { INTERVAL (make_interval lexbuf l i j r) }
   | ident          { IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf) }
+  | float1 | float2 { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
   | int            { INT (int_of_string (Lexing.lexeme lexbuf)) }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | comment? eof   { EOF }
