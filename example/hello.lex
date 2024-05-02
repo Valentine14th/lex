@@ -117,9 +117,30 @@ article "8"
 # article[1] "B" "dummy level to try out sublevels"
 paragraph "1"
 rule 
-    whenever isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
-    except "6(1)(1)(a)"
-    #except "6(1)"
+    whenever
+        isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
+    except {
+            # law "GDPR" (optional, will get inferred from the current context)
+            article "6"
+            paragraph "1"
+            point "1"
+            subpoint "a"
+        } and {
+            section "2"
+        } and {
+            section "3"
+            chapter "IV"
+        }
+
+    # except
+        # "6(1)(1)(a)"
+
+        #law "GDPR 6(1)(1)a" # keyword specifies the "level" at which the identifier starts
+        #article "6(1)(1)a"
+        #subpoint "GDPR 6(1)a"
+        #subpoint "6(1)(1)a"
+
+    # except "6(1)"
     # except "6(1)(a)"
     # except "7(1)(a)"
     # except "Art. 6(1)(a) GDPR"
