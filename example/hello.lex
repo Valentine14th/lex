@@ -86,6 +86,10 @@ article "5"
 paragraph "1"
 point "a"
 rule
+    fix
+        ep: processingid
+        x: processorid
+        y: dataid
     whenever
 
         PersonalDataProcessing(ep, x, z)
@@ -100,6 +104,14 @@ paragraph "1"
 point "1"
 subpoint "a"
 rule
+    fix
+        prp: purpose
+        ep: processingid
+        x: processorid
+        y: processorid
+        z: dataid
+        c: consentid
+        w: userid
     whenever 
         PersonalDataProcessing(ep, x, z)
         HasPurpose(ep, prp)
@@ -117,8 +129,14 @@ article "8"
 # article[1] "B" "dummy level to try out sublevels"
 paragraph "1"
 rule 
+    fix
+        w: userid
     whenever
         isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
+    # currenty implemented syntax:
+    # except
+        # "6(1)(1)(a)"
+    # proposed syntax:
     except {
             # law "GDPR" (optional, will get inferred from the current context)
             article "6"
@@ -131,10 +149,7 @@ rule
             section "3"
             chapter "IV"
         }
-
-    # except
-        # "6(1)(1)(a)"
-
+    # other ideas:
         #law "GDPR 6(1)(1)a" # keyword specifies the "level" at which the identifier starts
         #article "6(1)(1)a"
         #subpoint "GDPR 6(1)a"
@@ -143,4 +158,4 @@ rule
     # except "6(1)"
     # except "6(1)(a)"
     # except "7(1)(a)"
-    # except "Art. 6(1)(a) GDPR"
+    # except "Art. 6(1)(a) GDPR" # idea for different convention, if strings are uesd
