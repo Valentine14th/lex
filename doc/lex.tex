@@ -274,15 +274,15 @@ The general syntax for rule declarations is as follows:
                    &\qquad [label_{21}\kw{:}]~expr_{21}\\
                    &\qquad \dots\\
                    &\qquad [label_{2{k_2}}\kw{:}]~expr_{2{k_2}}\\
-  rule\_reference ::= &~\kw{\{} \\
-                      &~\qquad label\_level_1[\kw{[}int\kw{]}]~string_1 \\
-                      &\qquad \dots\\
-                      &~\qquad label\_level_k[\kw{[}int\kw{]}]~string_k \\
-                      &~\kw{\}} \\
-  rule\_references :: = &~rule\_reference \\
-                        &~[\kw{and}~rule\_references] \\
+  rule\_reference ::= &~\kw{\{}~
+                      label\_level_1[\kw{[}int_1\kw{]}]~string_1
+                      ~\dots~
+                      label\_level_k[\kw{[}int_k\kw{]}]~string_k
+                      ~\kw{\}} \\
   rule\_relative ::=&~rule\_verb\_relative~[patt_2] \\
-                    &~rule\_references \\
+                    &~\qquad rule\_reference_1 \\
+                    &~\qquad\dots \\
+                    &~\qquad rule\_reference_l \\
   rule\_decl ::=&~\kw{rule}~[string]\\
                 &~[\kw{fix}\\
                 &\qquad ident_{11}\kw{:} ident_{21}\\
