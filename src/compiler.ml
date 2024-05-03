@@ -17,8 +17,6 @@ let compile_imp f g =
     Non 0
 
 let compile_erule eprog =
-  let module Convention = (val eprog.labelconvention : Label.LabelConvention) in
-  let qualified_name = Convention.convention.qualified_name in
   let aux f' = function
     | EObligation (f, g) -> compile_imp (f@f') g
     | EPermission (f, g) -> compile_imp (f@f') g
@@ -27,7 +25,7 @@ let compile_erule eprog =
   in
   function
   | ESRule (_, label, _, rule, _, _, _) ->
-    let label_name = qualified_name label in
+    let label_name = Label.qualified_name label in
     let exceptions = Map.find_multi eprog.exceptions label_name in
     let f' = List.map exceptions ~f:(fun x -> make (tneg (snd x)) Non 0) in
     aux f' rule

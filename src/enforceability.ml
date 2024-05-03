@@ -503,6 +503,8 @@ let convert_transparently_enforceable pols f b pos =
                      (Formula.to_string f) in
     Util.type_error err_msg pos
 
+(* TODO: type check formulas with information in pols *)
+(* let type_trule pols = function *)
 let type_trule _ = function
   | TSRule (pos, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let rule =  (*[FH] todo, filler code!*) 
@@ -544,7 +546,6 @@ let do_type _ tprog =
     ealiases   = tprog.taliases;
     eevents    = tprog.tevents;
     variables  = tprog.variables;
-    exceptions = Map.map tprog.exceptions ~f:(type_exceptions pols);
-    labelconvention = tprog.labelconvention
+    exceptions = Map.map tprog.exceptions ~f:(type_exceptions pols)
   }
 

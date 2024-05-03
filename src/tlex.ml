@@ -33,8 +33,7 @@ type tprog =
     taliases: (ident, typ * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
-    exceptions: (ident, (ident * Formula.t) list, Base.String.comparator_witness) Map.t;
-    labelconvention: (module Label.LabelConvention)
+    exceptions: (ident, (ident * Formula.t) list, Base.String.comparator_witness) Map.t
   }
 
 let tempty =
@@ -43,8 +42,7 @@ let tempty =
     taliases = Map.empty (module String);
     tevents = Map.empty (module String);
     variables = Map.empty (module String); 
-    exceptions = Map.empty (module String);
-    labelconvention = (module Label.StandardConvention)
+    exceptions = Map.empty (module String)
   }
 
 let pol_map tprog =
@@ -115,7 +113,7 @@ let string_of_trule i trule =
     -> string_of_imp_rule (verb_of_trule trule) f g
   | TException (f, ident, _) -> string_of_exc_rule f ident
 
-let string_of_tstmt tprog ?(i=0) =
+let string_of_tstmt ?(i=0) =
   function
   | TSImport (_, idents, _) ->
      Printf.sprintf "import %s"
@@ -132,11 +130,9 @@ let string_of_tstmt tprog ?(i=0) =
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-      let module Convention = (val tprog.labelconvention : Label.LabelConvention) in
-      let qualified_name = Convention.convention.qualified_name in
       Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
         (Etc.tabs i)
-        (qualified_name label)
+        (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_trule (i+1) rule)
         (Etc.tabs i)
@@ -177,8 +173,7 @@ let string_of_signature signature =
        (String.concat ~sep:", " (List.map typed_idents ~f:string_of_typed_idents))
     
 let string_of_tprog tprog =
-  (* String.concat ~sep:"\n\n" (List.map prog.stmts ~f:string_of_stmt) *)
-  String.concat ~sep:"\n" (List.map tprog.tstmts ~f:(string_of_tstmt tprog))
+  String.concat ~sep:"\n" (List.map tprog.tstmts ~f:string_of_tstmt)
 
 let print_tprog tprog =
   Stdio.printf "%s\n" (string_of_tprog tprog)
