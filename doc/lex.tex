@@ -277,7 +277,8 @@ The general syntax for rule declarations is as follows:
   rule\_reference ::= &~\kw{\{}~
                       label\_level_1[\kw{[}int_1\kw{]}]~string_1
                       ~\dots~
-                      label\_level_k[\kw{[}int_k\kw{]}]~string_k
+                      label\_level_k[\kw{[}int_k\kw{]}]~string_{k}
+                      ~[\kw{rule}~string_{k+1}]
                       ~\kw{\}} \\
   rule\_relative ::=&~rule\_verb\_relative~[patt_2] \\
                     &~\qquad rule\_reference_1 \\
