@@ -59,7 +59,7 @@ let ttype s t = TType (s, t)
 
 let tbigcauconj = function
   | [] -> make ttt Non 0
-  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (tconj N f g) Non 0)
+  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (tconj N f g) Non 0) (*TODO: assign correct type to formula, not just Non*)
 
 let tbigcauforall vars f =
   List.fold_right vars ~init:f ~f:(fun x f -> make (tforall x f) Non 0)

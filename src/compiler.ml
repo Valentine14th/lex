@@ -17,8 +17,6 @@ let compile_imp f g =
     Non 0
 
 let compile_erule eprog =
-  let module Convention = (val eprog.labelconvention : Label.LabelConvention) in
-  let qualified_name = Convention.convention.qualified_name in
   let aux f' = function
     | EObligation (f, g) -> compile_imp (f@f') g
     | EPermission (f, g) -> compile_imp (f@f') g
@@ -27,7 +25,7 @@ let compile_erule eprog =
   in
   function
   | ESRule (_, label, _, rule, _, _, _) ->
-    let label_name = qualified_name label in
+    let label_name = Label.qualified_name label in
     let exceptions = Map.find_multi eprog.exceptions label_name in
     let f' = List.map exceptions ~f:(fun x -> make (tneg (snd x)) Non 0) in
     aux f' rule
@@ -69,7 +67,7 @@ let compile_exception_signature exceptions aliases variables =
       (* TODO: constants are not actually possible to be part of an exception predicate *)
       | Term.Const (Int _) -> (fresh_var (), TInt)
       | Term.Const (Str _) -> (fresh_var (), TString)
-      | Term.Const (Float _) -> assert false (* TODO: floats not supported yet *)
+      | Term.Const (Float _) -> (fresh_var (), TFloat)
     in
     let typed_terms = List.map terms ~f:type_term in
     (fst pred_name_and_terms, Lex.TInternal, typed_terms)

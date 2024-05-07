@@ -37,7 +37,7 @@
 					"name": "keyword.operator"
 				},
 				{
-					"match": "\\b(whenever|oblige|permit|constitute|except|let)\\b",
+					"match": "\\b(fix|whenever|oblige|permit|constitute|except|scope|let)\\b",
 					"name": "keyword.control"
 				},
 				{
@@ -49,7 +49,7 @@
 					"name": "storage.type"
 				},
 				{
-					"match": "\\b(string|int|causable|suppressable|observable|internal|enforceable)\\b",
+					"match": "\\b(string|int|float|causable|suppressable|observable|internal|enforceable)\\b",
 					"name": "support.type"
 				},
 				{

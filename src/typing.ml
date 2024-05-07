@@ -7,7 +7,6 @@ type t =
   {
     tprog: tprog;
     label: Label.t;
-    labelconvention: (module Label.LabelConvention);
     exceptions: (string * Label.t * Lexing.position * Formula.t) list;
     rule_labels: (string, Label.t, Base.String.comparator_witness) Map.t
   }
@@ -16,7 +15,6 @@ let empty =
   {
     tprog = tempty;
     label = Label.empty;
-    labelconvention = (module Label.StandardConvention);
     exceptions = [];
     rule_labels = Map.empty (module String)
   }
@@ -44,17 +42,15 @@ let add_exception pos f ident s =
   { s with exceptions = (ident, s.label, pos, f)::s.exceptions }
 
 let set_labels pos section_kind label s =
-  let module Convention = (val s.labelconvention : Label.LabelConvention) in
-  let set = Convention.convention.set in
-  { s with label = set pos section_kind label s.label }
+  { s with label = Label.set pos section_kind label s.label }
 
 let c = ref 0
 let fresh () = incr c; string_of_int !c
 
 let type_check_constant c t = match (c, t) with
   | Dom.Int _, TInt
-  | Dom.Str _, TString -> true
-  | Dom.Float _, _ -> false (* floats aren't yet supported by "lex"*)
+  | Dom.Str _, TString
+  | Dom.Float _, TFloat -> true
   | _, _ -> false
 
 let string_of_const = function
@@ -65,7 +61,7 @@ let string_of_const = function
 let typ_of_const = function
   | Dom.Int _ -> TInt
   | Dom.Str _ -> TString
-  | Dom.Float _ -> assert false (* floats are not supported yet *)
+  | Dom.Float _ -> TFloat
 
 let type_var (pos, v, t_alias) typed_vars taliases =
   let t = match Map.find taliases t_alias with
@@ -129,9 +125,7 @@ let type_formulas t_vars fs s pos =
 let type_rule s pos = function
   | SRule (_, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let label' = Label.set_rule_id rule_id s.label in
-      let module Convention = (val s.labelconvention : Label.LabelConvention) in
-      let qualified_name = Convention.convention.qualified_name in
-      let label_name = Label.valid_rule_label pos label'; qualified_name label' in
+      let label_name = Label.valid_rule_label pos label'; Label.qualified_name label' in
       let s, rule, fs = 
         match rule with
         | Exception (f, ident) ->
@@ -167,11 +161,8 @@ let type_stmt s = function
     
 let resolve_exception_identifiers s =
   let append_exception rule_labels m (ident, label, pos, f) =
-    let module Convention = (val s.labelconvention : Label.LabelConvention) in
-    let get_full_name = Convention.convention.get_full_name in
-    let qualified_name = Convention.convention.qualified_name in
-    let name = get_full_name ident label pos rule_labels in
-    Map.add_multi m ~key:name ~data:(qualified_name label, f)
+    let name = Label.get_full_name ident label pos rule_labels in
+    Map.add_multi m ~key:name ~data:(Label.qualified_name label, f)
   in
   List.fold s.exceptions ~init:(Map.empty (module String)) ~f:(append_exception s.rule_labels)
 
@@ -197,10 +188,9 @@ let update_var_ts_with_exceptions vars exceptions =
     Map.update m name ~f:(fun _ -> new_vars)
   in Map.fold exceptions ~init:vars ~f:type_exception
 
-let do_type _ prog labelconvention =
+let do_type _ prog =
   (* First pass: type statements *)
-  let init = {empty with labelconvention = labelconvention} in
-  let s = List.fold prog.stmts ~init:init ~f:type_stmt in
+  let s = List.fold prog.stmts ~init:empty ~f:type_stmt in
   (* Second pass: exceptions *)
   let exceptions = resolve_exception_identifiers s in
   let variables = update_var_ts_with_exceptions s.tprog.variables exceptions in
@@ -209,8 +199,7 @@ let do_type _ prog labelconvention =
     taliases = s.tprog.taliases;
     tevents = s.tprog.tevents;
     variables = variables;
-    exceptions = exceptions;
-    labelconvention = s.tprog.labelconvention
+    exceptions = exceptions
   }
 
 

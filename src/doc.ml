@@ -161,9 +161,7 @@ let html_of_estmt eprog =
            )
        )
   | ESRule (_, label, type_fixes, erule, rule_type, rule_constrs, doc_string) ->
-    let module Convention = (val eprog.labelconvention : Label.LabelConvention) in
-    let qualified_id = Convention.convention.qualified_id in
-    let rule_id = qualified_id label in
+    let rule_id = Label.qualified_id label in
     div "lex-stmt-rule" (
         two_column (
             kw "rule"

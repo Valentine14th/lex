@@ -266,9 +266,24 @@ The pairs of identifiers $ident_{i1}\kw{:} ident_{i2}$ contained in the event de
 
 The general syntax for rule declarations is as follows:
 \begin{align*}
-  rule\_verb ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{prohibit} \mid \kw{constitute} \mid \kw{except} \mid \kw{scope}\\
+  rule\_verb\_action ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{prohibit} \mid \kw{constitute} \\
+  rule\_verb\_relative ::=&~\kw{except} \mid \kw{scope}\\
   rule\_constr\_verb ::=&~\kw{causing} \mid \kw{suppressing}\\
   rule\_constr ::=&~rule\_constr\_verb~ident_1~\dots~ident_m\\
+  rule\_action ::= &~rule\_verb\_action~[patt_2]\\
+                   &\qquad [label_{21}\kw{:}]~expr_{21}\\
+                   &\qquad \dots\\
+                   &\qquad [label_{2{k_2}}\kw{:}]~expr_{2{k_2}}\\
+  rule\_reference ::= &~\kw{\{}~
+                      label\_level_1[\kw{[}int_1\kw{]}]~string_1
+                      ~\dots~
+                      label\_level_k[\kw{[}int_k\kw{]}]~string_{k}
+                      ~[\kw{rule}~string_{k+1}]
+                      ~\kw{\}} \\
+  rule\_relative ::=&~rule\_verb\_relative~[patt_2] \\
+                    &~\qquad rule\_reference_1 \\
+                    &~\qquad\dots \\
+                    &~\qquad rule\_reference_l \\
   rule\_decl ::=&~\kw{rule}~[string]\\
                 &~[\kw{fix}\\
                 &\qquad ident_{11}\kw{:} ident_{21}\\
@@ -278,10 +293,7 @@ The general syntax for rule declarations is as follows:
                 &\qquad [label_{11}\kw{:}]~expr_{11}\\
                 &\qquad \dots\\
                 &\qquad [label_{1{k_1}}\kw{:}]~expr_{1{k_1}}]\\
-                &~rule\_verb~[patt_2]\\
-                &\qquad [label_{21}\kw{:}]~expr_{21}\\
-                &\qquad \dots\\
-                &\qquad [label_{2{k_2}}\kw{:}]~expr_{2{k_2}}\\
+                &~(rule\_action\mid rule\_relative)\\
                 &[[\kw{transparently}]~\kw{enforceable}]~rule\_constr_1\kw{,}\dots\kw{,}rule\_constr_\ell
 \end{align*}
 In the following we review the syntax of expressions $expr_{ij}$ (Section~\ref{sec:expr}), the available verbs (Section~\ref{sec:expr-verb}) and the temporal patterns determined by $patt_1$ and $patt_2$ (Section~\ref{sec:opt}).
