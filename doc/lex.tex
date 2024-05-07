@@ -372,7 +372,7 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 % LegalRuleML: Design Principles and Foundations
 
-\subsection{To documentation}
+\subsection{To ddocumentation}
 
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
@@ -387,15 +387,27 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % design survey
 
 % Enforcer wishlist
-% - more complex terms
-% - predicates based on databases / external interface
-% - explicit reasoning about time
-% - complex data types: algebraic / records
+
+% WP1
+% - more complex terms → define function symbols and use them inside terms →  FORALL x, y. B(x) AND C(y) => A(sub(x,y), add(y,y))
+% - predicates based on databases / external interface → P(a, b, c, d) → 1 = p(a, b, c, d) ||| FORALL x, y. B(x) AND C(y) => P(x - y, y + y) (could be retrieving all or just testing)
+% - explicit reasoning about time → FORALL x. A(x) => current_time() = x
+% - load Python functions
+% - comparisons & equalities
+
+% WP2
 % - nary constructs
 % - take ordered sequences of formulae as inputs
-% - conditional Cau/Sup
+
+% WP3
 % - efficient handling of data structures
-% - comparisons
+% - efficient search for subformulae to update
+
+% WP4 (low priority)
+% - conditional Cau/Sup
+
+% WP5 (even lower priority)
+% - complex data types: algebraic / records
 
 {%\setlength\bibsep{2pt}
 \small
