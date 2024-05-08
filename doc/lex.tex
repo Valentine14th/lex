@@ -271,9 +271,9 @@ The general syntax for rule declarations is as follows:
   rule\_constr\_verb ::=&~\kw{causing} \mid \kw{suppressing}\\
   rule\_constr ::=&~rule\_constr\_verb~ident_1~\dots~ident_m\\
   rule\_action ::= &~rule\_verb\_action~[patt_2]\\
-                   &\qquad [label_{21}\kw{:}]~expr_{21}\\
+                   &\qquad [ident_{41}\kw{:}]~expr_{41}\\
                    &\qquad \dots\\
-                   &\qquad [label_{2{k_2}}\kw{:}]~expr_{2{k_2}}\\
+                   &\qquad [ident_{4{k_4}}\kw{:}]~expr_{4{k_4}}\\
   rule\_reference ::= &~\kw{\{}~
                       label\_level_1[\kw{[}int_1\kw{]}]~string_1
                       ~\dots~
@@ -290,9 +290,9 @@ The general syntax for rule declarations is as follows:
                 &\qquad \dots\\
                 &\qquad ident_{1n}\kw{:} ident_{2n}]\\
                 &~[\kw{whenever}~[patt_1]\\
-                &\qquad [label_{11}\kw{:}]~expr_{11}\\
+                &\qquad [ident_{31}\kw{:}]~expr_{31}\\
                 &\qquad \dots\\
-                &\qquad [label_{1{k_1}}\kw{:}]~expr_{1{k_1}}]\\
+                &\qquad [ident_{3{k_3}}\kw{:}]~expr_{3{k_3}}]\\
                 &~(rule\_action\mid rule\_relative)\\
                 &[[\kw{transparently}]~\kw{enforceable}]~rule\_constr_1\kw{,}\dots\kw{,}rule\_constr_\ell
 \end{align*}
