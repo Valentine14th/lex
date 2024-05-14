@@ -20,8 +20,10 @@ rule read =
   parse
   | white          { read lexbuf }
   | comment? newline { new_line lexbuf; read lexbuf }
-  | '('            { LPA }
-  | ')'            { RPA }
+  | '('            { LPA lexbuf.lex_start_p }
+  | ')'            { RPA lexbuf.lex_start_p }
+  | '{'            { LBR lexbuf.lex_start_p }
+  | '}'            { RBR lexbuf.lex_start_p }
   | ','            { COM }
   | ':'            { COL }
   | '.'            { DOT }
@@ -60,30 +62,31 @@ rule read =
   | "permit"       { PERMIT }
   | "constitute"   { CONSTITUTE }
   | "except"       { EXCEPT }
+  | "scope"        { SCOPE }
   | "suppressing"  { SUPPRESSING }
   | "causing"      { CAUSING }
-  | "false" | "⊥"  { FALSE }
-  | "true" | "⊤"   { TRUE }
-  | "="            { EQCONST }
-  | "¬" | "NOT"    { NEG }
-  | "∧" | "AND"    { AND }
-  | "∨" | "OR"     { OR }
-  | "→" | "IMPLIES" { IMP }
-  | "↔" | "IFF"   { IFF }
-  | "∃"  | "EXISTS"{ EXISTS }
-  | "∀"  | "FORALL"{ FORALL }
-  | "SINCE" | "S"  { SINCE }
-  | "UNTIL" | "U"  { UNTIL }
-  | "RELEASE" | "R"{ RELEASE }
-  | "TRIGGER" |	"T"{ TRIGGER }
-  | "NEXT" | "X" | "○" { NEXT }
-  | "PREV" | "PREVIOUS" | "Y" | "●" { PREV }
-  | "GLOBALLY" | "ALWAYS" | "G" | "□" { ALWAYS }
-  | "EVENTUALLY" | "F" | "◊" { EVENTUALLY }
-  | "GLOBALLY_PAST" | "HISTORICALLY" | "■" { HISTORICALLY }
-  | "ONCE" | "⧫"   { ONCE }
+  | "false" | "⊥"  { FALSE lexbuf.lex_start_p }
+  | "true" | "⊤"   { TRUE lexbuf.lex_start_p }
+  | "="            { EQCONST lexbuf.lex_start_p }
+  | "¬" | "NOT"    { NEG lexbuf.lex_start_p }
+  | "∧" | "AND"    { AND lexbuf.lex_start_p }
+  | "∨" | "OR"     { OR lexbuf.lex_start_p }
+  | "→" | "IMPLIES" { IMP lexbuf.lex_start_p }
+  | "↔" | "IFF"    { IFF lexbuf.lex_start_p }
+  | "∃"  | "EXISTS"{ EXISTS lexbuf.lex_start_p }
+  | "∀"  | "FORALL"{ FORALL lexbuf.lex_start_p }
+  | "SINCE" | "S"  { SINCE lexbuf.lex_start_p }
+  | "UNTIL" | "U"  { UNTIL lexbuf.lex_start_p }
+  | "RELEASE" | "R"{ RELEASE lexbuf.lex_start_p }
+  | "TRIGGER" |	"T"{ TRIGGER lexbuf.lex_start_p }
+  | "NEXT" | "X" | "○" { NEXT lexbuf.lex_start_p }
+  | "PREV" | "PREVIOUS" | "Y" | "●" { PREV lexbuf.lex_start_p }
+  | "GLOBALLY" | "ALWAYS" | "G" | "□" { ALWAYS lexbuf.lex_start_p }
+  | "EVENTUALLY" | "F" | "◊" { EVENTUALLY lexbuf.lex_start_p }
+  | "GLOBALLY_PAST" | "HISTORICALLY" | "■" { HISTORICALLY lexbuf.lex_start_p }
+  | "ONCE" | "⧫"   { ONCE lexbuf.lex_start_p }
   | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)
-                   { INTERVAL (make_interval lexbuf l i j r) }
+                   { INTERVAL (lexbuf.lex_start_p, make_interval lexbuf l i j r) }
   | ident          { IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf) }
   | float1 | float2 { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
   | int            { INT (int_of_string (Lexing.lexeme lexbuf)) }

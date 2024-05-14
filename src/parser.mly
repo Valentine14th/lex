@@ -8,7 +8,9 @@
 %token <int> INT
 %token <float> FLOAT
 %token <string> STRING
-%token LPA RPA COM COL
+%token <Lexing.position> LPA RPA
+%token COM COL
+%token <Lexing.position> LBR RBR
 %token <Lexing.position> IMPORT
 %token EVENT PREDICATE TSTRING TINT TFLOAT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IS TTYPE
@@ -17,31 +19,31 @@
 %token <int> LABEL_LEVEL
 %token <Lexing.position> RULE
 %token <Lexing.position> NOTE
-%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
+%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT SCOPE
 %token CAUSING SUPPRESSING
 
 %token DOT
-%token <Interval.t> INTERVAL
-%token FALSE
-%token TRUE
-%token EQCONST
-%token NEG
-%token AND
-%token OR
-%token IMP
-%token IFF
-%token EXISTS
-%token FORALL
-%token PREV
-%token NEXT
-%token ONCE
-%token EVENTUALLY
-%token HISTORICALLY
-%token ALWAYS
-%token SINCE
-%token UNTIL
-%token RELEASE
-%token TRIGGER
+%token <Lexing.position * Interval.t> INTERVAL
+%token <Lexing.position> FALSE
+%token <Lexing.position> TRUE
+%token <Lexing.position> EQCONST
+%token <Lexing.position> NEG
+%token <Lexing.position> AND
+%token <Lexing.position> OR
+%token <Lexing.position> IMP
+%token <Lexing.position> IFF
+%token <Lexing.position> EXISTS
+%token <Lexing.position> FORALL
+%token <Lexing.position> PREV
+%token <Lexing.position> NEXT
+%token <Lexing.position> ONCE
+%token <Lexing.position> EVENTUALLY
+%token <Lexing.position> HISTORICALLY
+%token <Lexing.position> ALWAYS
+%token <Lexing.position> SINCE
+%token <Lexing.position> UNTIL
+%token <Lexing.position> RELEASE
+%token <Lexing.position> TRIGGER
 
 %token FORMEX AKOMANTOSO
 
@@ -99,7 +101,7 @@ section_kind_and_pos:
   | PARAGRAPH             { Paragraph 0, $1 }
   | POINT                 { Point 0, $1 }
   | SUBPOINT              { Subpoint 0, $1 }
-                      
+
 rule_type:
   | TENFORCEABLE { Enforceable }
   | TTRANSPARENTLY TENFORCEABLE { Transparent }
@@ -119,11 +121,34 @@ typ:
   | TINT    { TInt }
   | TFLOAT  { TFloat }
 
+section_kind_with_name:
+  | LAW LABEL_LEVEL STRING       { Law $2, $3 }
+  | TITLE LABEL_LEVEL STRING     { Title $2, $3 }
+  | CHAPTER LABEL_LEVEL STRING   { Chapter $2, $3 }
+  | SECTION LABEL_LEVEL STRING   { Section $2, $3 }
+  | ARTICLE LABEL_LEVEL STRING   { Article $2, $3 }
+  | PARAGRAPH LABEL_LEVEL STRING { Paragraph $2, $3 }
+  | POINT LABEL_LEVEL STRING     { Point $2, $3 }
+  | SUBPOINT LABEL_LEVEL STRING  { Subpoint $2, $3 }
+  | LAW STRING                   { Law 0, $2 }
+  | TITLE STRING                 { Title 0, $2 }
+  | CHAPTER STRING               { Chapter 0, $2 }
+  | SECTION STRING               { Section 0, $2 }
+  | ARTICLE STRING               { Article 0, $2 }
+  | PARAGRAPH STRING             { Paragraph 0, $2 }
+  | POINT STRING                 { Point 0, $2 }
+  | SUBPOINT STRING              { Subpoint 0, $2 }
+
+reference:
+  | LBR nonempty_list(section_kind_with_name) RULE STRING RBR { ($1, ($2, Some $4)) }
+  | LBR nonempty_list(section_kind_with_name) RBR { ($1, ($2, None)) }
+
 rule:
-  | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)      { Obligation ($2, $4) }
-  | WHENEVER nonempty_list(e) PERMIT nonempty_list(e)      { Permission ($2, $4) }
-  | WHENEVER nonempty_list(e) CONSTITUTE nonempty_list(e)  { Constitutive ($2, $4) }
-  | WHENEVER nonempty_list(e) EXCEPT STRING                { Exception ($2, $4) }
+  | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)         { Obligation ($2, $4) }
+  | WHENEVER nonempty_list(e) PERMIT nonempty_list(e)         { Permission ($2, $4) }
+  | WHENEVER nonempty_list(e) CONSTITUTE nonempty_list(e)     { Constitutive ($2, $4) }
+  | WHENEVER nonempty_list(e) EXCEPT nonempty_list(reference) { Exception ($2, $4) }
+  | WHENEVER nonempty_list(e) SCOPE nonempty_list(reference)  { Scope ($2, $4) }
 
 ident:
   | IDENT { snd $1 }
@@ -160,54 +185,54 @@ arg:
   | IDENT COL IDENT { (fst $1, snd $1, snd $3) }
 
 e:
-| ee                                   { flatten_assoc $1 }
+| ee                                   { fst $1, flatten_assoc (snd $1) }
 
 ee:
-| LPA e RPA                            { $2 }
-| TRUE                                 { tt }
-| FALSE                                { ff }
-| ident EQCONST const                  { eqconst $1 (Term.unconst $3)}
-| NEG e                                { neg $2 }
-| PREV INTERVAL e                      { prev $2 $3 }
-| PREV e                               { prev Interval.full $2 }
-| NEXT INTERVAL e                      { next $2 $3 }
-| NEXT e                               { next Interval.full $2 }
-| ONCE INTERVAL e                      { once $2 $3 }
-| ONCE e                               { once Interval.full $2 }
-| EVENTUALLY INTERVAL e                { eventually $2 $3 }
-| EVENTUALLY e                         { eventually Interval.full $2 }
-| HISTORICALLY INTERVAL e              { historically $2 $3 }
-| HISTORICALLY e                       { historically Interval.full $2 }
-| ALWAYS INTERVAL e                    { always $2 $3 }
-| ALWAYS e                             { always Interval.full $2 }
-| e AND side e                         { conj $3 $1 $4 }
-| e AND e                              { conj N $1 $3 }
-| e OR side e                          { disj $3 $1 $4 }
-| e OR e                               { disj N $1 $3 }
-| e IMP side e                         { imp $3 $1 $4 }
-| e IMP e                              { imp N $1 $3 }
-| e IFF sides e                        { iff (fst $3) (snd $3) $1 $4 }
-| e IFF e                              { iff N N $1 $3 }
-| e SINCE INTERVAL side e              { since $4 $3 $1 $5 }
-| e SINCE INTERVAL e                   { since N $3 $1 $4 }
-| e SINCE side e                       { since $3 Interval.full $1 $4 }
-| e SINCE e                            { since N Interval.full $1 $3 }
-| e UNTIL INTERVAL side e              { until $4 $3 $1 $5 }
-| e UNTIL INTERVAL e                   { until N $3 $1 $4 }
-| e UNTIL side e                       { until $3 Interval.full $1 $4 }
-| e UNTIL e                            { until N Interval.full $1 $3 }
-| e TRIGGER INTERVAL side e            { trigger $4 $3 $1 $5 }
-| e TRIGGER INTERVAL e                 { trigger N $3 $1 $4 }
-| e TRIGGER side e                     { trigger $3 Interval.full $1 $4 }
-| e TRIGGER e                          { trigger N Interval.full $1 $3 }
-| e RELEASE INTERVAL side e            { release $4 $3 $1 $5 }
-| e RELEASE INTERVAL e                 { release N $3 $1 $4 }
-| e RELEASE side e                     { release $3 Interval.full $1 $4 }
-| e RELEASE e                          { release N Interval.full $1 $3 }
-| EXISTS vars DOT e %prec EXISTS       { List.fold_right exists (List.tl $2) (exists (List.hd $2) $4) }
-| FORALL vars DOT e %prec FORALL       { List.fold_right forall (List.tl $2) (forall (List.hd $2) $4) }
-| IDENT LPA terms RPA                  { predicate (snd $1) $3 }
-| e COL ty                             { type_ $1 $3 }
+| LPA e RPA                            { $1, snd $2 }
+| TRUE                                 { $1, tt }
+| FALSE                                { $1, ff }
+| IDENT EQCONST const                  { fst $1, eqconst (snd $1) (Term.unconst $3)}
+| NEG e                                { $1, neg (snd $2) }
+| PREV INTERVAL e                      { $1, prev (snd $2) (snd $3) }
+| PREV e                               { $1, prev Interval.full (snd $2) }
+| NEXT INTERVAL e                      { $1, next (snd $2) (snd $3) }
+| NEXT e                               { $1, next Interval.full (snd $2) }
+| ONCE INTERVAL e                      { $1, once (snd $2) (snd $3) }
+| ONCE e                               { $1, once Interval.full (snd $2) }
+| EVENTUALLY INTERVAL e                { $1, eventually (snd $2) (snd $3) }
+| EVENTUALLY e                         { $1, eventually Interval.full (snd $2) }
+| HISTORICALLY INTERVAL e              { $1, historically (snd $2) (snd $3) }
+| HISTORICALLY e                       { $1, historically Interval.full (snd $2) }
+| ALWAYS INTERVAL e                    { $1, always (snd $2) (snd $3) }
+| ALWAYS e                             { $1, always Interval.full (snd $2) }
+| e AND side e                         { fst $1, conj $3 (snd $1) (snd $4) }
+| e AND e                              { fst $1, conj N (snd $1) (snd $3) }
+| e OR side e                          { fst $1, disj $3 (snd $1) (snd $4) }
+| e OR e                               { fst $1, disj N (snd $1) (snd $3) }
+| e IMP side e                         { fst $1, imp $3 (snd $1) (snd $4) }
+| e IMP e                              { fst $1, imp N (snd $1) (snd $3) }
+| e IFF sides e                        { fst $1, iff (fst $3) (snd $3) (snd $1) (snd $4) }
+| e IFF e                              { fst $1, iff N N (snd $1) (snd $3) }
+| e SINCE INTERVAL side e              { fst $1, since $4 (snd $3) (snd $1) (snd $5) }
+| e SINCE INTERVAL e                   { fst $1, since N (snd $3) (snd $1) (snd $4) }
+| e SINCE side e                       { fst $1, since $3 Interval.full (snd $1) (snd $4) }
+| e SINCE e                            { fst $1, since N Interval.full (snd $1) (snd $3) }
+| e UNTIL INTERVAL side e              { fst $1, until $4 (snd $3) (snd $1) (snd $5) }
+| e UNTIL INTERVAL e                   { fst $1, until N (snd $3) (snd $1) (snd $4) }
+| e UNTIL side e                       { fst $1, until $3 Interval.full (snd $1) (snd $4) }
+| e UNTIL e                            { fst $1, until N Interval.full (snd $1) (snd $3) }
+| e TRIGGER INTERVAL side e            { fst $1, trigger $4 (snd $3) (snd $1) (snd $5) }
+| e TRIGGER INTERVAL e                 { fst $1, trigger N (snd $3) (snd $1) (snd $4) }
+| e TRIGGER side e                     { fst $1, trigger $3 Interval.full (snd $1) (snd $4) }
+| e TRIGGER e                          { fst $1, trigger N Interval.full (snd $1) (snd $3) }
+| e RELEASE INTERVAL side e            { fst $1, release $4 (snd $3) (snd $1) (snd $5) }
+| e RELEASE INTERVAL e                 { fst $1, release N (snd $3) (snd $1) (snd $4) }
+| e RELEASE side e                     { fst $1, release $3 Interval.full (snd $1) (snd $4) }
+| e RELEASE e                          { fst $1, release N Interval.full (snd $1) (snd $3) }
+| EXISTS vars DOT e %prec EXISTS       { $1, List.fold_right exists (List.tl $2) (exists (List.hd $2) (snd $4)) }
+| FORALL vars DOT e %prec FORALL       { $1, List.fold_right forall (List.tl $2) (forall (List.hd $2) (snd $4)) }
+| IDENT LPA terms RPA                  { fst $1, predicate (snd $1) $3 }
+| e COL ty                             { fst $1, type_ (snd $1) $3 }
 
 side:
 | COL IDENT                            { Side.of_string (snd $2) }

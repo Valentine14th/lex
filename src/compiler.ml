@@ -18,17 +18,20 @@ let compile_imp f g =
 
 let compile_erule eprog =
   let aux f' = function
-    | EObligation (f, g) -> compile_imp (f@f') g
-    | EPermission (f, g) -> compile_imp (f@f') g
-    | EConstitutive (f, g) -> compile_imp (f@f') g
-    | EException (f, _, pred) -> compile_imp (f@f') [pred]
+    | EObligation (f, g) -> compile_imp (List.map ~f:snd f@f') (List.map ~f:snd g)
+    | EPermission (f, g) -> compile_imp (List.map ~f:snd f@f') (List.map ~f:snd g)
+    | EConstitutive (f, g) -> compile_imp (List.map ~f:snd f@f') (List.map ~f:snd g)
+    | EException (f, _, pred) -> compile_imp (List.map ~f:snd f@f') [pred] (* TODO: implement exception compilation to more closely represent let expressions, maybe with iff instead of just if *)
+    | EScope (f, _, pred) -> compile_imp (List.map ~f:snd f@f') [pred] (* TODO is a negation necessary here, or is this handled elsewhwere? *)
   in
   function
-  | ESRule (_, label, _, rule, _, _, _) ->
-    let label_name = Label.qualified_name label in
-    let exceptions = Map.find_multi eprog.exceptions label_name in
-    let f' = List.map exceptions ~f:(fun x -> make (tneg (snd x)) Non 0) in
-    aux f' rule
+  | ESRule (_, idx, _, _, rule, _, _, _) ->
+    let exception_idxs = Map.find_multi eprog.rule_tree.exceptions idx in
+    let scope_idxs = Map.find_multi eprog.rule_tree.scopes idx in
+    let exceptions = List.map exception_idxs ~f:(Map.find_exn eprog.exception_predicates) in
+    let scopes = List.map scope_idxs ~f:(Map.find_exn eprog.scope_predicates) in
+    let f' = List.map exceptions ~f:(fun x -> make (tneg x) Non 0) in
+    aux (f'@scopes) rule
   | _ -> assert false
 
 let compile_events events aliases =
@@ -51,10 +54,10 @@ let compile_events events aliases =
 let c = ref 0
 let fresh_var () = incr c; "_v" ^ string_of_int !c
 
-let compile_exception_signature exceptions aliases variables =
-  let exceptions_list = List.concat (Map.data exceptions) in
-  let compile_exception_predicate (rule_name, pred) =
-    let var_types = try Map.find_exn variables rule_name with _ -> assert false in
+let compile_exception_or_scope_signature predicate_map aliases variables =
+  let indexed_predicates = (Map.to_alist predicate_map) in
+  let compile_predicate (idx, pred) =
+    let var_types = try Map.find_exn variables idx with _ -> assert false in
     let pred_name_and_terms = match pred.f with
       | Tformula.TPredicate (n, ts) -> (n, ts)
       | _ -> assert false
@@ -72,13 +75,14 @@ let compile_exception_signature exceptions aliases variables =
     let typed_terms = List.map terms ~f:type_term in
     (fst pred_name_and_terms, Lex.TInternal, typed_terms)
   in
-  List.map exceptions_list ~f:compile_exception_predicate
+  List.map indexed_predicates ~f:compile_predicate
 
 
-let compile_signature events aliases variables exceptions =
+let compile_signature events aliases variables exceptions scopes =
   let event_signatures = compile_events events aliases in
-  let exception_signatures = compile_exception_signature exceptions aliases variables in
-  List.concat [event_signatures; exception_signatures]
+  let exception_signatures = compile_exception_or_scope_signature exceptions aliases variables in
+  let scope_signatures = compile_exception_or_scope_signature scopes aliases variables in
+  List.concat [event_signatures; exception_signatures; scope_signatures]
 
 let pol_to_symbol_string pol =
   match pol with
@@ -102,7 +106,7 @@ let compile eprog =
   let rules = List.filter eprog.estmts ~f:is_erule in
   let formulae = List.map rules ~f:(compile_erule eprog) in
   let phi = tbigcauconj formulae in
-  let signatures = compile_signature eprog.eevents eprog.ealiases eprog.variables eprog.exceptions in
+  let signatures = compile_signature eprog.eevents eprog.ealiases eprog.variables eprog.exception_predicates eprog.scope_predicates in
   Printf.printf "Signature:\n%s\n\nFormula:\n%s\n"
     (string_of_signatures signatures)
     (Tformula.to_string phi)

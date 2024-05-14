@@ -16,6 +16,8 @@ type section_kind =
   | Point     of int
   | Subpoint  of int
 
+type reference = (section_kind * ident) list * ident option
+
 let equal_section_kind kind kind' =
   match kind, kind' with
   | Law i, Law i'
@@ -28,12 +30,31 @@ let equal_section_kind kind kind' =
   | Subpoint i, Subpoint i' when i = i' -> true
   | _, _ -> false
 
+let compare_section_kind kind kind' =
+  let rank = function
+    | Law i       -> (7, -i)
+    | Title i     -> (6, -i)
+    | Chapter i   -> (5, -i)
+    | Section i   -> (4, -i)
+    | Article i   -> (3, -i)
+    | Paragraph i -> (2, -i)
+    | Point i     -> (1, -i)
+    | Subpoint i  -> (0, -i)
+  in
+  let compare_tuple (a, b) (a', b') =
+    match Int.compare a a' with
+    | 0 -> Int.compare b b'
+    | n -> n
+  in
+  compare_tuple (rank kind) (rank kind')
+
 type rule =
-  | Obligation   of Formula.t list * Formula.t list
-  | Permission   of Formula.t list * Formula.t list
-  | Constitutive of Formula.t list * Formula.t list
-  | Exception    of Formula.t list * ident
-    
+  | Obligation   of (Lexing.position * Formula.t) list * (Lexing.position * Formula.t) list
+  | Permission   of (Lexing.position * Formula.t) list * (Lexing.position * Formula.t) list
+  | Constitutive of (Lexing.position * Formula.t) list * (Lexing.position * Formula.t) list
+  | Exception    of (Lexing.position * Formula.t) list * (Lexing.position * reference) list
+  | Scope        of (Lexing.position * Formula.t) list * (Lexing.position * reference) list
+
 type rule_type = Vanilla | Enforceable | Transparent
 
 type rule_constr =
@@ -116,26 +137,37 @@ let verb_of_rule = function
   | Permission _ -> "permit"
   | Constitutive _ -> "constitute"
   | Exception _ -> "except"
-  
+  | Scope _ -> "scope"
+
+let string_of_reference (rs, rule) =
+  let rule_id = match rule with
+    | Some r -> "rule \"" ^ r ^ "\""
+    | None ->  ""
+  in
+  let string_of_section_kind_and_name (s, n) = string_of_section_kind s ^ " \"" ^ n ^ "\"" in
+  "{ " ^ String.concat ~sep:" " (List.map ~f:string_of_section_kind_and_name rs) ^ rule_id ^ " }"
+
 let string_of_rule i rule =
   let to_string f =
     Etc.tabs (i+1) ^ Formula.to_string f
   in
   let string_of_imp_rule verb f g =
       Etc.tabs i     ^ "whenever"                       ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
     ^ Etc.tabs i     ^ verb                             ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:to_string g)
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
   in
-  let string_of_exc_rule f ident =
+  let string_of_exc_rule verb f rs =
       Etc.tabs i     ^ "whenever"          ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n"
-    ^ Etc.tabs i     ^ "except \"" ^ ident ^ "\""
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ Etc.tabs i     ^ verb
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,r') -> string_of_reference r') rs)
   in
   match rule with
   | Obligation (f, g) | Permission (f, g) | Constitutive (f, g)
     -> string_of_imp_rule (verb_of_rule rule) f g
-  | Exception (f, ident) -> string_of_exc_rule f ident
+  | Exception (f, references) | Scope (f, references)
+    -> string_of_exc_rule (verb_of_rule rule) f references
 
 let string_of_args args i = 
     let string_of_arg (_, name, typ_alias) = 
@@ -227,7 +259,6 @@ let string_of_signature signature =
        (String.concat ~sep:", " (List.map typed_idents ~f:string_of_typed_idents))
     
 let string_of_prog prog =
-  (* String.concat ~sep:"\n\n" (List.map prog.stmts ~f:string_of_stmt) *)
   String.concat ~sep:"\n" (List.map prog.stmts ~f:string_of_stmt)
       
 let print_prog prog =

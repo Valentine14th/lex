@@ -160,12 +160,25 @@ let reading_of_rule_then prefix_id eprog verb g =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let reading_of_rule_except ident_ =
+let reading_of_refs labels =
+    let refs = List.map labels ~f:Label.reference_of_label in
+    String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: check reading of references and possibly make additions *)
+
+let reading_of_rule_except refs =
   p "lex-reading-then" (
       "Then "
-      ^ ident ident_
+      ^ reading_of_refs refs
       ^ " "
       ^ strong "lex-reading-verb" "does not apply"
+    )
+
+(* TODO: check if reading of scope rules is correct *)
+let reading_of_rule_scope refs =
+  p "lex-reading-then" (
+      "Then "
+      ^ reading_of_refs refs
+      ^ " "
+      ^ strong "lex-reading-verb" "does apply"
     )
 
 let reading_of_type_fixes eprog rule_id type_fixes =
@@ -199,15 +212,20 @@ let reading_of_erule rule_id eprog type_fixes erule =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f
     ^ reading_of_rule_then (prefix_id "then") eprog verb g in
-  let reading_of_exc_rule f ident =
+  let reading_of_exc_rule f refs =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f
-    ^ reading_of_rule_except ident in
+    ^ reading_of_rule_except refs in
+  let reading_of_scope_rule f refs  =
+    reading_of_type_fixes eprog rule_id type_fixes
+    ^ reading_of_rule_if (prefix_id "if") eprog f
+    ^ reading_of_rule_scope refs in
   match erule with
   | EObligation (f, g)
   | EPermission (f, g)
   | EConstitutive (f, g)
-    -> reading_of_imp_rule (verb_of_erule erule) f g
-  | EException (f, ident, _) -> reading_of_exc_rule f ident
+    -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd g)
+  | EException (f, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) (List.map ~f:snd refs)
+  | EScope (f, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) (List.map ~f:snd refs)
 
 let reading_of_doc_string = Placeholders.mark_all

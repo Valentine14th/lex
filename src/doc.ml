@@ -54,21 +54,28 @@ let html_of_erule rule_id erule =
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
-  let string_of_exc_rule f id =
+  let string_of_refs labels =
+    let refs = List.map labels ~f:Label.reference_of_label in
+    String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: pretty print reference, e.g. with syntax highlighting of keywords *)
+  in 
+  let string_of_ref_rule verb f refs =
     div "lex-rule-if" (
         kw "whenever"
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
       )
     ^ div "lex-rule-then" (
-          kw "except" ^ ident id
+          kw verb
+          ^ string_of_refs refs
         )
   in
   match erule with
   | EObligation (f, g)
   | EPermission (f, g)
   | EConstitutive (f, g)
-    -> string_of_imp_rule (verb_of_erule erule) f g
-  | EException (f, ident, _) -> string_of_exc_rule f ident
+    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd g)
+  | EException (f, refs, _)
+  | EScope (f, refs, _)
+    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f: snd refs)
 
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
@@ -160,7 +167,7 @@ let html_of_estmt eprog =
              )
            )
        )
-  | ESRule (_, label, type_fixes, erule, rule_type, rule_constrs, doc_string) ->
+  | ESRule (_, _, label, type_fixes, erule, rule_type, rule_constrs, doc_string) ->
     let rule_id = Label.qualified_id label in
     div "lex-stmt-rule" (
         two_column (
