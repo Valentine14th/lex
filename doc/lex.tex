@@ -384,7 +384,7 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 % LegalRuleML: Design Principles and Foundations
 
-\subsection{To ddocumentation}
+\subsection{To documentation}
 
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
@@ -397,10 +397,14 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % implement temporal patterns
 % Erwägungsgründe
 % design survey
+% two-level enforcement
+% relationship to (prioritized) default logic
+% add readings of complex terms
+% typing of unops and binops 
 
 % Enforcer wishlist
 
-% WP1
+% WP1 DONE
 % - more complex terms → define function symbols and use them inside terms →  FORALL x, y. B(x) AND C(y) => A(sub(x,y), add(y,y))
 % - predicates based on databases / external interface → P(a, b, c, d) → 1 = p(a, b, c, d) ||| FORALL x, y. B(x) AND C(y) => P(x - y, y + y) (could be retrieving all or just testing)
 % - explicit reasoning about time → FORALL x. A(x) => current_time() = x
@@ -420,6 +424,9 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 % WP5 (even lower priority)
 % - complex data types: algebraic / records
+
+% WP6
+% - let bindings
 
 {%\setlength\bibsep{2pt}
 \small

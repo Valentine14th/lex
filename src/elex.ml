@@ -3,28 +3,30 @@ open Lex
 open Tlex
 
 type erule =
-  | EObligation   of Tformula.t list * Tformula.t list
-  | EPermission   of Tformula.t list * Tformula.t list
-  | EConstitutive of Tformula.t list * Tformula.t list
-  | EException    of Tformula.t list * ident * Tformula.t
+  | EObligation   of Eformula.t list * Eformula.t list
+  | EPermission   of Eformula.t list * Eformula.t list
+  | EConstitutive of Eformula.t list * Eformula.t list
+  | EException    of Eformula.t list * ident * Eformula.t
 
 type estmt =
   | ESImport  of Lexing.position * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
-  | ESRule    of Lexing.position * Label.t * (ident * ident) list * erule * rule_type * rule_constr list * string tannot option
-  | ESEvent   of event_type * ident * (Lexing.position * ident * ident) list * pol * string option
-  | ESType    of ident * typ * string option
+  | ESRule    of Lexing.position * Label.t * (ident * Formula.TypeTerm.t) list * erule * rule_type * rule_constr list * string tannot option
+  | ESEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
+  | ESType    of ident * Dom.tt * string option
+  | ESFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | ESNote    of string
 
-type var_types = (ident, ident, Base.String.comparator_witness) Map.t
+type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map.t
 
 type eprog =
   {
     estmts: estmt list;
-    ealiases: (ident, typ * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    ealiases: (ident, Dom.tt * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
+    efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
-    exceptions: (ident, (ident * Tformula.t) list, Base.String.comparator_witness) Map.t
+    exceptions: (ident, (ident * Eformula.t) list, Base.String.comparator_witness) Map.t
   }
 
 let tempty =
@@ -32,6 +34,7 @@ let tempty =
     estmts = [];
     ealiases = Map.empty (module String);
     eevents = Map.empty (module String);
+    efunctions = Map.empty (module String);
     variables = Map.empty (module String); 
     exceptions = Map.empty (module String)
   }
@@ -48,7 +51,7 @@ let verb_of_erule = function
 
 let string_of_erule i erule =
   let to_string f =
-    Etc.tabs (i+1) ^ Tformula.to_string f
+    Etc.tabs (i+1) ^ Eformula.to_string f
   in
   let string_of_imp_rule verb f g =
     Printf.sprintf "%swhenever\n%s\n%s%s\n%s"
@@ -121,7 +124,21 @@ let string_of_estmt ?(i=0) =
           | None -> ""
       in
      Printf.sprintf "type %s is %s%s"
-       name (string_of_typ typ) description
+       name (Dom.string_of_tt typ) description
+  | ESFunction (name, typed_args, return_typ, doc_string) ->
+     let description =
+          match doc_string with
+          | Some s -> "\n" ^ make_doc_string s i
+          | None -> ""
+     in
+     let f (ident, typ) =
+       Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
+     Printf.sprintf "%sfunction %s(%s) -> %s%s"
+       (Etc.tabs i)
+       name
+       (String.concat ~sep:", " (List.map typed_args ~f))
+       (Formula.TypeTerm.value_to_string return_typ)
+       description
   | ESNote text -> "note \"" ^ text ^ "\""
     
 let string_of_eprog eprog =

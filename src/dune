@@ -7,4 +7,5 @@
 
 (library
  (name lex_lib)
- (libraries core core_unix core_unix.sys_unix re xml-light))
+ (libraries core core_unix core_unix.sys_unix re xml-light calendar)
+ (preprocess (pps ppx_jane)))

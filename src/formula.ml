@@ -67,43 +67,150 @@ module Side = struct
 
 end
 
+
+module TypeTerm = struct
+
+  type t =
+    | TypeConst of Dom.tt
+    | TypeVar   of string
+
+  let equal t t' =
+    match t, t' with
+    | TypeConst tt, TypeConst tt' -> Dom.tt_equal tt tt'
+    | TypeVar v, TypeVar v' -> String.equal v v'
+    | _, _ -> false
+      
+
+  let to_string = function
+    | TypeConst tt -> "TypeConst " ^ Dom.string_of_tt tt
+    | TypeVar i    -> "TypeVar " ^ i
+
+  let value_to_string = function
+    | TypeConst tt -> Dom.string_of_tt tt
+    | TypeVar i    -> i
+
+  let supports_usub = function
+    | TypeConst Dom.TInt
+      | TypeConst Dom.TFloat
+      | TypeConst Dom.TSpan
+      | TypeConst (Dom.TMoney _) -> true
+    | _ -> false
+
+  let eval aliases = function
+    | TypeConst tt -> tt
+    | TypeVar v    -> fst (Map.find_exn aliases v)
+
+  let eval_with_doc_string aliases = function
+    | TypeConst tt -> (tt, None) 
+    | TypeVar v    -> Map.find_exn aliases v
+
+end
+
 module Term = struct
 
-  type t = Var of string | Const of Dom.t 
+  type unop =
+    | USub
+    | UNot [@@deriving compare, sexp_of, hash, equal]
+
+  let string_of_unop = function
+    | USub -> "-"
+    | UNot -> "!"
+
+  type binop =
+    | BAdd | BSub | BMul | BDiv | BPow
+    | BAnd | BOr | BXor
+    | BEq | BNeq | BLt | BLeq | BGt | BGeq  [@@deriving compare, sexp_of, hash, equal]
+
+  let string_of_binop = function
+    | BAdd -> "+"
+    | BSub -> "-"
+    | BMul -> "*"
+    | BDiv -> "/"
+    | BPow -> "^"
+    | BAnd -> "and"
+    | BOr  -> "or"
+    | BXor -> "xor"
+    | BEq  -> "="
+    | BNeq -> "<>"
+    | BLt  -> "<"
+    | BLeq -> "<="
+    | BGt  -> ">"
+    | BGeq -> ">="
+
+  let prio_of_binop = function
+    | BXor | BOr -> 1
+    | BAnd -> 2
+    | BEq | BNeq | BLt | BLeq | BGt | BGeq -> 3
+    | BAdd | BSub -> 4
+    | BMul | BDiv -> 5
+    | BPow -> 6
+    
+  type t =
+    | Var of string
+    | Const of Dom.t
+    | App of string * (t list)
+    | Unop of unop * t
+    | Binop of t * binop * t
 
   let unvar = function
     | Var x -> x
     | Const _ -> raise (Invalid_argument "unvar is undefined for Consts")
+    | App _ -> raise (Invalid_argument "unvar is undefined for Apps")
+    | Unop _ -> raise (Invalid_argument "unvar is undefined for Unops")
+    | Binop _ -> raise (Invalid_argument "unvar is undefined for Binops")
+
+  let is_const = function
+    | Const _ -> true
+    | _ -> false
 
   let unconst = function
     | Var _ -> raise (Invalid_argument "unconst is undefined for Vars")
     | Const c -> c
+    | App _ -> raise (Invalid_argument "unconst is undefined for Apps")
+    | Unop _ -> raise (Invalid_argument "unconst is undefined for Unops")
+    | Binop _ -> raise (Invalid_argument "unconst is undefined for Binops")
 
   let rec fv_list = function
     | [] -> []
-    | Const _ :: trms -> fv_list trms
     | Var x :: trms -> x :: fv_list trms
+    | _ :: trms -> fv_list trms
 
-  let equal t t' = match t, t' with
+  let rec equal t t' = match t, t' with
     | Var x, Var x' -> String.equal x x'
     | Const d, Const d' -> Dom.equal d d'
+    | App (f, ts), App (f', ts') ->
+       String.equal f f' && (match List.map2 ts ts' ~f:equal with
+                             | Ok e -> List.for_all e ~f:(fun x -> x)
+                             | Unequal_lengths -> false)
+    | Unop (o, t), Unop (o', t') -> equal_unop o o' && equal t t'
+    | Binop (t1, o, t2), Binop (t1', o', t2') ->
+       equal t1 t1' && equal_binop o o' && equal t2 t2'
     | _ -> false
 
-  let to_string = function
+  let rec to_string = function
     | Var x -> Printf.sprintf "Var %s" x
     | Const d -> Printf.sprintf "Const %s" (Dom.to_string d)
+    | App (f, ts) -> Printf.sprintf "App %s(%s)" f
+                       (String.concat ~sep:", " (List.map ts ~f:to_string))
+    | Unop (o, t) -> Printf.sprintf "Unop %s (%s)" (string_of_unop o) (to_string t)
+    | Binop (t, o, t') -> Printf.sprintf "Binop (%s) %s (%s)"
+                            (to_string t) (string_of_binop o) (to_string t')
 
-  let value_to_string = function
+  let rec value_to_string ?(l=0) = function
     | Var x -> Printf.sprintf "%s" x
     | Const d -> Printf.sprintf "%s" (Dom.to_string d)
+    | App (f, ts) -> Printf.sprintf "%s(%s)" f
+                       (String.concat ~sep:", " (List.map ts ~f:to_string))
+    | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                       (string_of_unop o)
+                       (value_to_string ~l:10 t)
+    | Binop (t, o, t') -> let l' = prio_of_binop o in
+                          Printf.sprintf (Util.paren l l' "%s %s %s")
+                            (value_to_string ~l:l' t)
+                            (string_of_binop o)
+                            (value_to_string ~l:l' t')
 
-  let rec list_to_string trms =
-    match trms with
-    | [] -> ""
-    | (Var x) :: trms -> if List.is_empty trms then x
-                         else Printf.sprintf "%s, %s" x (list_to_string trms)
-    | (Const d) :: trms -> if List.is_empty trms then (Dom.to_string d)
-                           else Printf.sprintf "%s, %s" (Dom.to_string d) (list_to_string trms)
+  let list_to_string trms = String.concat ~sep:", " (List.map trms ~f:value_to_string)
 
 end
 
@@ -119,7 +226,7 @@ let ty_to_string = function
 type t =
   | TT
   | FF
-  | EqConst of string * Dom.t
+  | EqConst of Term.t * Term.t
   | Predicate of string * Term.t list
   | Neg of t
   | And of Side.t * (t list)
@@ -174,7 +281,7 @@ let bigforall vars f =
 
 let rec fv = function
   | TT | FF -> Set.empty (module String)
-  | EqConst (x, _) -> Set.of_list (module String) [x]
+  | EqConst (x, y) -> Set.of_list (module String) (Term.fv_list [x; y])
   | Predicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
   | Exists (x, f)
     | Forall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
@@ -265,7 +372,7 @@ let rec flatten_assoc f = match f with
 let rec to_string_rec l = function
   | TT -> Printf.sprintf "⊤"
   | FF -> Printf.sprintf "⊥"
-  | EqConst (x, c) -> Printf.sprintf "%s = %s" x (Dom.to_string c)
+  | EqConst (x, y) -> Printf.sprintf "%s = %s" (Term.to_string x) (Term.to_string y)
   | Predicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | Neg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | And (s, fs) ->

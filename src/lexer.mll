@@ -25,6 +25,19 @@ rule read =
   | ','            { COM }
   | ':'            { COL }
   | '.'            { DOT }
+  | '+'            { ADD }
+  | '-'            { SUB }
+  | '*'            { MUL }
+  | '/'            { DIV }
+  | '^'            { POW }
+  | "and"          { AND }
+  | "or"           { OR }
+  | "xor"          { XOR }
+  | "<>"           { NEQ }
+  | '<'            { LT }
+  | '>'            { GT }
+  | "not"          { NOT }
+  | '`'            { read_time (Buffer.create 17) lexbuf }
   | '"'            { read_string (Buffer.create 17) lexbuf }
   | "\"\"\""       { read_docstring (Buffer.create 17) lexbuf }
   | "import"       { IMPORT lexbuf.lex_start_p }
@@ -64,7 +77,7 @@ rule read =
   | "causing"      { CAUSING }
   | "false" | "⊥"  { FALSE }
   | "true" | "⊤"   { TRUE }
-  | "="            { EQCONST }
+  | "="            { EQ }
   | "¬" | "NOT"    { NEG }
   | "∧" | "AND"    { AND }
   | "∨" | "OR"     { OR }
@@ -106,6 +119,21 @@ and read_string buf =
     }
   | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
+
+and read_time buf =
+  parse
+  | '`'       { TIME (
+                    let contents = Buffer.contents buf in
+                    try Lextime.Time.of_string contents
+                    with _ -> raise (SyntaxError ("Illegal time expression: `" ^ contents ^ "`"))
+                  )
+              }
+  | [^ '`']+
+    { Buffer.add_string buf (Lexing.lexeme lexbuf);
+      read_time buf lexbuf
+    }
+  | _ { raise (SyntaxError ("Illegal time character: " ^ Lexing.lexeme lexbuf)) }
+  | eof { raise (SyntaxError ("Time is not terminated")) }
 
 (* TODO: remove indentation at the beginning of the line of docstring during parsing *)
 and read_docstring buf =

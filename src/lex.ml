@@ -2,8 +2,6 @@ open Core
 
 type ident = string
 
-type typ = TString | TInt | TFloat
-
 type pol = TCau | TSup | TObs | TCauSup | TInternal
 
 type section_kind =
@@ -50,18 +48,19 @@ type event_type = Event | Predicate
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
-  | SRule      of Lexing.position * string option * (ident * ident) list * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
-  | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * ident) list * pol * string option (* location points to beginning of event identifier *)
-  | SType      of Lexing.position * ident * typ * string option (* location points to beginning of type identifier *)
+  | SRule      of Lexing.position * string option * (ident * Formula.TypeTerm.t) list * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
+  | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option (* location points to beginning of event identifier *)
+  | SType      of Lexing.position * ident * Dom.tt * string option (* location points to beginning of type identifier *)
+  | SFunction  of Lexing.position * ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | SNote      of Lexing.position * string
 
-type signature = ident * (ident * typ) list
+type signature = ident * (ident * Dom.tt) list
 
 type prog = { stmts: stmt list }
 
 let compare_typs t1 t2 =
   match t1, t2 with
-  | TString, TString
+  | Dom.TStr, Dom.TStr
   | TInt, TInt
   | TFloat, TFloat -> true
   | _ -> false
@@ -70,11 +69,6 @@ let is_rule = function
   | SRule _ -> true
   | _ -> false
 
-let string_of_typ = function
-  | TString -> "string"
-  | TInt -> "int"
-  | TFloat -> "float"
-
 let string_of_pol = function
   | TCau -> "causable"
   | TSup -> "suppressable"
@@ -82,8 +76,8 @@ let string_of_pol = function
   | TCauSup -> "causable suppressable"
   | TInternal -> "internal"
 
-let string_of_typed_idents (name, typ) =
-  Printf.sprintf "%s : %s" name (string_of_typ typ)
+let string_of_typed_idents (name, tt) =
+  Printf.sprintf "%s : %s" name (Dom.string_of_tt tt)
 
 let string_of_label_level = function
   | 0 -> ""
@@ -139,7 +133,7 @@ let string_of_rule i rule =
 
 let string_of_args args i = 
     let string_of_arg (_, name, typ_alias) = 
-      Printf.sprintf "%s%s : %s" (Etc.tabs (i+1)) name typ_alias
+      Printf.sprintf "%s%s : %s" (Etc.tabs (i+1)) name (Formula.TypeTerm.value_to_string typ_alias)
     in
     String.concat ~sep:"\n" (List.map args ~f:string_of_arg)
 
@@ -160,7 +154,7 @@ let string_of_event_type = function
 let string_of_type_fixes i = function
   | [] -> ""
   | type_fixes ->
-     let f (ident, typ) = Printf.sprintf "%s : %s" ident typ in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
      Printf.sprintf "%sfix\n%s%s\n"
        (Etc.tabs i)
        (Etc.tabs (i+1))
@@ -215,8 +209,21 @@ let string_of_stmt ?(i=0) =
        | Some s -> "\n" ^ make_doc_string s i
        | None -> ""
      in
-     Printf.sprintf "type %s is %s%s"
-       name (string_of_typ typ) description
+     Printf.sprintf "%stype %s is %s%s"
+       (Etc.tabs i) name (Dom.string_of_tt typ) description
+  | SFunction (_, name, typed_args, return_typ, doc_string) ->
+     let description =
+          match doc_string with
+          | Some s -> "\n" ^ make_doc_string s i
+          | None -> ""
+     in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
+     Printf.sprintf "%sfunction %s(%s) -> %s%s"
+       (Etc.tabs i)
+       name
+       (String.concat ~sep:", " (List.map typed_args ~f))
+       (Formula.TypeTerm.to_string return_typ)
+       description
   | SNote (_, text) -> "note \"" ^ text ^ "\""
 
 let string_of_signature signature =

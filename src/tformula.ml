@@ -10,10 +10,101 @@
 open Core
 open Formula
 
-type core_t =
+module Term = struct
+    
+  type core_t =
+    | TVar of string
+    | TConst of Dom.t
+    | TApp of string * (t list)
+    | TUnop of Formula.Term.unop * t
+    | TBinop of t * Formula.Term.binop * t
+
+  and t = { trm: core_t; tt: TypeTerm.t }
+
+  let rec to_formula_term_core = function
+    | TVar v -> Formula.Term.Var v
+    | TConst d -> Const d
+    | TApp (f, trms) -> App (f, List.map trms ~f:to_formula_term)
+    | TUnop (o, trm) -> Unop (o, to_formula_term trm)
+    | TBinop (trm, o, trm') -> Binop (to_formula_term trm, o, to_formula_term trm')
+
+  and to_formula_term t = to_formula_term_core t.trm
+
+  let unvar = function
+    | TVar x -> x
+    | TConst _ -> raise (Invalid_argument "unvar is undefined for Consts")
+    | TApp _ -> raise (Invalid_argument "unvar is undefined for Apps")
+    | TUnop _ -> raise (Invalid_argument "unvar is undefined for Unops")
+    | TBinop _ -> raise (Invalid_argument "unvar is undefined for Binops")
+
+  let is_const = function
+    | TConst _ -> true
+    | _ -> false
+
+  let unconst = function
+    | TVar _ -> raise (Invalid_argument "unconst is undefined for Vars")
+    | TConst c -> c
+    | TApp _ -> raise (Invalid_argument "unconst is undefined for Apps")
+    | TUnop _ -> raise (Invalid_argument "unconst is undefined for Unops")
+    | TBinop _ -> raise (Invalid_argument "unconst is undefined for Binops")
+
+  let rec fv_list_core = function
+    | [] -> []
+    | TVar x :: trms -> x :: fv_list_core trms
+    | _ :: trms -> fv_list_core trms
+  and fv_list trms = fv_list_core (List.map trms ~f:(fun t -> t.trm))
+
+  let rec equal_core t t' = match t, t' with
+    | TVar x, TVar x' -> String.equal x x'
+    | TConst d, TConst d' -> Dom.equal d d'
+    | TApp (f, ts), TApp (f', ts') ->
+       String.equal f f' && (match List.map2 ts ts' ~f:equal with
+                             | Ok e -> List.for_all e ~f:(fun x -> x)
+                             | Unequal_lengths -> false)
+    | TUnop (o, t), TUnop (o', t') -> Formula.Term.equal_unop o o' && equal t t'
+    | TBinop (t1, o, t2), TBinop (t1', o', t2') ->
+       equal t1 t1' && Formula.Term.equal_binop o o' && equal t2 t2'
+    | _ -> false
+  
+  and equal t t' = equal_core t.trm t'.trm && TypeTerm.equal t.tt t'.tt
+
+  let rec to_string_core = function
+    | TVar x -> Printf.sprintf "TVar %s" x
+    | TConst d -> Printf.sprintf "TConst %s" (Dom.to_string d)
+    | TApp (f, ts) -> Printf.sprintf "TApp %s(%s)" f
+                       (String.concat ~sep:", " (List.map ts ~f:to_string))
+    | TUnop (o, t) -> Printf.sprintf "TUnop %s (%s)" (Formula.Term.string_of_unop o) (to_string t)
+    | TBinop (t, o, t') -> Printf.sprintf "TBinop (%s) %s (%s)"
+                             (to_string t) (Formula.Term.string_of_binop o) (to_string t')
+
+  and to_string t = Printf.sprintf "%s : %s" (to_string_core t.trm) (TypeTerm.to_string t.tt)
+
+  let rec value_to_string_core ?(l=0) = function
+    | TVar x -> Printf.sprintf "%s" x
+    | TConst d -> Printf.sprintf "%s" (Dom.to_string d)
+    | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (list_to_string trms)
+    | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                       (Formula.Term.string_of_unop o)
+                       (value_to_string ~l:10 t)
+    | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+                          Printf.sprintf (Util.paren l l' "%s %s %s")
+                            (value_to_string ~l:l' t)
+                            (Formula.Term.string_of_binop o)
+                            (value_to_string ~l:l' t')
+  and list_to_string trms = String.concat ~sep:", " (List.map trms ~f:value_to_string)
+  
+  and value_to_string ?(l=0) t = 
+    Printf.sprintf (Util.paren l 0 "%a : %s")
+      (fun _ -> value_to_string_core ~l:5) t.trm (TypeTerm.value_to_string t.tt)
+
+end
+
+let term trm tt = Term.({ trm; tt })
+
+type t =
   | TTT
   | TFF
-  | TEqConst of string * Dom.t
+  | TEqConst of Term.t * Term.t
   | TPredicate of string * Term.t list
   | TNeg of t
   | TAnd of Side.t * (t list)
@@ -25,16 +116,12 @@ type core_t =
   | TPrev of Interval.t * t
   | TNext of Interval.t * t
   | TOnce of Interval.t * t
-  | TEventually of Interval.t * bool * t
+  | TEventually of Interval.t * t
   | THistorically of Interval.t * t
-  | TAlways of Interval.t * bool * t
+  | TAlways of Interval.t * t
   | TSince of Side.t * Interval.t * t * t
-  | TUntil of Side.t * Interval.t * bool * t * t
+  | TUntil of Side.t * Interval.t * t * t
   | TType of t * ty
-
-and t = { f: core_t; enftype: EnfType.t; id: int }
-
-let make f enftype id = { f; enftype; id }
 
 let ttt = TTT
 let fff = TFF
@@ -50,55 +137,23 @@ let tforall x f = TForall (x, f)
 let tprev i f = TPrev (i, f)
 let tnext i f = TNext (i, f)
 let tonce i f = TOnce (i, f)
-let teventually i f = TEventually (i, true, f)
+let teventually i f = TEventually (i, f)
 let thistorically i f = THistorically (i, f)
-let talways i f = TAlways (i, true, f)
+let talways i f = TAlways (i, f)
 let tsince s i f g = TSince (s, i, f, g)
-let tuntil s i f g = TUntil (s, i, true, f, g)
+let tuntil s i f g = TUntil (s, i, f, g)
 let ttype s t = TType (s, t)
 
 let tbigcauconj = function
-  | [] -> make ttt Non 0
-  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (tconj N f g) Non 0) (*TODO: assign correct type to formula, not just Non*)
+  | [] -> ttt
+  | h::t -> List.fold_left t ~init:h ~f:(tconj N) (*TODO: assign correct type to formula, not just Non*)
 
 let tbigcauforall vars f =
-  List.fold_right vars ~init:f ~f:(fun x f -> make (tforall x f) Non 0)
+  List.fold_right vars ~init:f ~f:tforall 
 
-let rec core_of_formula ?id:(id=1) d = 
-  let lof_formula = of_formula ~id:(d*id)
-  and rof_formula = of_formula ~id:(d*id+1)
-  and iof_formula i = of_formula ~id:(d*id+i) in
-  function
-  | TT -> TTT
-  | FF -> TFF
-  | EqConst (x, v) -> TEqConst (x, v)
-  | Predicate (e, t) -> TPredicate (e, t)
-  | Neg f -> TNeg (lof_formula f)
-  | And (s, fs) -> TAnd (s, List.mapi ~f:iof_formula fs)
-  | Or (s, fs) -> TOr (s, List.mapi ~f:iof_formula fs)
-  | Imp (s, f, g) -> TImp (s, lof_formula f, rof_formula g)
-  | Iff (s, t, f, g) -> TIff (s, t, lof_formula f, rof_formula g)
-  | Exists (x, f) -> TExists (x, lof_formula f)
-  | Forall (x, f) -> TForall (x, lof_formula f)
-  | Prev (i, f) -> TPrev (i, lof_formula f)
-  | Next (i, f) -> TNext (i, lof_formula f)
-  | Once (i, f) -> TOnce (i, lof_formula f)
-  | Eventually (i, f) -> TEventually (i, true, lof_formula f)
-  | Historically (i, f) -> THistorically (i, lof_formula f)
-  | Always (i, f) -> TAlways (i, true, lof_formula f)
-  | Since (s, i, f, g) -> TSince (s, i, lof_formula f, rof_formula g)
-  | Until (s, i, f, g) -> TUntil (s, i, true, lof_formula f, rof_formula g)
-  | Type (f, ty) -> TType (lof_formula f, ty)
-
-and of_formula ?id:(id=1) f =
-  let d = deg f in
-  { f = core_of_formula ~id d f; enftype = EnfType.Obs; id }
-
-let of_formulas = List.map ~f:of_formula
-
-let rec fv f = match f.f with
+let rec fv = function
   | TTT | TFF -> Set.empty (module String)
-  | TEqConst (x, _) -> Set.of_list (module String) [x]
+  | TEqConst (x, _) -> Set.of_list (module String) (Term.fv_list [x])
   | TPredicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
   | TExists (x, f)
     | TForall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
@@ -106,14 +161,14 @@ let rec fv f = match f.f with
     | TPrev (_, f)
     | TOnce (_, f)
     | THistorically (_, f) 
-    | TEventually (_, _, f)
-    | TAlways (_, _, f)
+    | TEventually (_, f)
+    | TAlways (_, f)
     | TNext (_, f)
     | TType (f, _) -> fv f
     | TImp (_, f1, f2)
     | TIff (_, _, f1, f2)
     | TSince (_, _, f1, f2)
-    | TUntil (_, _, _, f1, f2) -> Set.union (fv f1) (fv f2)
+    | TUntil (_, _, f1, f2) -> Set.union (fv f1) (fv f2)
   | TAnd (_, fs)
     | TOr (_, fs) ->
      let f x g = Set.union x (fv g) in
@@ -129,16 +184,39 @@ let rec rank = function
     | TPrev (_, f)
     | TNext (_, f)
     | TOnce (_, f)
-    | TEventually (_, _, f)
+    | TEventually (_, f)
     | THistorically (_, f)
-    | TAlways (_, _, f)
-    | TType (f, _) -> rank f.f
+    | TAlways (_, f)
+    | TType (f, _) -> rank f
     | TImp (_, f, g)
     | TIff (_, _, f, g)
     | TSince (_, _, f, g)
-    | TUntil (_, _, _, f, g) -> rank f.f + rank g.f
+    | TUntil (_, _, f, g) -> rank f + rank g
   | TAnd (_, fs)
-    | TOr (_, fs) -> List.fold_left (List.map fs ~f:(fun f -> rank f.f)) ~init:0 ~f:(+) 
+    | TOr (_, fs) -> List.fold_left (List.map fs ~f:(fun f -> rank f)) ~init:0 ~f:(+)
+
+let rec deg = function
+  | TTT
+    | TFF
+    | TEqConst _ 
+    | TPredicate _ -> 2
+  | TNeg f 
+    | TExists (_, f)
+    | TForall (_, f)
+    | TPrev (_, f)
+    | TNext (_, f)
+    | TOnce (_, f)
+    | TEventually (_, f)
+    | THistorically (_, f)
+    | TAlways (_, f)
+    | TType (f, _) -> deg f
+    | TImp (_, f, g)
+    | TIff (_, _, f, g)
+    | TSince (_, _, f, g)
+    | TUntil (_, _, f, g) -> max 2 (max (deg f) (deg g))
+    | TAnd (_, fs)
+    | TOr (_, fs) -> List.fold_left (List.map fs ~f:deg) ~init:1 ~f:max
+
 
 let fix_side s f g =
   match s with
@@ -146,31 +224,31 @@ let fix_side s f g =
                else Side.R
   | _ -> s
 
-let rec to_formula f = match f.f with
+let rec to_formula = function
   | TTT -> TT
   | TFF -> FF
-  | TEqConst (x, v) -> EqConst (x, v)
-  | TPredicate (e, t) -> Predicate (e, t)
+  | TEqConst (trm, trm') -> EqConst (Term.to_formula_term trm, Term.to_formula_term trm')
+  | TPredicate (e, trms) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
   | TNeg f -> Neg (to_formula f)
-  | TAnd (s, fs) -> And (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
+  | TAnd (s, fs) -> And (fix_side s (List.hd_exn fs) (List.last_exn fs),
                          List.map fs ~f:to_formula)
-  | TOr (s, fs) -> Or (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
+  | TOr (s, fs) -> Or (fix_side s (List.hd_exn fs) (List.last_exn fs),
                        List.map fs ~f:to_formula)
-  | TImp (s, f, g) -> Imp (fix_side s f.f g.f, to_formula f, to_formula g)
-  | TIff (s, t, f, g) -> Iff (fix_side s f.f g.f, fix_side t f.f g.f, to_formula f, to_formula g)
+  | TImp (s, f, g) -> Imp (fix_side s f g, to_formula f, to_formula g)
+  | TIff (s, t, f, g) -> Iff (fix_side s f g, fix_side t f g, to_formula f, to_formula g)
   | TExists (x, f) -> Exists (x, to_formula f)
   | TForall (x, f) -> Forall (x, to_formula f)
   | TPrev (i, f) -> Prev (i, to_formula f)
   | TNext (i, f) -> Next (i, to_formula f)
   | TOnce (i, f) -> Once (i, to_formula f)
-  | TEventually (i, _, f) -> Eventually (i, to_formula f)
+  | TEventually (i, f) -> Eventually (i, to_formula f)
   | THistorically (i, f) -> Historically (i, to_formula f)
-  | TAlways (i, _, f) -> Always (i, to_formula f)
-  | TSince (s, i, f, g) -> Since (fix_side s f.f g.f, i, to_formula f, to_formula g)
-  | TUntil (s, i, _, f, g) -> Until (s, i, to_formula f, to_formula g)
+  | TAlways (i, f) -> Always (i, to_formula f)
+  | TSince (s, i, f, g) -> Since (fix_side s f g, i, to_formula f, to_formula g)
+  | TUntil (s, i, f, g) -> Until (s, i, to_formula f, to_formula g)
   | TType (f, ty) -> Type (to_formula f, ty)
 
-let rec op_to_string_core = function
+let op_to_string = function
   | TTT -> Printf.sprintf "⊤"
   | TFF -> Printf.sprintf "⊥"
   | TEqConst _ -> Printf.sprintf "="
@@ -185,19 +263,18 @@ let rec op_to_string_core = function
   | TPrev (i, _) -> Printf.sprintf "●%s" (Interval.to_string i)
   | TNext (i, _) -> Printf.sprintf "○%s" (Interval.to_string i)
   | TOnce (i, _) -> Printf.sprintf "⧫%s" (Interval.to_string i)
-  | TEventually (i, _, _) -> Printf.sprintf "◊%s" (Interval.to_string i)
+  | TEventually (i, _) -> Printf.sprintf "◊%s" (Interval.to_string i)
   | THistorically (i, _) -> Printf.sprintf "■%s" (Interval.to_string i)
-  | TAlways (i, _, _) -> Printf.sprintf "□%s" (Interval.to_string i)
+  | TAlways (i, _) -> Printf.sprintf "□%s" (Interval.to_string i)
   | TSince (_, i, _, _) -> Printf.sprintf "S%s" (Interval.to_string i)
-  | TUntil (_, i, _,  _, _) -> Printf.sprintf "U%s" (Interval.to_string i)
+  | TUntil (_, i,  _, _) -> Printf.sprintf "U%s" (Interval.to_string i)
   | TType (_, _) -> Printf.sprintf ":"
-and op_to_string f = op_to_string_core f.f
 
 
-let rec to_string_core_rec l = function
+let rec to_string_rec l = function
   | TTT -> Printf.sprintf "⊤"
   | TFF -> Printf.sprintf "⊥"
-  | TEqConst (x, c) -> Printf.sprintf "%s = %s" x (Dom.to_string c)
+  | TEqConst (trm, trm') -> Printf.sprintf "%s = %s" (Term.to_string trm) (Term.to_string trm')
   | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | TNeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | TAnd (s, fs) ->
@@ -215,21 +292,15 @@ let rec to_string_core_rec l = function
   | TPrev (i, f) -> Printf.sprintf (Util.paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
   | TNext (i, f) -> Printf.sprintf (Util.paren l 5 "○%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
   | TOnce (i, f) -> Printf.sprintf (Util.paren l 5 "⧫%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TEventually (i, _, f) -> Printf.sprintf (Util.paren l 5 "◊%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | TEventually (i, f) -> Printf.sprintf (Util.paren l 5 "◊%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
   | THistorically (i, f) -> Printf.sprintf (Util.paren l 5 "■%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TAlways (i, _, f) -> Printf.sprintf (Util.paren l 5 "□%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
+  | TAlways (i, f) -> Printf.sprintf (Util.paren l 5 "□%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
   | TSince (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a S%a%a %a") (fun _ -> to_string_rec 5) f
                          (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | TUntil (s, i, _, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
-                                (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
+  | TUntil (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
+                             (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | TType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> ty_to_string) ty
 
-and to_string_rec l form =
-  if EnfType.equal form.enftype EnfType.Obs then
-    Printf.sprintf "%a" (fun _ -> to_string_core_rec 5) form.f
-  else
-    Printf.sprintf (Util.paren l 0 "%a : %s") (fun _ -> to_string_core_rec 5) form.f (EnfType.to_string form.enftype)
 
 let to_string = to_string_rec 0
 
-let to_string_core = to_string_core_rec 0

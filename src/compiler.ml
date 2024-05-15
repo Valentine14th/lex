@@ -1,7 +1,6 @@
 open Core
 
-open Formula
-open Tformula
+open Eformula
 open Lex
 open Elex
 
@@ -10,10 +9,10 @@ let compile_imp f g =
     Set.elements
       (Set.union_list (module String)
          (List.map f ~f:fv @ List.map g ~f:fv)) in
-  make (TAlways
+  make (EAlways
     (Interval.full,
      true,
-     tbigcauforall vars ((make (TImp (N, tbigcauconj f, tbigcauconj g)) Non 0))))
+     tbigcauforall vars ((make (EImp (N, tbigcauconj f, tbigcauconj g)) Non 0))))
     Non 0
 
 let compile_erule eprog =
@@ -27,21 +26,36 @@ let compile_erule eprog =
   | ESRule (_, label, _, rule, _, _, _) ->
     let label_name = Label.qualified_name label in
     let exceptions = Map.find_multi eprog.exceptions label_name in
-    let f' = List.map exceptions ~f:(fun x -> make (tneg (snd x)) Non 0) in
+    let f' = List.map exceptions ~f:(fun x -> make (eneg (snd x)) Non 0) in
     aux f' rule
   | _ -> assert false
+
+type signature_item =
+  | CEvent of ident * pol * ((ident * Dom.tt) list)
+  | CFunction of ident * ((ident * Dom.tt) list) * Dom.tt
 
 let compile_events events aliases =
   let event_list = Map.to_alist events in
   let compile_event (name, (args, pol, _)) =
     let type_args (_, name, typ_alias) =
-      let typ = fst (Map.find_exn aliases typ_alias) in
-      (name, typ)
+      (name, Formula.TypeTerm.eval aliases typ_alias)
     in
     let typed_args = List.map args ~f:type_args in
-    (name, pol, typed_args)
+    CEvent (name, pol, typed_args)
   in
   List.map event_list ~f:compile_event
+
+let compile_functions functions aliases =
+  let function_list = Map.to_alist functions in
+  let compile_function (name, (typed_args, return_type, _)) =
+    let type_args (name, typ_alias) =
+      (name, Formula.TypeTerm.eval aliases typ_alias)
+    in
+    let typed_args = List.map typed_args ~f:type_args in
+    let return_type = Formula.TypeTerm.eval aliases return_type in
+    CFunction (name, typed_args, return_type)
+  in
+  List.map function_list ~f:compile_function
 
 (* TODO: constants inside of predicates do not
    actually introduce an unnamed variable for the
@@ -53,32 +67,31 @@ let fresh_var () = incr c; "_v" ^ string_of_int !c
 
 let compile_exception_signature exceptions aliases variables =
   let exceptions_list = List.concat (Map.data exceptions) in
-  let compile_exception_predicate (rule_name, pred) =
+  let compile_exception_predicate (rule_name, (pred:Eformula.t)) =
     let var_types = try Map.find_exn variables rule_name with _ -> assert false in
     let pred_name_and_terms = match pred.f with
-      | Tformula.TPredicate (n, ts) -> (n, ts)
+      | Eformula.EPredicate (n, ts) -> (n, ts)
       | _ -> assert false
     in
     let terms = snd pred_name_and_terms in
-    let type_term = function
-      | Term.Var v -> let a = try Map.find_exn var_types v with _ -> assert false in
-                      let t = try Map.find_exn aliases a with _ -> assert false in
-                      (v, fst t)
+    let type_term f = match Eformula.Term.(f.trm) with
+      | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> assert false in
+                       let t = Formula.TypeTerm.eval aliases a in
+                       (v, t)
+      | _ -> assert false
       (* TODO: constants are not actually possible to be part of an exception predicate *)
-      | Term.Const (Int _) -> (fresh_var (), TInt)
-      | Term.Const (Str _) -> (fresh_var (), TString)
-      | Term.Const (Float _) -> (fresh_var (), TFloat)
     in
     let typed_terms = List.map terms ~f:type_term in
-    (fst pred_name_and_terms, Lex.TInternal, typed_terms)
+    CEvent (fst pred_name_and_terms, Lex.TInternal, typed_terms)
   in
   List.map exceptions_list ~f:compile_exception_predicate
 
 
-let compile_signature events aliases variables exceptions =
+let compile_signature events functions aliases variables exceptions =
   let event_signatures = compile_events events aliases in
+  let function_signatures = compile_functions functions aliases in
   let exception_signatures = compile_exception_signature exceptions aliases variables in
-  List.concat [event_signatures; exception_signatures]
+  List.concat [event_signatures; function_signatures; exception_signatures]
 
 let pol_to_symbol_string pol =
   match pol with
@@ -89,20 +102,32 @@ let pol_to_symbol_string pol =
   | TObs -> ""
 
 let string_of_signatures signatures =
-  let string_of_signature (name, pol, args) =
-    let arg_strs = List.map args ~f:(fun (name, typ) ->
-      Printf.sprintf "%s: %s" name (string_of_typ typ)) in
+  let string_of_event_signature (name, pol, args) =
+    let arg_strs = List.map args ~f:(fun (name, tt) ->
+      Printf.sprintf "%s: %s" name (Dom.string_of_tt tt)) in
     let args_str = String.concat ~sep:", " arg_strs in
     Printf.sprintf "%s(%s)%s" name args_str (pol_to_symbol_string pol)
   in
-  let signature_strs = List.map signatures ~f:string_of_signature in
+  let string_of_function_signature (name, args, ret_tt) =
+    let arg_strs = List.map args ~f:(fun (name, tt) ->
+      Printf.sprintf "%s: %s" name (Dom.string_of_tt tt)) in
+    let args_str = String.concat ~sep:", " arg_strs in
+    Printf.sprintf "fun %s(%s) -> %s" name args_str (Dom.string_of_tt ret_tt)
+  in
+  let string_of_signature_item = function
+    | CEvent (name, pol, args) ->
+       string_of_event_signature (name, pol, args)
+    | CFunction (name, args, ret_tt) ->
+       string_of_function_signature (name, args, ret_tt) in
+  let signature_strs = List.map signatures ~f:string_of_signature_item in
   String.concat ~sep:"\n" signature_strs
 
-let compile eprog =
+let compile (eprog:Elex.eprog) =
   let rules = List.filter eprog.estmts ~f:is_erule in
   let formulae = List.map rules ~f:(compile_erule eprog) in
   let phi = tbigcauconj formulae in
-  let signatures = compile_signature eprog.eevents eprog.ealiases eprog.variables eprog.exceptions in
+  let signatures = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
+                     eprog.variables eprog.exceptions in
   Printf.printf "Signature:\n%s\n\nFormula:\n%s\n"
     (string_of_signatures signatures)
-    (Tformula.to_string phi)
+    (Eformula.to_string phi)

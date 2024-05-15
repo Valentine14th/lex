@@ -2,10 +2,10 @@ open Core
 open Lex
 
 type trule =
-  | TObligation   of Formula.t list * Formula.t list
-  | TPermission   of Formula.t list * Formula.t list
-  | TConstitutive of Formula.t list * Formula.t list
-  | TException    of Formula.t list * ident * Formula.t
+  | TObligation   of Tformula.t list * Tformula.t list
+  | TPermission   of Tformula.t list * Tformula.t list
+  | TConstitutive of Tformula.t list * Tformula.t list
+  | TException    of Tformula.t list * ident * Tformula.t
 
 type 'a tannot =
   | TALex of 'a
@@ -18,22 +18,25 @@ let of_annot = function
 type tstmt =
   | TSImport  of Lexing.position * string list * import_format
   | TSSection of section_kind * Label.t * string * string tannot option
-  | TSRule    of Lexing.position * Label.t * (ident * ident) list * trule * rule_type * rule_constr list * string tannot option
-  | TSEvent   of event_type * ident * (Lexing.position * ident * ident) list * pol * string option
-  | TSType    of ident * typ * string option
+  | TSRule    of Lexing.position * Label.t * (ident * Formula.TypeTerm.t) list * trule * rule_type * rule_constr list * string tannot option
+  | TSEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
+  | TSType    of ident * Dom.tt * string option
+  | TSFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | TSNote    of string
 
-type tevent = (Lexing.position * ident * ident) list * pol * string option
+type tevent = (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
+type tfunction = (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
 
-type var_types = (ident, ident, Base.String.comparator_witness) Map.t
+type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map.t
 
 type tprog =
   {
     tstmts: tstmt list;
-    taliases: (ident, typ * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    taliases: (ident, Dom.tt * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
+    tfunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
-    exceptions: (ident, (ident * Formula.t) list, Base.String.comparator_witness) Map.t
+    exceptions: (ident, (ident * Tformula.t) list, Base.String.comparator_witness) Map.t
   }
 
 let tempty =
@@ -41,6 +44,7 @@ let tempty =
     tstmts = [];
     taliases = Map.empty (module String);
     tevents = Map.empty (module String);
+    tfunctions = Map.empty (module String);
     variables = Map.empty (module String); 
     exceptions = Map.empty (module String)
   }
@@ -67,6 +71,15 @@ let add_tevent event_type name args pol ds tprog pos =
   in
   { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, pol, ds)::tprog.tstmts}
 
+let add_tfunction name arg_types return_type ds tprog pos =
+  let function_ = (arg_types, return_type, ds) in
+  (* TODO: allow for overwriting/reusing event names *)
+  let functions =
+    try Map.add_exn tprog.tfunctions ~key:name ~data:function_
+    with _ -> Util.type_error (Printf.sprintf "function %s already exists" name) pos
+  in
+  { tprog with tfunctions = functions; tstmts = TSFunction (name, arg_types, return_type, ds)::tprog.tstmts}
+
 let add_vars vs name tprog pos =
   let variables =
     try Map.add_exn tprog.variables ~key:name ~data:vs
@@ -89,7 +102,7 @@ let verb_of_trule = function
 
 let string_of_trule i trule =
   let to_string f =
-    Etc.tabs (i+1) ^ Formula.to_string f
+    Etc.tabs (i+1) ^ Tformula.to_string f
   in
   let string_of_imp_rule verb f g =
     Printf.sprintf "%swhenever\n%s\n%s%s\n%s"
@@ -155,14 +168,29 @@ let string_of_tstmt ?(i=0) =
           name
           description
           (string_of_args typed_args i)
-  | TSType (name, typ, doc_string) ->
+  | TSType (name, tt, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-     Printf.sprintf "type %s is %s%s"
-       name (string_of_typ typ) description
+     Printf.sprintf "%stype %s is %s%s"
+       (Etc.tabs i) name (Dom.string_of_tt tt) description
+
+  | TSFunction (name, typed_args, return_typ, doc_string) ->
+     let description =
+          match doc_string with
+          | Some s -> "\n" ^ make_doc_string s i
+          | None -> ""
+     in
+     let f (ident, typ) =
+       Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
+     Printf.sprintf "%sfunction %s(%s) -> %s%s"
+       (Etc.tabs i)
+       name
+       (String.concat ~sep:", " (List.map typed_args ~f))
+       (Formula.TypeTerm.value_to_string return_typ)
+       description
   | TSNote text -> "note \"" ^ text ^ "\""
 
 let string_of_signature signature =

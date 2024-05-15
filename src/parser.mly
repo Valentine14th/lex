@@ -8,9 +8,12 @@
 %token <int> INT
 %token <float> FLOAT
 %token <string> STRING
+%token <Lextime.Time.t> TIME
 %token LPA RPA COM COL
+%token NEG
+%token ADD SUB MUL DIV POW AND OR XOR EQ NEQ LT LEQ GT GEQ NOT
 %token <Lexing.position> IMPORT
-%token EVENT PREDICATE TSTRING TINT TFLOAT TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token FUNCTION EVENT PREDICATE TSTRING TINT TFLOAT TBOOL TTIME TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IS TTYPE
 %token <string> DOCSTRING
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
@@ -24,10 +27,6 @@
 %token <Interval.t> INTERVAL
 %token FALSE
 %token TRUE
-%token EQCONST
-%token NEG
-%token AND
-%token OR
 %token IMP
 %token IFF
 %token EXISTS
@@ -69,6 +68,8 @@ stmt:
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, None) }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4, None) }
   | TTYPE IDENT IS typ DOCSTRING           { SType (fst $2, snd $2, $4, Some $5) }
+  | FUNCTION IDENT LPA fun_args RPA SUB GT type_term { SFunction (fst $2, snd $2, $4, $8, None) }
+  | FUNCTION IDENT LPA fun_args RPA SUB GT type_term DOCSTRING { SFunction (fst $2, snd $2, $4, $8, Some $9) }
   | event_def                              { $1 }
   | NOTE STRING                            { SNote ($1, $2) }
   | NOTE DOCSTRING                         { SNote ($1, $2) }
@@ -115,9 +116,16 @@ pol:
   |                         { TObs }
 
 typ:
-  | TSTRING { TString }
-  | TINT    { TInt }
-  | TFLOAT  { TFloat }
+  | TSTRING      { Dom.TStr }
+  | TINT         { Dom.TInt }
+  | TFLOAT       { Dom.TFloat }
+  | TBOOL        { Dom.TBool }
+  | TTIME        { Dom.TTime }
+  | TMONEY IDENT { Dom.TMoney (snd $2) }
+
+type_term:
+  | typ          { TypeTerm.TypeConst $1 }
+  | IDENT        { TypeTerm.TypeVar (snd $1) }
 
 rule:
   | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)      { Obligation ($2, $4) }
@@ -136,11 +144,14 @@ rule_constrs:
   | separated_list(COM, rule_constr) { $1 }
 
 type_fix:
-  | IDENT COL IDENT { (snd $1, snd $3) }
+  | IDENT COL type_term { (snd $1, $3) }
 
 type_fixes:
   | { [] }
   | FIX list(type_fix) { $2 }
+
+fun_args:
+  | separated_list(COM, type_fix) { $1 }
 
 srule:
   | RULE DOCSTRING type_fixes rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, $6, Some $2) }
@@ -157,7 +168,7 @@ event_type:
   | PREDICATE { Lex.Predicate }
 
 arg:
-  | IDENT COL IDENT { (fst $1, snd $1, snd $3) }
+  | IDENT COL type_term { (fst $1, snd $1, $3) }
 
 e:
 | ee                                   { flatten_assoc $1 }
@@ -166,7 +177,7 @@ ee:
 | LPA e RPA                            { $2 }
 | TRUE                                 { tt }
 | FALSE                                { ff }
-| ident EQCONST const                  { eqconst $1 (Term.unconst $3)}
+| term EQ term                         { eqconst $1 $3 }
 | NEG e                                { neg $2 }
 | PREV INTERVAL e                      { prev $2 $3 }
 | PREV e                               { prev Interval.full $2 }
@@ -216,16 +227,55 @@ sides:
 | COL IDENT COM IDENT                  { (Side.of_string (snd $2), Side.of_string (snd $4)) }
 
 term:
+| LPA term RPA                         { $2 }
 | const                                { $1 }
 | IDENT                                { Term.Var (snd $1) }
+| IDENT LPA terms RPA                  { Term.App (snd $1, $3) }
+| unop term                            { Term.Unop ($1, $2) }
+| term binop term                      { Term.Binop ($1, $2, $3) }
 
 const:
 | INT                                  { Term.Const (Int $1) }
 | STRING                               { Term.Const (Str $1) }
 | FLOAT                                { Term.Const (Float $1) }
+| TRUE                                 { Term.Const (Bool true) }
+| FALSE                                { Term.Const (Bool false) }
+| TIME                                 { Term.Const (Time $1) }
+| span                                 { Term.Const (Span $1) }
+| money                                { Term.Const (Money $1) }
 
 terms:
 | trms=separated_list(COM, term)      { trms }
+
+binop:
+| ADD { Term.BAdd }
+| SUB { Term.BSub }
+| MUL { Term.BMul }
+| DIV { Term.BDiv }
+| POW { Term.BPow }
+| AND { Term.BAnd }
+| OR  { Term.BOr }
+| XOR { Term.BXor }
+| EQ  { Term.BEq }
+| NEQ { Term.BNeq }
+| LT  { Term.BLt }
+| LEQ { Term.BLeq }
+| GT  { Term.BGt }
+| GEQ { Term.BGeq }
+
+unop:
+| SUB { Term.USub }
+| NOT { Term.UNot }
+
+span:
+| span_atom { $1 }
+| span_atom span { Lextime.Span.($1 + $2) }
+
+span_atom:
+| INT IDENT { Lextime.Span.of_value_with_string_unit $1 (fst $2) (snd $2) }
+
+money:
+| IDENT FLOAT { Money.( $2 $ (snd $1) ) }
 
 vars:
 | vrs=separated_nonempty_list (COM, ident) { vrs }

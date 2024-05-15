@@ -1,40 +1,49 @@
 open Core
 open Elex
 open Html
-open Tformula
+open Eformula
 
-let html_of_trm = function
-  | Formula.Term.Var x -> ident x
-  | Const d -> const (Dom.to_string d)
 
-let html_of_trms trms =
-  String.concat ~sep:", " (List.map ~f:html_of_trm trms)
+let rec html_of_trm ?(l=0) = function
+  | Tformula.Term.TVar x -> ident x
+  | TConst d -> const (Dom.to_string d)
+  | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
+  | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                     (Formula.Term.string_of_unop o)
+                     (html_of_trm ~l:10 t.trm)
+  | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+                        Printf.sprintf (Util.paren l l' "%s %s %s")
+                          (html_of_trm ~l:l' t.trm)
+                          (Formula.Term.string_of_binop o)
+                          (html_of_trm ~l:l' t'.trm)
+
+and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
 
 let rec html_of_formula_ formula_id l f =
   let inner_html = 
     match f.f with
-    | TTT -> const "true"
-    | TFF -> const "false"
-    | TEqConst (x, c) -> Printf.sprintf "%s = %s" (ident x) (const (Dom.to_string c))
-    | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
-    | TNeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
-    | TAnd (_, fs) -> Util.paren_string l 4 (
+    | ETT -> const "true"
+    | EFF -> const "false"
+    | EEqConst (x, c) -> Printf.sprintf "%s = %s" (html_of_trm x.trm) (const (Dom.to_string c))
+    | EPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
+    | ENeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
+    | EAnd (_, fs) -> Util.paren_string l 4 (
                           String.concat ~sep:(kw "AND") (List.map fs ~f:(html_of_formula_ formula_id 4)))
-    | TOr (_, fs) -> Util.paren_string l 3 (
+    | EOr (_, fs) -> Util.paren_string l 3 (
                          String.concat ~sep:(kw "OR") (List.map fs ~f:(html_of_formula_ formula_id 3)))
-    | TImp (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
-    | TIff (_, _, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
-    | TExists (x, f) -> Util.paren_string l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
-    | TForall (x, f) -> Util.paren_string l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
-    | TPrev (i, f) -> Util.paren_string l 5  (kw "PREVIOUS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TNext (i, f) -> Util.paren_string l 5 (kw "NEXT" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TOnce (i, f) -> Util.paren_string l 5 (kw "ONCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TEventually (i, _, f) -> Util.paren_string l 5 (kw "EVENTUALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | THistorically (i, f) -> Util.paren_string l 5 (kw "HISTORICALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TAlways (i, _, f) -> Util.paren_string l 5 (kw "ALWAYS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
-    | TSince (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
-    | TUntil (_, i, _, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
-    | TType (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Formula.ty_to_string t) in
+    | EImp (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
+    | EIff (_, _, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
+    | EExists (x, f) -> Util.paren_string l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | EForall (x, f) -> Util.paren_string l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | EPrev (i, f) -> Util.paren_string l 5  (kw "PREVIOUS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | ENext (i, f) -> Util.paren_string l 5 (kw "NEXT" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | EOnce (i, f) -> Util.paren_string l 5 (kw "ONCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | EEventually (i, _, f) -> Util.paren_string l 5 (kw "EVENTUALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | EHistorically (i, f) -> Util.paren_string l 5 (kw "HISTORICALLY" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | EAlways (i, _, f) -> Util.paren_string l 5 (kw "ALWAYS" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 f)
+    | ESince (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
+    | EUntil (_, i, _, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (Interval.to_string i)) ^ html_of_formula_ formula_id 5 g)
+    | EType (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Formula.ty_to_string t) in
   let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
   span ~id "lex-subformula" inner_html 
 
@@ -116,18 +125,28 @@ let html_of_doc_string s =
 
 let html_of_arg (_, id, ty) =
   div "lex-event-arg" (
-      ident id ^ ": " ^ typ ty
+      ident id ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty)
     )
 
-let html_of_type_fix rule_id i (ident_, typ_) =
+let html_of_function_arg (id, ty) =
+  div "lex-function-arg" (
+      ident id ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty)
+    )
+
+let html_of_type_fix rule_id i (ident_, ty) =
   let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
   div "lex-type-fix-outer" (
-      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ typ_)
+      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty))
     )
 
 let html_of_args args =
   div "lex-event-args" (
       String.concat ~sep:"" (List.map ~f:html_of_arg args)
+    )
+
+let html_of_function_args args =
+  div "lex-function-args" (
+      String.concat ~sep:", " (List.map ~f:html_of_function_arg args)
     )
 
 let html_of_type_fixes rule_id = function
@@ -175,7 +194,8 @@ let html_of_estmt eprog =
                 html_of_rule_constrs rule_constrs
             )
           )
-          (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id) eprog type_fixes erule doc_string)
+          (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id)
+             eprog type_fixes erule doc_string)
       )
   | ESEvent (event_type, name, typed_args, pol, doc_string) ->
      let html_of_event =
@@ -189,11 +209,22 @@ let html_of_estmt eprog =
         | Some s -> two_column html_of_event (html_of_doc_string s)
         | None   -> one_column html_of_event)
   | ESType (name, ty, doc_string) ->
-     let html_of_type = typ name ^ kw "is" ^ typ (Lex.string_of_typ ty) in
+     let html_of_type = typ name ^ kw "is" ^ typ (Dom.string_of_tt ty) in
      div "lex-stmt-type"
        (match doc_string with
         | Some s -> two_column html_of_type (html_of_doc_string s)
         | None   -> one_column html_of_type)
+  | ESFunction (name, typed_args, return_type, doc_string) ->
+     let html_of_function =
+       ident name
+       ^ html_of_function_args typed_args
+       ^ " -> "
+       ^ typ (Formula.TypeTerm.value_to_string return_type)
+     in
+     div "lex-stmt-function"
+       (match doc_string with
+        | Some s -> two_column html_of_function (html_of_doc_string s)
+        | None   -> one_column html_of_function)
   | ESNote text ->
      div "lex-stmt-note" (
          one_column (kw "note" ^ string text)
