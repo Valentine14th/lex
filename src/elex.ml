@@ -3,15 +3,16 @@ open Lex
 open Tlex
 
 type erule =
-  | EObligation   of Eformula.t list * Eformula.t list
-  | EPermission   of Eformula.t list * Eformula.t list
-  | EConstitutive of Eformula.t list * Eformula.t list
-  | EException    of Eformula.t list * ident * Eformula.t
+  | EObligation   of (Lexing.position * Eformula.t) list * (Lexing.position * Eformula.t) list
+  | EPermission   of (Lexing.position * Eformula.t) list * (Lexing.position * Eformula.t) list
+  | EConstitutive of (Lexing.position * Eformula.t) list * (Lexing.position * Eformula.t) list
+  | EException    of (Lexing.position * Eformula.t) list * (Lexing.position * Label.t) list * Eformula.t
+  | EScope        of (Lexing.position * Eformula.t) list * (Lexing.position * Label.t) list * Eformula.t
 
 type estmt =
   | ESImport  of Lexing.position * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
-  | ESRule    of Lexing.position * Label.t * (ident * Formula.TypeTerm.t) list * erule * rule_type * rule_constr list * string tannot option
+  | ESRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * erule * rule_type * rule_constr list * string tannot option
   | ESEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
   | ESType    of ident * Dom.tt * string option
   | ESFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
@@ -25,8 +26,10 @@ type eprog =
     ealiases: (ident, Dom.tt * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
-    variables: (ident, var_types, Base.String.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
-    exceptions: (ident, (ident * Eformula.t) list, Base.String.comparator_witness) Map.t
+    variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
+    rule_tree: Label.RuleTree.s;
+    exception_predicates: (int, Eformula.t, Int.comparator_witness) Map.t;
+    scope_predicates: (int, Eformula.t, Int.comparator_witness) Map.t;
   }
 
 let tempty =
@@ -35,8 +38,10 @@ let tempty =
     ealiases = Map.empty (module String);
     eevents = Map.empty (module String);
     efunctions = Map.empty (module String);
-    variables = Map.empty (module String); 
-    exceptions = Map.empty (module String)
+    variables = Map.empty (module Int); 
+    rule_tree = Label.RuleTree.empty;
+    exception_predicates = Map.empty (module Int);
+    scope_predicates = Map.empty (module Int)
   }
 
 let is_erule = function
@@ -48,6 +53,7 @@ let verb_of_erule = function
   | EPermission _ -> "permit"
   | EConstitutive _ -> "constitute"
   | EException _ -> "except"
+  | EScope _ -> "scope"
 
 let string_of_erule i erule =
   let to_string f =
@@ -61,19 +67,26 @@ let string_of_erule i erule =
       verb
       (String.concat ~sep:"\n" (List.map ~f:to_string g))
   in
-  let string_of_exc_rule f ident =
-    Printf.sprintf "%swhenever\n%s\n%sexcept \"%s\""
+  let string_of_ref_rule verb f erefs =
+    let string_of_erefs labels = 
+      let refs = List.map labels ~f:Label.reference_of_label in
+      String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
+    in
+    Printf.sprintf "%swhenever\n%s\n%s%s \"%s\""
       (Etc.tabs i)
       (String.concat ~sep:"\n" (List.map ~f:to_string f))
       (Etc.tabs i)
-      ident
+      verb
+      (string_of_erefs erefs)
   in
   match erule with
   | EObligation (f, g)
   | EPermission (f, g)
   | EConstitutive (f, g)
-    -> string_of_imp_rule (verb_of_erule erule) f g
-  | EException (f, ident, _) -> string_of_exc_rule f ident
+    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd g)
+  | EException (f, erefs, _)
+  | EScope (f, erefs, _)
+    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd erefs)
 
 let string_of_estmt ?(i=0) =
   function
@@ -86,7 +99,7 @@ let string_of_estmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf ": \"%s\"" (of_annot title) | None -> "")
-  | ESRule (_, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
+  | ESRule (_, _, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
      let description =
           match doc_string with
           | Some s -> "\n" ^ make_doc_string (of_annot s) i

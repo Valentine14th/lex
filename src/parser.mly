@@ -5,13 +5,16 @@
 
 %token EOF
 %token <Lexing.position * string> IDENT
-%token <int> INT
-%token <float> FLOAT
-%token <string> STRING
-%token <Lextime.Time.t> TIME
-%token LPA RPA COM COL
-%token NEG
-%token ADD SUB MUL DIV POW AND OR XOR EQ NEQ LT LEQ GT GEQ NOT
+%token <Lexing.position * int> INT
+%token <Lexing.position * float> FLOAT
+%token <Lexing.position * string> STRING
+%token <Lexing.position * Lextime.Time.t> TIME
+%token COM COL
+%token <Lexing.position> SUB
+%token <Lexing.position> NOT
+%token ADD MUL DIV POW XOR NEQ LT LEQ GT GEQ
+%token <Lexing.position> LPA RPA
+%token <Lexing.position> LBR RBR
 %token <Lexing.position> IMPORT
 %token FUNCTION EVENT PREDICATE TSTRING TINT TFLOAT TBOOL TTIME TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IS TTYPE
@@ -20,27 +23,31 @@
 %token <int> LABEL_LEVEL
 %token <Lexing.position> RULE
 %token <Lexing.position> NOTE
-%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT
+%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT SCOPE
 %token CAUSING SUPPRESSING
 
 %token DOT
-%token <Interval.t> INTERVAL
-%token FALSE
-%token TRUE
-%token IMP
-%token IFF
-%token EXISTS
-%token FORALL
-%token PREV
-%token NEXT
-%token ONCE
-%token EVENTUALLY
-%token HISTORICALLY
-%token ALWAYS
-%token SINCE
-%token UNTIL
-%token RELEASE
-%token TRIGGER
+%token <Lexing.position * Interval.t> INTERVAL
+%token <Lexing.position> FALSE
+%token <Lexing.position> TRUE
+%token <Lexing.position> EQ
+%token <Lexing.position> NEG
+%token <Lexing.position> AND
+%token <Lexing.position> OR
+%token <Lexing.position> IMP
+%token <Lexing.position> IFF
+%token <Lexing.position> EXISTS
+%token <Lexing.position> FORALL
+%token <Lexing.position> PREV
+%token <Lexing.position> NEXT
+%token <Lexing.position> ONCE
+%token <Lexing.position> EVENTUALLY
+%token <Lexing.position> HISTORICALLY
+%token <Lexing.position> ALWAYS
+%token <Lexing.position> SINCE
+%token <Lexing.position> UNTIL
+%token <Lexing.position> RELEASE
+%token <Lexing.position> TRIGGER
 
 %token FORMEX AKOMANTOSO
 
@@ -64,14 +71,14 @@ stmts: list(stmt) EOF { { stmts = $1 } }
 stmt:
   | IMPORT import                          { SImport ($1, ILex, $2) }
   | IMPORT import_option import            { SImport ($1, $2, $3) }
-  | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, $2, Some $3) }
-  | section_kind_and_pos STRING            { SSection (snd $1, fst $1, $2, None) }
+  | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, snd $2, Some (snd $3)) }
+  | section_kind_and_pos STRING            { SSection (snd $1, fst $1, snd $2, None) }
   | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4, None) }
   | TTYPE IDENT IS typ DOCSTRING           { SType (fst $2, snd $2, $4, Some $5) }
   | FUNCTION IDENT LPA fun_args RPA SUB GT type_term { SFunction (fst $2, snd $2, $4, $8, None) }
   | FUNCTION IDENT LPA fun_args RPA SUB GT type_term DOCSTRING { SFunction (fst $2, snd $2, $4, $8, Some $9) }
   | event_def                              { $1 }
-  | NOTE STRING                            { SNote ($1, $2) }
+  | NOTE STRING                            { SNote ($1, snd $2) }
   | NOTE DOCSTRING                         { SNote ($1, $2) }
   | srule                                  { $1 }
 
@@ -100,7 +107,7 @@ section_kind_and_pos:
   | PARAGRAPH             { Paragraph 0, $1 }
   | POINT                 { Point 0, $1 }
   | SUBPOINT              { Subpoint 0, $1 }
-                      
+
 rule_type:
   | TENFORCEABLE { Enforceable }
   | TTRANSPARENTLY TENFORCEABLE { Transparent }
@@ -127,11 +134,34 @@ type_term:
   | typ          { TypeTerm.TypeConst $1 }
   | IDENT        { TypeTerm.TypeVar (snd $1) }
 
+section_kind_with_name:
+  | LAW LABEL_LEVEL STRING       { Law $2, snd $3 }
+  | TITLE LABEL_LEVEL STRING     { Title $2, snd $3 }
+  | CHAPTER LABEL_LEVEL STRING   { Chapter $2, snd $3 }
+  | SECTION LABEL_LEVEL STRING   { Section $2, snd $3 }
+  | ARTICLE LABEL_LEVEL STRING   { Article $2, snd $3 }
+  | PARAGRAPH LABEL_LEVEL STRING { Paragraph $2, snd $3 }
+  | POINT LABEL_LEVEL STRING     { Point $2, snd $3 }
+  | SUBPOINT LABEL_LEVEL STRING  { Subpoint $2, snd $3 }
+  | LAW STRING                   { Law 0, snd $2 }
+  | TITLE STRING                 { Title 0, snd $2 }
+  | CHAPTER STRING               { Chapter 0, snd $2 }
+  | SECTION STRING               { Section 0, snd $2 }
+  | ARTICLE STRING               { Article 0, snd $2 }
+  | PARAGRAPH STRING             { Paragraph 0, snd $2 }
+  | POINT STRING                 { Point 0, snd $2 }
+  | SUBPOINT STRING              { Subpoint 0, snd $2 }
+
+reference:
+  | LBR nonempty_list(section_kind_with_name) RULE STRING RBR { ($1, ($2, Some (snd $4))) }
+  | LBR nonempty_list(section_kind_with_name) RBR { ($1, ($2, None)) }
+
 rule:
-  | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)      { Obligation ($2, $4) }
-  | WHENEVER nonempty_list(e) PERMIT nonempty_list(e)      { Permission ($2, $4) }
-  | WHENEVER nonempty_list(e) CONSTITUTE nonempty_list(e)  { Constitutive ($2, $4) }
-  | WHENEVER nonempty_list(e) EXCEPT STRING                { Exception ($2, $4) }
+  | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)         { Obligation ($2, $4) }
+  | WHENEVER nonempty_list(e) PERMIT nonempty_list(e)         { Permission ($2, $4) }
+  | WHENEVER nonempty_list(e) CONSTITUTE nonempty_list(e)     { Constitutive ($2, $4) }
+  | WHENEVER nonempty_list(e) EXCEPT nonempty_list(reference) { Exception ($2, $4) }
+  | WHENEVER nonempty_list(e) SCOPE nonempty_list(reference)  { Scope ($2, $4) }
 
 ident:
   | IDENT { snd $1 }
@@ -155,9 +185,9 @@ fun_args:
 
 srule:
   | RULE DOCSTRING type_fixes rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, $6, Some $2) }
-  | RULE STRING DOCSTRING type_fixes rule rule_type rule_constrs { SRule ($1, Some $2, $4, $5, $6, $7, Some $3) }
+  | RULE STRING DOCSTRING type_fixes rule rule_type rule_constrs { SRule ($1, Some (snd $2), $4, $5, $6, $7, Some $3) }
   | RULE type_fixes rule rule_type rule_constrs                  { SRule ($1, None, $2, $3, $4, $5, None) }
-  | RULE STRING type_fixes rule rule_type rule_constrs           { SRule ($1, Some $2, $3, $4, $5, $6, None) }
+  | RULE STRING type_fixes rule rule_type rule_constrs           { SRule ($1, Some (snd $2), $3, $4, $5, $6, None) }
 
 event_def:
   | pol event_type IDENT list(arg) { SEvent (fst $3, $2, snd $3, $4, $1, None) }
@@ -171,54 +201,54 @@ arg:
   | IDENT COL type_term { (fst $1, snd $1, $3) }
 
 e:
-| ee                                   { flatten_assoc $1 }
+| ee                                   { fst $1, flatten_assoc (snd $1) }
 
 ee:
-| LPA e RPA                            { $2 }
-| TRUE                                 { tt }
-| FALSE                                { ff }
-| term EQ term                         { eqconst $1 $3 }
-| NEG e                                { neg $2 }
-| PREV INTERVAL e                      { prev $2 $3 }
-| PREV e                               { prev Interval.full $2 }
-| NEXT INTERVAL e                      { next $2 $3 }
-| NEXT e                               { next Interval.full $2 }
-| ONCE INTERVAL e                      { once $2 $3 }
-| ONCE e                               { once Interval.full $2 }
-| EVENTUALLY INTERVAL e                { eventually $2 $3 }
-| EVENTUALLY e                         { eventually Interval.full $2 }
-| HISTORICALLY INTERVAL e              { historically $2 $3 }
-| HISTORICALLY e                       { historically Interval.full $2 }
-| ALWAYS INTERVAL e                    { always $2 $3 }
-| ALWAYS e                             { always Interval.full $2 }
-| e AND side e                         { conj $3 $1 $4 }
-| e AND e                              { conj N $1 $3 }
-| e OR side e                          { disj $3 $1 $4 }
-| e OR e                               { disj N $1 $3 }
-| e IMP side e                         { imp $3 $1 $4 }
-| e IMP e                              { imp N $1 $3 }
-| e IFF sides e                        { iff (fst $3) (snd $3) $1 $4 }
-| e IFF e                              { iff N N $1 $3 }
-| e SINCE INTERVAL side e              { since $4 $3 $1 $5 }
-| e SINCE INTERVAL e                   { since N $3 $1 $4 }
-| e SINCE side e                       { since $3 Interval.full $1 $4 }
-| e SINCE e                            { since N Interval.full $1 $3 }
-| e UNTIL INTERVAL side e              { until $4 $3 $1 $5 }
-| e UNTIL INTERVAL e                   { until N $3 $1 $4 }
-| e UNTIL side e                       { until $3 Interval.full $1 $4 }
-| e UNTIL e                            { until N Interval.full $1 $3 }
-| e TRIGGER INTERVAL side e            { trigger $4 $3 $1 $5 }
-| e TRIGGER INTERVAL e                 { trigger N $3 $1 $4 }
-| e TRIGGER side e                     { trigger $3 Interval.full $1 $4 }
-| e TRIGGER e                          { trigger N Interval.full $1 $3 }
-| e RELEASE INTERVAL side e            { release $4 $3 $1 $5 }
-| e RELEASE INTERVAL e                 { release N $3 $1 $4 }
-| e RELEASE side e                     { release $3 Interval.full $1 $4 }
-| e RELEASE e                          { release N Interval.full $1 $3 }
-| EXISTS vars DOT e %prec EXISTS       { List.fold_right exists (List.tl $2) (exists (List.hd $2) $4) }
-| FORALL vars DOT e %prec FORALL       { List.fold_right forall (List.tl $2) (forall (List.hd $2) $4) }
-| IDENT LPA terms RPA                  { predicate (snd $1) $3 }
-| e COL ty                             { type_ $1 $3 }
+| LPA e RPA                            { $1, snd $2 }
+| TRUE                                 { $1, tt }
+| FALSE                                { $1, ff }
+| term EQ term                         { fst $1, eqconst (snd $1) (snd $3)}
+| NEG e                                { $1, neg (snd $2) }
+| PREV INTERVAL e                      { $1, prev (snd $2) (snd $3) }
+| PREV e                               { $1, prev Interval.full (snd $2) }
+| NEXT INTERVAL e                      { $1, next (snd $2) (snd $3) }
+| NEXT e                               { $1, next Interval.full (snd $2) }
+| ONCE INTERVAL e                      { $1, once (snd $2) (snd $3) }
+| ONCE e                               { $1, once Interval.full (snd $2) }
+| EVENTUALLY INTERVAL e                { $1, eventually (snd $2) (snd $3) }
+| EVENTUALLY e                         { $1, eventually Interval.full (snd $2) }
+| HISTORICALLY INTERVAL e              { $1, historically (snd $2) (snd $3) }
+| HISTORICALLY e                       { $1, historically Interval.full (snd $2) }
+| ALWAYS INTERVAL e                    { $1, always (snd $2) (snd $3) }
+| ALWAYS e                             { $1, always Interval.full (snd $2) }
+| e AND side e                         { fst $1, conj $3 (snd $1) (snd $4) }
+| e AND e                              { fst $1, conj N (snd $1) (snd $3) }
+| e OR side e                          { fst $1, disj $3 (snd $1) (snd $4) }
+| e OR e                               { fst $1, disj N (snd $1) (snd $3) }
+| e IMP side e                         { fst $1, imp $3 (snd $1) (snd $4) }
+| e IMP e                              { fst $1, imp N (snd $1) (snd $3) }
+| e IFF sides e                        { fst $1, iff (fst $3) (snd $3) (snd $1) (snd $4) }
+| e IFF e                              { fst $1, iff N N (snd $1) (snd $3) }
+| e SINCE INTERVAL side e              { fst $1, since $4 (snd $3) (snd $1) (snd $5) }
+| e SINCE INTERVAL e                   { fst $1, since N (snd $3) (snd $1) (snd $4) }
+| e SINCE side e                       { fst $1, since $3 Interval.full (snd $1) (snd $4) }
+| e SINCE e                            { fst $1, since N Interval.full (snd $1) (snd $3) }
+| e UNTIL INTERVAL side e              { fst $1, until $4 (snd $3) (snd $1) (snd $5) }
+| e UNTIL INTERVAL e                   { fst $1, until N (snd $3) (snd $1) (snd $4) }
+| e UNTIL side e                       { fst $1, until $3 Interval.full (snd $1) (snd $4) }
+| e UNTIL e                            { fst $1, until N Interval.full (snd $1) (snd $3) }
+| e TRIGGER INTERVAL side e            { fst $1, trigger $4 (snd $3) (snd $1) (snd $5) }
+| e TRIGGER INTERVAL e                 { fst $1, trigger N (snd $3) (snd $1) (snd $4) }
+| e TRIGGER side e                     { fst $1, trigger $3 Interval.full (snd $1) (snd $4) }
+| e TRIGGER e                          { fst $1, trigger N Interval.full (snd $1) (snd $3) }
+| e RELEASE INTERVAL side e            { fst $1, release $4 (snd $3) (snd $1) (snd $5) }
+| e RELEASE INTERVAL e                 { fst $1, release N (snd $3) (snd $1) (snd $4) }
+| e RELEASE side e                     { fst $1, release $3 Interval.full (snd $1) (snd $4) }
+| e RELEASE e                          { fst $1, release N Interval.full (snd $1) (snd $3) }
+| EXISTS vars DOT e %prec EXISTS       { $1, List.fold_right exists (List.tl $2) (exists (List.hd $2) (snd $4)) }
+| FORALL vars DOT e %prec FORALL       { $1, List.fold_right forall (List.tl $2) (forall (List.hd $2) (snd $4)) }
+| IDENT LPA terms RPA                  { fst $1, predicate (snd $1) (List.map snd $3) }
+| e COL ty                             { fst $1, type_ (snd $1) $3 }
 
 side:
 | COL IDENT                            { Side.of_string (snd $2) }
@@ -227,22 +257,22 @@ sides:
 | COL IDENT COM IDENT                  { (Side.of_string (snd $2), Side.of_string (snd $4)) }
 
 term:
-| LPA term RPA                         { $2 }
+| LPA term RPA                         { $1, snd $2 }
 | const                                { $1 }
-| IDENT                                { Term.Var (snd $1) }
-| IDENT LPA terms RPA                  { Term.App (snd $1, $3) }
-| unop term                            { Term.Unop ($1, $2) }
-| term binop term                      { Term.Binop ($1, $2, $3) }
+| IDENT                                { fst $1, Term.Var (snd $1) }
+| IDENT LPA terms RPA                  { fst $1, Term.App (snd $1, List.map snd $3) }
+| unop term                            { fst $1, Term.Unop (snd $1, snd $2) }
+| term binop term                      { fst $1, Term.Binop (snd $1, $2, snd $3) }
 
 const:
-| INT                                  { Term.Const (Int $1) }
-| STRING                               { Term.Const (Str $1) }
-| FLOAT                                { Term.Const (Float $1) }
-| TRUE                                 { Term.Const (Bool true) }
-| FALSE                                { Term.Const (Bool false) }
-| TIME                                 { Term.Const (Time $1) }
-| span                                 { Term.Const (Span $1) }
-| money                                { Term.Const (Money $1) }
+| INT                                  { fst $1, Term.Const (Int (snd $1)) }
+| STRING                               { fst $1, Term.Const (Str (snd $1)) }
+| FLOAT                                { fst $1, Term.Const (Float (snd $1)) }
+| TRUE                                 { $1, Term.Const (Bool true) }
+| FALSE                                { $1, Term.Const (Bool false) }
+| TIME                                 { fst $1, Term.Const (Time (snd $1)) }
+| span                                 { fst $1, Term.Const (Span (snd $1)) }
+| money                                { fst $1, Term.Const (Money (snd $1)) }
 
 terms:
 | trms=separated_list(COM, term)      { trms }
@@ -264,18 +294,18 @@ binop:
 | GEQ { Term.BGeq }
 
 unop:
-| SUB { Term.USub }
-| NOT { Term.UNot }
+| SUB { $1, Term.USub }
+| NOT { $1, Term.UNot }
 
 span:
 | span_atom { $1 }
-| span_atom span { Lextime.Span.($1 + $2) }
+| span_atom span { fst $1, Lextime.Span.((snd $1) + (snd $2)) }
 
 span_atom:
-| INT IDENT { Lextime.Span.of_value_with_string_unit $1 (fst $2) (snd $2) }
+| INT IDENT { fst $1, Lextime.Span.of_value_with_string_unit (snd $1) (fst $2) (snd $2) }
 
 money:
-| IDENT FLOAT { Money.( $2 $ (snd $1) ) }
+| IDENT FLOAT { fst $1, Money.( (snd $2) $ (snd $1) ) }
 
 vars:
 | vrs=separated_nonempty_list (COM, ident) { vrs }

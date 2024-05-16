@@ -507,19 +507,21 @@ let convert_transparently_enforceable pols f b pos =
 (* TODO: type check formulas with information in pols *)
 (* let type_trule pols = function *)
 let type_trule _ = function
-  | TSRule (pos, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
+  | TSRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let rule =  (*[FH] todo, filler code!*) 
         match rule with
-        | TException (f1, ident, f2) -> 
-           EException (Eformula.of_tformulas f1, ident, Eformula.of_tformula f2)
+        | TException (f1, refs, f2) -> 
+           EException (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), refs, Eformula.of_tformula f2)
+        | TScope (f1, refs, f2) -> 
+           EScope (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), refs, Eformula.of_tformula f2)
         | TObligation (f1, f2) ->
-           EObligation (Eformula.of_tformulas f1, Eformula.of_tformulas f2)
+           EObligation (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
         | TPermission (f1, f2) ->
-           EPermission (Eformula.of_tformulas f1, Eformula.of_tformulas f2)
+           EPermission (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
         | TConstitutive (f1, f2) ->
-           EConstitutive (Eformula.of_tformulas f1, Eformula.of_tformulas f2)
+           EConstitutive (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
       in
-      ESRule (pos, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string)
+      ESRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string)
     end
   | _ -> assert false
 
@@ -536,11 +538,15 @@ let type_tstmt pols = function
      ESFunction (name, arg_types, return_type, doc_string)
   | TSNote text -> ESNote text
 
-let type_exception _ (ident, f) =
-  (ident, Eformula.of_tformula f)
+let type_exception _ f = Eformula.of_tformula f
 
-let type_exceptions pol exceptions =
+let type_scope _ f = Eformula.of_tformula f
+
+(* let type_exceptions pol exceptions =
   List.map exceptions ~f:(type_exception pol)
+
+let type_scopes pol scopes =
+  List.map scopes ~f:(type_scope pol) *)
 
 let do_type _ tprog =
   let pols = Tlex.pol_map tprog in
@@ -550,6 +556,8 @@ let do_type _ tprog =
     eevents    = tprog.tevents;
     efunctions = tprog.tfunctions;
     variables  = tprog.variables;
-    exceptions = Map.map tprog.exceptions ~f:(type_exceptions pols)
+    rule_tree  = tprog.rule_tree;
+    exception_predicates = Map.map tprog.exception_predicates ~f:(type_exception pols);
+    scope_predicates     = Map.map tprog.scope_predicates ~f:(type_scope pols);
   }
 

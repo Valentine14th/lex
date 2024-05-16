@@ -133,29 +133,15 @@ rule
         w: userid
     whenever
         isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
-    # currenty implemented syntax:
-    # except
-        # "6(1)(1)(a)"
-    # proposed syntax:
-    except {
-            # law "GDPR" (optional, will get inferred from the current context)
-            article "6"
-            paragraph "1"
-            point "1"
-            subpoint "a"
-        } and {
-            section "2"
-        } and {
-            section "3"
-            chapter "IV"
-        }
-    # other ideas:
-        #law "GDPR 6(1)(1)a" # keyword specifies the "level" at which the identifier starts
-        #article "6(1)(1)a"
-        #subpoint "GDPR 6(1)a"
-        #subpoint "6(1)(1)a"
+    except
+        { article "6" paragraph "1" point "1" subpoint "a" } 
+        { section "2" } 
+        { chapter "IV" section "3" }
 
-    # except "6(1)"
-    # except "6(1)(a)"
-    # except "7(1)(a)"
-    # except "Art. 6(1)(a) GDPR" # idea for different convention, if strings are uesd
+section "2"
+
+chapter "III"
+chapter "IV"
+section "1"
+section "2"
+section "3"

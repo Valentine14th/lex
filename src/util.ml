@@ -12,6 +12,8 @@ let type_error msg pos = eprintf "Type error at %s: %s\n" (string_of_pos pos) ms
 
 let label_error msg pos = eprintf "Label error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
 
+let reference_error msg pos = eprintf "Reference error at %s: %s\n" (string_of_pos pos) msg; exit(-1)
+
 let take l n =
   let rec aux = function
     | _, 0 -> []

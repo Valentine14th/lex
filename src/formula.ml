@@ -89,13 +89,6 @@ module TypeTerm = struct
     | TypeConst tt -> Dom.string_of_tt tt
     | TypeVar i    -> i
 
-  let supports_usub = function
-    | TypeConst Dom.TInt
-      | TypeConst Dom.TFloat
-      | TypeConst Dom.TSpan
-      | TypeConst (Dom.TMoney _) -> true
-    | _ -> false
-
   let eval aliases = function
     | TypeConst tt -> tt
     | TypeVar v    -> fst (Map.find_exn aliases v)

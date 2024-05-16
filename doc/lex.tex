@@ -271,9 +271,9 @@ The general syntax for rule declarations is as follows:
   rule\_constr\_verb ::=&~\kw{causing} \mid \kw{suppressing}\\
   rule\_constr ::=&~rule\_constr\_verb~ident_1~\dots~ident_m\\
   rule\_action ::= &~rule\_verb\_action~[patt_2]\\
-                   &\qquad [label_{21}\kw{:}]~expr_{21}\\
+                   &\qquad [ident_{41}\kw{:}]~expr_{41}\\
                    &\qquad \dots\\
-                   &\qquad [label_{2{k_2}}\kw{:}]~expr_{2{k_2}}\\
+                   &\qquad [ident_{4{k_4}}\kw{:}]~expr_{4{k_4}}\\
   rule\_reference ::= &~\kw{\{}~
                       label\_level_1[\kw{[}int_1\kw{]}]~string_1
                       ~\dots~
@@ -290,9 +290,9 @@ The general syntax for rule declarations is as follows:
                 &\qquad \dots\\
                 &\qquad ident_{1n}\kw{:} ident_{2n}]\\
                 &~[\kw{whenever}~[patt_1]\\
-                &\qquad [label_{11}\kw{:}]~expr_{11}\\
+                &\qquad [ident_{31}\kw{:}]~expr_{31}\\
                 &\qquad \dots\\
-                &\qquad [label_{1{k_1}}\kw{:}]~expr_{1{k_1}}]\\
+                &\qquad [ident_{3{k_3}}\kw{:}]~expr_{3{k_3}}]\\
                 &~(rule\_action\mid rule\_relative)\\
                 &[[\kw{transparently}]~\kw{enforceable}]~rule\_constr_1\kw{,}\dots\kw{,}rule\_constr_\ell
 \end{align*}
@@ -389,33 +389,26 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
 % todo:
-% more complex terms
+% more complex terms: algebraic data types...
 % access databases
 % reason about time explicitly
-% complex data structures
 % points inside rules
 % implement temporal patterns
 % Erwägungsgründe
 % design survey
-% two-level enforcement
-% relationship to (prioritized) default logic
+% enforcement of constitutive rules
+% clarify relationship to (prioritized) default logic (→ paper)
 % add readings of complex terms
 % typing of unops and binops 
 
 % Enforcer wishlist
 
 % WP1 DONE
-% - more complex terms → define function symbols and use them inside terms →  FORALL x, y. B(x) AND C(y) => A(sub(x,y), add(y,y))
-% - predicates based on databases / external interface → P(a, b, c, d) → 1 = p(a, b, c, d) ||| FORALL x, y. B(x) AND C(y) => P(x - y, y + y) (could be retrieving all or just testing)
-% - explicit reasoning about time → FORALL x. A(x) => current_time() = x
-% - load Python functions
-% - comparisons & equalities
 
-% WP2
+% WP2 (new)
+% - new data structure (= sequence of named formulae with references)
 % - nary constructs
-% - take ordered sequences of formulae as inputs
-
-% WP3
+% - let bindings
 % - efficient handling of data structures
 % - efficient search for subformulae to update
 
