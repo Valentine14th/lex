@@ -1,10 +1,89 @@
 open Core
 
+open Formula.Term
 open Eformula
 open Lex
 open Elex
 
-let compile_imp f g =
+let compile_tt = function
+  | Dom.TInt -> Dom.TInt
+  | TStr -> TStr
+  | TFloat -> TFloat
+  | TBool -> TInt
+  | TTime -> TFloat
+  | TSpan -> TFloat
+  | TMoney _ -> TInt
+
+let compile_dom = function
+  | Dom.Int i -> Dom.Int i
+  | Str s -> Str s
+  | Float f -> Float f
+  | Bool b -> Int (if b then 1 else 0)
+  | Time t -> Float (Lextime.Time.to_float t)
+  | Span _ -> assert false
+  | Money (Money.M (a, _)) -> Int a
+
+let prefix_tt = function
+  | Dom.TInt -> "i"
+  | TStr -> "s"
+  | TFloat -> "f"
+  | _ -> assert false
+
+let compile_unop = function
+  | USub -> "usub"
+  | UNot -> "not"
+
+let compile_binop = function
+  | BAdd -> "add"
+  | BSub -> "sub"
+  | BMul -> "mul"
+  | BDiv -> "div"
+  | BPow -> "pow"
+  | BAnd -> "and"
+  | BOr  -> "or"
+  | BXor -> "xor"
+  | BEq  -> "eq"
+  | BNeq -> "neq"
+  | BLt  -> "lt"
+  | BLeq -> "leq"
+  | BGt  -> "gt"
+  | BGeq -> "geq"
+    
+let rec compile_term aliases term =
+  let compile_unop tt f =
+    prefix_tt tt ^ compile_unop f in
+  let compile_binop tt tt' f =
+    let p  = prefix_tt tt in
+    let p' = prefix_tt tt' in
+    let prefix = if String.equal p p' then p else p ^ p' in
+    prefix ^ compile_binop f in
+  let trm = 
+    match Term.(term.trm) with
+    | Term.TVar v -> Term.TVar v
+    | Term.TConst d -> Term.TConst (compile_dom d)
+    | Term.TApp (f, terms) -> Term.TApp (f, List.map ~f:(compile_term aliases) terms)
+    | Term.TUnop (op, term) ->
+       let f = compile_unop (compile_tt (Formula.TypeTerm.eval aliases term.tt)) op in
+       Term.TApp (f, [compile_term aliases term])
+    | Term.TBinop (term, op, term') ->
+       let f = compile_binop
+                 (compile_tt (Formula.TypeTerm.eval aliases term.tt))
+                 (compile_tt (Formula.TypeTerm.eval aliases term'.tt)) op in
+       Term.TApp (f, [compile_term aliases term; compile_term aliases term'])
+  in { term with trm }
+
+let compile_pattern (f: Eformula.t) = function
+  | EPPresent -> f
+  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); enftype = Non; id = 0 }
+  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); enftype = Non; id = 0 }
+  | EPUntil (i, g) -> { f = EUntil (R, i, Interval.is_bounded i, g, f); enftype = Non; id = 0 }
+  | EPOnce i -> { f = EOnce (i, f); enftype = Non; id = 0 }
+  | EPHistorically i -> { f = EHistorically (i, f); enftype = Non; id = 0 }
+  | EPSince (i, g) -> let neg_f = { f = ENeg f; enftype = Non; id = 0} in
+                      let since_f = { f = ESince (R, i, neg_f, g); enftype = Non; id = 0 } in
+                      { f = ENeg since_f; enftype = Non; id = 0 }
+
+let compile_imp f p g q =
   let vars =
     Set.elements
       (Set.union_list (module String)
@@ -12,16 +91,18 @@ let compile_imp f g =
   make (EAlways
     (Interval.full,
      true,
-     tbigcauforall vars ((make (EImp (N, tbigcauconj f, tbigcauconj g)) Non 0))))
+     tbigcauforall vars
+       ((make (EImp (N, compile_pattern
+                          (tbigcauconj f) p, compile_pattern (tbigcauconj g) q)) Non 0))))
     Non 0
 
 let compile_erule eprog =
   let aux f' = function
-    | EObligation (f, g) -> compile_imp (List.map ~f:snd f@f') (List.map ~f:snd g)
-    | EPermission (f, g) -> compile_imp (List.map ~f:snd f@f') (List.map ~f:snd g)
-    | EConstitutive (f, g) -> compile_imp (List.map ~f:snd f@f') (List.map ~f:snd g)
-    | EException (f, _, pred) -> compile_imp (List.map ~f:snd f@f') [pred] (* TODO: implement exception compilation to more closely represent let expressions, maybe with iff instead of just if *)
-    | EScope (f, _, pred) -> compile_imp (List.map ~f:snd f@f') [pred] (* TODO is a negation necessary here, or is this handled elsewhwere? *)
+    | EObligation (f, p, g, q) -> compile_imp (List.map ~f:snd f@f') p (List.map ~f:snd g) q
+    | EPermission (f, p, g, q) -> compile_imp (List.map ~f:snd f@f') p (List.map ~f:snd g) q
+    | EConstitutive (f, p, g) -> compile_imp (List.map ~f:snd f@f') p (List.map ~f:snd g) EPPresent
+    | EException (f, p, _, pred) -> compile_imp (List.map ~f:snd f@f') p [pred] EPPresent (* TODO: implement exception compilation to more closely represent let expressions, maybe with iff instead of just if *)
+    | EScope (f, p, _, pred) -> compile_imp (List.map ~f:snd f@f') p [pred] EPPresent (* TODO is a negation necessary here, or is this handled elsewhwere? *)
   in
   function
 (*

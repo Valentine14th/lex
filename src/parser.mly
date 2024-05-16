@@ -15,8 +15,11 @@
 %token ADD MUL DIV POW XOR NEQ LT LEQ GT GEQ
 %token <Lexing.position> LPA RPA
 %token <Lexing.position> LBR RBR
+%token <Lexing.position> LSB RSB
 %token <Lexing.position> IMPORT
+%token INFINITY
 %token FUNCTION EVENT PREDICATE TSTRING TINT TFLOAT TBOOL TTIME TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token IWITHIN IBEFORE ISTRICTLY IAFTER IBETWEEN IEXCLUDED IEVENTUALLY IALWAYS IONCE ISINCE IDELAYING IIF IIN ITHE IFUTURE IPAST
 %token IS TTYPE
 %token <string> DOCSTRING
 %token <Lexing.position> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
@@ -27,7 +30,6 @@
 %token CAUSING SUPPRESSING
 
 %token DOT
-%token <Lexing.position * Interval.t> INTERVAL
 %token <Lexing.position> FALSE
 %token <Lexing.position> TRUE
 %token <Lexing.position> EQ
@@ -51,7 +53,6 @@
 
 %token FORMEX AKOMANTOSO
 
-%nonassoc INTERVAL
 %right COL
 %right SINCE UNTIL RELEASE TRIGGER
 %nonassoc PREV NEXT ONCE EVENTUALLY HISTORICALLY ALWAYS
@@ -157,11 +158,11 @@ reference:
   | LBR nonempty_list(section_kind_with_name) RBR { ($1, ($2, None)) }
 
 rule:
-  | WHENEVER nonempty_list(e) OBLIGE nonempty_list(e)         { Obligation ($2, $4) }
-  | WHENEVER nonempty_list(e) PERMIT nonempty_list(e)         { Permission ($2, $4) }
-  | WHENEVER nonempty_list(e) CONSTITUTE nonempty_list(e)     { Constitutive ($2, $4) }
-  | WHENEVER nonempty_list(e) EXCEPT nonempty_list(reference) { Exception ($2, $4) }
-  | WHENEVER nonempty_list(e) SCOPE nonempty_list(reference)  { Scope ($2, $4) }
+  | WHENEVER pattern nonempty_list(e) OBLIGE pattern nonempty_list(e) { Obligation ($3, $2, $6, $5) }
+  | WHENEVER pattern nonempty_list(e) PERMIT pattern nonempty_list(e) { Permission ($3, $2, $6, $5) }
+  | WHENEVER pattern nonempty_list(e) CONSTITUTE nonempty_list(e)     { Constitutive ($3, $2, $5) }
+  | WHENEVER pattern nonempty_list(e) EXCEPT nonempty_list(reference) { Exception ($3, $2, $5) }
+  | WHENEVER pattern nonempty_list(e) SCOPE nonempty_list(reference)  { Scope ($3, $2, $5) }
 
 ident:
   | IDENT { snd $1 }
@@ -209,17 +210,17 @@ ee:
 | FALSE                                { $1, ff }
 | term EQ term                         { fst $1, eqconst (snd $1) (snd $3)}
 | NEG e                                { $1, neg (snd $2) }
-| PREV INTERVAL e                      { $1, prev (snd $2) (snd $3) }
+| PREV interval e                      { $1, prev (snd $2) (snd $3) }
 | PREV e                               { $1, prev Interval.full (snd $2) }
-| NEXT INTERVAL e                      { $1, next (snd $2) (snd $3) }
+| NEXT interval e                      { $1, next (snd $2) (snd $3) }
 | NEXT e                               { $1, next Interval.full (snd $2) }
-| ONCE INTERVAL e                      { $1, once (snd $2) (snd $3) }
+| ONCE interval e                      { $1, once (snd $2) (snd $3) }
 | ONCE e                               { $1, once Interval.full (snd $2) }
-| EVENTUALLY INTERVAL e                { $1, eventually (snd $2) (snd $3) }
+| EVENTUALLY interval e                { $1, eventually (snd $2) (snd $3) }
 | EVENTUALLY e                         { $1, eventually Interval.full (snd $2) }
-| HISTORICALLY INTERVAL e              { $1, historically (snd $2) (snd $3) }
+| HISTORICALLY interval e              { $1, historically (snd $2) (snd $3) }
 | HISTORICALLY e                       { $1, historically Interval.full (snd $2) }
-| ALWAYS INTERVAL e                    { $1, always (snd $2) (snd $3) }
+| ALWAYS interval e                    { $1, always (snd $2) (snd $3) }
 | ALWAYS e                             { $1, always Interval.full (snd $2) }
 | e AND side e                         { fst $1, conj $3 (snd $1) (snd $4) }
 | e AND e                              { fst $1, conj N (snd $1) (snd $3) }
@@ -229,20 +230,20 @@ ee:
 | e IMP e                              { fst $1, imp N (snd $1) (snd $3) }
 | e IFF sides e                        { fst $1, iff (fst $3) (snd $3) (snd $1) (snd $4) }
 | e IFF e                              { fst $1, iff N N (snd $1) (snd $3) }
-| e SINCE INTERVAL side e              { fst $1, since $4 (snd $3) (snd $1) (snd $5) }
-| e SINCE INTERVAL e                   { fst $1, since N (snd $3) (snd $1) (snd $4) }
+| e SINCE interval side e              { fst $1, since $4 (snd $3) (snd $1) (snd $5) }
+| e SINCE interval e                   { fst $1, since N (snd $3) (snd $1) (snd $4) }
 | e SINCE side e                       { fst $1, since $3 Interval.full (snd $1) (snd $4) }
 | e SINCE e                            { fst $1, since N Interval.full (snd $1) (snd $3) }
-| e UNTIL INTERVAL side e              { fst $1, until $4 (snd $3) (snd $1) (snd $5) }
-| e UNTIL INTERVAL e                   { fst $1, until N (snd $3) (snd $1) (snd $4) }
+| e UNTIL interval side e              { fst $1, until $4 (snd $3) (snd $1) (snd $5) }
+| e UNTIL interval e                   { fst $1, until N (snd $3) (snd $1) (snd $4) }
 | e UNTIL side e                       { fst $1, until $3 Interval.full (snd $1) (snd $4) }
 | e UNTIL e                            { fst $1, until N Interval.full (snd $1) (snd $3) }
-| e TRIGGER INTERVAL side e            { fst $1, trigger $4 (snd $3) (snd $1) (snd $5) }
-| e TRIGGER INTERVAL e                 { fst $1, trigger N (snd $3) (snd $1) (snd $4) }
+| e TRIGGER interval side e            { fst $1, trigger $4 (snd $3) (snd $1) (snd $5) }
+| e TRIGGER interval e                 { fst $1, trigger N (snd $3) (snd $1) (snd $4) }
 | e TRIGGER side e                     { fst $1, trigger $3 Interval.full (snd $1) (snd $4) }
 | e TRIGGER e                          { fst $1, trigger N Interval.full (snd $1) (snd $3) }
-| e RELEASE INTERVAL side e            { fst $1, release $4 (snd $3) (snd $1) (snd $5) }
-| e RELEASE INTERVAL e                 { fst $1, release N (snd $3) (snd $1) (snd $4) }
+| e RELEASE interval side e            { fst $1, release $4 (snd $3) (snd $1) (snd $5) }
+| e RELEASE interval e                 { fst $1, release N (snd $3) (snd $1) (snd $4) }
 | e RELEASE side e                     { fst $1, release $3 Interval.full (snd $1) (snd $4) }
 | e RELEASE e                          { fst $1, release N Interval.full (snd $1) (snd $3) }
 | EXISTS vars DOT e %prec EXISTS       { $1, List.fold_right exists (List.tl $2) (exists (List.hd $2) (snd $4)) }
@@ -314,5 +315,39 @@ ty:
 | TCAUSABLE                            { Cau }
 | TSUPPRESSABLE                        { Sup }
 
+pattern:
+| IEVENTUALLY past_interval                     { PEventually $2 }
+| IONCE past_interval                           { POnce $2 }
+| IALWAYS IIN ITHE IPAST past_interval          { PHistorically $5 }
+| IALWAYS IIN ITHE IFUTURE future_interval      { PAlways $5 }
+| IEVENTUALLY IDELAYING IIF e future_interval   { PUntil ($5, (snd $4)) }
+| IALWAYS ISINCE e future_interval              { PSince ($4, (snd $3)) }
 
+past_interval:
+| common_interval                      { $1 }
+| IBEFORE span                         { Interval.lclosed_UI (snd $2) }
+| ISTRICTLY IBEFORE span               { Interval.lopen_UI (snd $3) }
 
+future_interval:
+| common_interval                      { $1 }
+| IAFTER span                          { Interval.lclosed_UI (snd $2) }
+| ISTRICTLY IAFTER span                { Interval.lopen_UI (snd $3) }
+
+common_interval:
+|                                      { Interval.full }
+| IWITHIN span                         { Interval.lzero_rclosed_BI (snd $2) }
+| IBETWEEN span AND span               { Interval.lclosed_rclosed_BI (snd $2) (snd $4) }
+| ISTRICTLY IBETWEEN span AND span     { Interval.lopen_ropen_BI (snd $3) (snd $5) }
+| IBETWEEN span AND span IEXCLUDED     { Interval.lclosed_ropen_BI (snd $2) (snd $4) }
+| IBETWEEN span IEXCLUDED AND span     { Interval.lopen_rclosed_BI (snd $2) (snd $5) }
+					   
+interval:
+| LSB ib COM ib RSB        { $1, Interval.lclosed_rclosed_BI $2 $4 }
+| LSB ib COM ib RPA        { $1, Interval.lclosed_ropen_BI $2 $4 }
+| LSB ib COM INFINITY RPA  { $1, Interval.lclosed_UI $2 }
+| LPA ib COM ib RSB        { $1, Interval.lopen_rclosed_BI $2 $4 }
+| LPA ib COM ib RPA        { $1, Interval.lopen_ropen_BI $2 $4 }
+| LPA ib COM INFINITY RPA  { $1, Interval.lopen_UI $2 }
+
+ib:
+| span { snd $1 }

@@ -46,12 +46,21 @@ let compare_section_kind kind kind' =
   in
   compare_tuple (rank kind) (rank kind')
 
+type pattern =
+  | PPresent
+  | PEventually of Interval.t
+  | PAlways of Interval.t
+  | PUntil of Interval.t * Formula.t
+  | POnce of Interval.t
+  | PHistorically of Interval.t
+  | PSince of Interval.t * Formula.t
+
 type rule =
-  | Obligation   of (Lexing.position * Formula.t) list * (Lexing.position * Formula.t) list
-  | Permission   of (Lexing.position * Formula.t) list * (Lexing.position * Formula.t) list
-  | Constitutive of (Lexing.position * Formula.t) list * (Lexing.position * Formula.t) list
-  | Exception    of (Lexing.position * Formula.t) list * (Lexing.position * reference) list
-  | Scope        of (Lexing.position * Formula.t) list * (Lexing.position * reference) list
+  | Obligation   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern
+  | Permission   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern
+  | Constitutive of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list
+  | Exception    of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
+  | Scope        of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
 
 type rule_type = Vanilla | Enforceable | Transparent
 
@@ -141,27 +150,38 @@ let string_of_reference (rs, rule) =
   let string_of_section_kind_and_name (s, n) = string_of_section_kind s ^ " \"" ^ n ^ "\"" in
   "{ " ^ String.concat ~sep:" " (List.map ~f:string_of_section_kind_and_name rs) ^ rule_id ^ " }"
 
+let string_of_pattern = function
+  | PPresent -> ""
+  | PEventually i -> " eventually " ^ Interval.to_string i 
+  | PAlways i -> " always in the future " ^ Interval.to_string i 
+  | PUntil (i, f) -> " eventually delaying if " ^ Formula.to_string f ^ " " ^ Interval.to_string i
+  | POnce i -> " once " ^ Interval.to_string i
+  | PHistorically i -> " always in the past " ^ Interval.to_string i
+  | PSince (i, f) -> " always since " ^ Formula.to_string f ^ " " ^ Interval.to_string i
+
 let string_of_rule i rule =
   let to_string f =
     Etc.tabs (i+1) ^ Formula.to_string f
   in
-  let string_of_imp_rule verb f g =
-      Etc.tabs i     ^ "whenever"                       ^ "\n"
+  let string_of_imp_rule verb f p g q =
+      Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
     ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
-    ^ Etc.tabs i     ^ verb                             ^ "\n"
+    ^ Etc.tabs i     ^ verb       ^ string_of_pattern q ^ "\n"
     ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
   in
-  let string_of_exc_rule verb f rs =
-      Etc.tabs i     ^ "whenever"          ^ "\n"
+  let string_of_exc_rule verb f p rs =
+      Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
     ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
     ^ Etc.tabs i     ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,r') -> string_of_reference r') rs)
   in
   match rule with
-  | Obligation (f, g) | Permission (f, g) | Constitutive (f, g)
-    -> string_of_imp_rule (verb_of_rule rule) f g
-  | Exception (f, references) | Scope (f, references)
-    -> string_of_exc_rule (verb_of_rule rule) f references
+  | Obligation (f, p, g, q) | Permission (f, p, g, q)
+    -> string_of_imp_rule (verb_of_rule rule) f p g q
+  | Constitutive (f, p, g)
+    -> string_of_imp_rule (verb_of_rule rule) f p g PPresent
+  | Exception (f, p, references) | Scope (f, p, references)
+    -> string_of_exc_rule (verb_of_rule rule) f p references
 
 let string_of_args args i = 
     let string_of_arg (_, name, typ_alias) = 

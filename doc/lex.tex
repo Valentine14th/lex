@@ -337,7 +337,7 @@ every \Lex{} rule declaration represents a statement of the form
 where $form_1$ and $form_2$ are determined by $patt_1$ and $patt_2$, respectively. These options use the following
 grammars for time and time intervals:
 \begin{align*}
-  time\_unit ::= &~\kw{y} \mid \kw{d} \mid \kw{h} \mid \kw{s} \mid \kw{ms} \\
+  time\_unit ::= &~\kw{y} \mid \kw{d} \mid \kw{h} \mid \kw{s}  \\
   time\_bound ::= &~ int~time\_unit \\
   time\_interval ::= &~ \kw{within}~time\_bound \mid \kw{before}~time\_bound \mid \kw{after}~time\_bound
 \end{align*}
@@ -391,19 +391,15 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % todo:
 % more complex terms: algebraic data types...
 % access databases
-% reason about time explicitly
 % points inside rules
 % implement temporal patterns
 % Erwägungsgründe
 % design survey
 % enforcement of constitutive rules
-% clarify relationship to (prioritized) default logic (→ paper)
 % add readings of complex terms
-% typing of unops and binops 
+% arithmetics of time
 
 % Enforcer wishlist
-
-% WP1 DONE
 
 % WP2 (new)
 % - new data structure (= sequence of named formulae with references)
@@ -420,6 +416,9 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 % WP6
 % - let bindings
+
+% WP7
+% - time arithmetics
 
 {%\setlength\bibsep{2pt}
 \small

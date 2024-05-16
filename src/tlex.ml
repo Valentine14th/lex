@@ -1,12 +1,21 @@
 open Core
 open Lex
 
+type tpattern =
+  | TPPresent
+  | TPEventually of Interval.t
+  | TPAlways of Interval.t
+  | TPUntil of Interval.t * Tformula.t
+  | TPOnce of Interval.t
+  | TPHistorically of Interval.t
+  | TPSince of Interval.t * Tformula.t
+
 type trule =
-  | TObligation   of (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list
-  | TPermission   of (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list
-  | TConstitutive of (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list
-  | TException    of (Lexing.position * Tformula.t) list * (Lexing.position * Label.t) list * Tformula.t
-  | TScope        of (Lexing.position * Tformula.t) list * (Lexing.position * Label.t) list * Tformula.t
+  | TObligation   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
+  | TPermission   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
+  | TConstitutive of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list
+  | TException    of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t) list * Tformula.t
+  | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t) list * Tformula.t
 
 type 'a tannot =
   | TALex of 'a
@@ -49,7 +58,7 @@ let tempty =
     tstmts = [];
     taliases = Map.empty (module String);
     tevents = Map.empty (module String);
-    tfunctions = Map.empty (module String);
+    tfunctions = Builtin.functions_map;
     variables = Map.empty (module Int); 
     rule_tree = Label.RuleTree.empty;
     exception_predicates = Map.empty (module Int);
@@ -133,38 +142,43 @@ let verb_of_trule = function
   | TException _ -> "except"
   | TScope _ -> "scope"
 
+
+let string_of_tpattern = function
+  | TPPresent -> ""
+  | TPEventually i -> " eventually " ^ Interval.to_string i 
+  | TPAlways i -> " always in the future " ^ Interval.to_string i 
+  | TPUntil (i, f) -> " eventually delaying if " ^ Tformula.to_string f ^ " " ^ Interval.to_string i
+  | TPOnce i -> " once " ^ Interval.to_string i
+  | TPHistorically i -> " always in the past " ^ Interval.to_string i
+  | TPSince (i, f) -> " always since " ^ Tformula.to_string f ^ " " ^ Interval.to_string i
+
+
 let string_of_trule i trule =
   let to_string f =
     Etc.tabs (i+1) ^ Tformula.to_string f
   in
-  let string_of_imp_rule verb f g =
-    Printf.sprintf "%swhenever\n%s\n%s%s\n%s"
-      (Etc.tabs i)
-      (String.concat ~sep:"\n" (List.map ~f:to_string f))
-      (Etc.tabs i)
-      verb
-      (String.concat ~sep:"\n" (List.map ~f:to_string g))
+  let string_of_imp_rule verb f p g q =
+    Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ Etc.tabs i   ^ verb     ^ string_of_tpattern q ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
   in
-  let string_of_ref_rule verb f trefs =
-    let string_of_trefs labels =
-      let refs = List.map labels ~f:Label.reference_of_label in
-      String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
-    in
-    Printf.sprintf "%swhenever\n%s\n%s%s \"%s\""
-      (Etc.tabs i)
-      (String.concat ~sep:"\n" (List.map ~f:to_string f))
-      (Etc.tabs i)
-      verb
-      (string_of_trefs trefs)
+  let string_of_ref_rule verb f p trefs =
+    let refs = List.map trefs ~f:Label.reference_of_label in
+    Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ Etc.tabs i   ^ verb                             ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
   in
   match trule with
-  | TObligation (f, g)
-  | TPermission (f, g)
-  | TConstitutive (f, g)
-    -> string_of_imp_rule (verb_of_trule trule) (List.map ~f:snd f) (List.map ~f:snd g)
-  | TException (f, trefs, _)
-  | TScope (f, trefs, _)
-    -> string_of_ref_rule (verb_of_trule trule) (List.map ~f:snd f) (List.map ~f:snd trefs)
+  | TObligation (f, p, g, q)
+  | TPermission (f, p, g, q)
+    -> string_of_imp_rule (verb_of_trule trule) f p g q
+  | TConstitutive (f, p, g)
+    -> string_of_imp_rule (verb_of_trule trule) f p g TPPresent
+  | TException (f, p, trefs, _)
+  | TScope (f, p, trefs, _)
+    -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:snd trefs)
 
 let string_of_tstmt ?(i=0) =
   function

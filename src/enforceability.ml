@@ -34,14 +34,14 @@ let rec is_past_guarded x p f =
   | TExists (y, f) | TForall (y, f) -> not (String.equal x y) && is_past_guarded x p f
   | TPrev (_, f) -> p && is_past_guarded x p f
   | TOnce (_, f) | TEventually (_, f) when p -> is_past_guarded x p f
-  | TOnce (i, f) | TEventually (i, f) -> Interval.mem 0 i && is_past_guarded x p f
+  | TOnce (i, f) | TEventually (i, f) -> Interval.has_zero i && is_past_guarded x p f
   | THistorically (_, f) | TAlways (_, f) when not p -> is_past_guarded x p f
-  | THistorically (i, f) -> Interval.mem 0 i && is_past_guarded x p f
-  | TSince (_, i, f, g) when p -> not (Interval.mem 0 i) && is_past_guarded x p f
+  | THistorically (i, f) -> Interval.has_zero i && is_past_guarded x p f
+  | TSince (_, i, f, g) when p -> not (Interval.has_zero i) && is_past_guarded x p f
                                  || is_past_guarded x p g
-  | TUntil (_, i, f, g) when p -> not (Interval.mem 0 i) && is_past_guarded x p f
+  | TUntil (_, i, f, g) when p -> not (Interval.has_zero i) && is_past_guarded x p f
                                  || is_past_guarded x p f && is_past_guarded x p g
-  | TSince (_, i, _, g) | TUntil (_, i, _, g) -> Interval.mem 0 i && is_past_guarded x p g
+  | TSince (_, i, _, g) | TUntil (_, i, _, g) -> Interval.has_zero i && is_past_guarded x p g
   | _ -> false
   in r
 
@@ -181,11 +181,11 @@ let rec types pols t f =
       | TForall (x, _) -> error ("for causability " ^ x ^ " must be past-guarded")
       | TNext (i, f) when Interval.equal i Interval.full -> types pols Cau f
       | TNext _ -> error "○ with non-[0,∞) interval is never Cau"
-      | TOnce (i, g) | TSince (_, i, _, g) when Interval.mem 0 i -> types pols Cau g
+      | TOnce (i, g) | TSince (_, i, _, g) when Interval.has_zero i -> types pols Cau g
       | TOnce _ | TSince _ -> error "⧫[a,b) or S[a,b) with a > 0 is never Cau"
       | TEventually (_, f) | TAlways (_, f) -> types pols Cau f
       | TUntil (LR, B _, f, g) -> conj (types pols Cau f) (types pols Cau g)
-      | TUntil (_, i, _, g) when Interval.mem 0 i -> types pols Cau g
+      | TUntil (_, i, _, g) when Interval.has_zero i -> types pols Cau g
       | TUntil (_, _, f, g) -> conj (types pols Cau f) (types pols Cau g)
       | TPrev _ -> error "● is never Cau"
       | _ -> Impossible (EFormula (None, f, t))
@@ -210,14 +210,14 @@ let rec types pols t f =
       | TExists (x, _) -> error ("for suppressability " ^ x ^ " must be past-guarded")
       | TForall (_, f) -> types pols Sup f
       | TNext (_, f) -> types pols Sup f
-      | THistorically (i, f) when Interval.mem 0 i -> types pols Sup f
+      | THistorically (i, f) when Interval.has_zero i -> types pols Sup f
       | THistorically _ -> error "■[a,b) with a > 0 is never Sup"
-      | TSince (_, i, f, _) when not (Interval.mem 0 i) -> types pols Sup f
+      | TSince (_, i, f, _) when not (Interval.has_zero i) -> types pols Sup f
       | TSince (_, _, f, g) -> conj (types pols Sup f) (types pols Sup g)
       | TEventually (_, f) | TAlways (_, f) -> types pols Sup f
-      | TUntil (L, i, f, _) when not (Interval.mem 0 i) -> types pols Sup f
-      | TUntil (R, i, _, g) when not (Interval.mem 0 i) -> types pols Sup g
-      | TUntil (_, i, f, g) when not (Interval.mem 0 i) -> disj (types pols Sup f) (types pols Sup g)
+      | TUntil (L, i, f, _) when not (Interval.has_zero i) -> types pols Sup f
+      | TUntil (R, i, _, g) when not (Interval.has_zero i) -> types pols Sup g
+      | TUntil (_, i, f, g) when not (Interval.has_zero i) -> disj (types pols Sup f) (types pols Sup g)
       | TUntil (_, _, _, g) -> types pols Sup g
       | TPrev _ -> error "● is never Sup"
       | _ -> Impossible (EFormula (None, f, t))
@@ -230,7 +230,7 @@ let rec convert (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t opti
   let convert = convert pols b in
   let default_L (s: Side.t) = if Side.equal s R then Side.R else L in
   let set_b = function
-    | Interval.U (UI a) -> Interval.B (BI (a, b))
+    | Interval.U a -> Interval.B (a, b)
     | B _ as i -> i in
   let f =
     match enftype with
@@ -289,15 +289,15 @@ let rec convert (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t opti
         | TForall (x, f) when is_past_guarded x false f -> (convert Cau f) >>| (fun f' -> Eformula.EForall (x, f'))
         | TNext (i, f) when Interval.equal i Interval.full ->
            (convert Cau f) >>| (fun f' -> Eformula.ENext (i, f'))
-        | TOnce (i, f) when Interval.mem 0 i ->
+        | TOnce (i, f) when Interval.has_zero i ->
            (convert Cau f) >>| (fun f' -> Eformula.EOnce (i, f'))
-        | TSince (_, i, f, g) when Interval.mem 0 i ->
+        | TSince (_, i, f, g) when Interval.has_zero i ->
            (convert Cau g) >>| (fun g' -> Eformula.ESince (R, i, Eformula.of_tformula f, g'))
         | TEventually (i, f) -> (convert Cau f) >>| (fun f' -> Eformula.EEventually (set_b i, Interval.is_bounded i, f'))
         | TAlways (i, f) -> (convert Cau f) >>| (fun f' -> Eformula.EAlways (i, true, f'))
         | TUntil (LR, i, f, g) ->
            (convert Cau f) >>= (fun f' -> (convert Cau g) >>| (fun g' -> Eformula.EUntil (LR, set_b i, Interval.is_bounded i, f', g')))
-        | TUntil (_, i, f, g) when Interval.mem 0 i ->
+        | TUntil (_, i, f, g) when Interval.has_zero i ->
            (convert Cau g) >>| (fun g' -> Eformula.EUntil (LR, set_b i, Interval.is_bounded i, Eformula.of_tformula f, g'))
         | TUntil (L, i, f, g) ->
            (convert Cau g) >>| (fun g' -> Eformula.EUntil (LR, set_b i, Interval.is_bounded i, Eformula.of_tformula f, g'))
@@ -341,19 +341,19 @@ let rec convert (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t opti
            (convert Sup f) >>| (fun f' -> Eformula.EExists (x, f'))
         | TForall (x, f) ->  (convert Sup f) >>| (fun f' -> Eformula.EForall (x, f'))
         | TNext (i, f) -> (convert Sup f) >>= (fun f' -> Some (Eformula.ENext (i, f')))
-        | THistorically (i, f) when Interval.mem 0 i ->
+        | THistorically (i, f) when Interval.has_zero i ->
            (convert Sup f) >>| (fun f' -> Eformula.EHistorically (i, f'))
-        | TSince (_, i, f, g) when not (Interval.mem 0 i) ->
+        | TSince (_, i, f, g) when not (Interval.has_zero i) ->
            (convert Sup f) >>| (fun f' -> Eformula.ESince (L, i, f', Eformula.of_tformula g))
         | TSince (_, i, f, g) -> (convert Sup f) >>= (fun f' -> (convert Sup g)
                                                                     >>| (fun g' -> Eformula.ESince (LR, i, f', g')))
         | TEventually (i, f) -> (convert Sup f) >>| (fun f' -> Eformula.EEventually (i, true, f'))
         | TAlways (i, f) -> (convert Sup f) >>| (fun f' -> Eformula.EAlways (set_b i, Interval.is_bounded i, f'))
-        | TUntil (L, i, f, g) when not (Interval.mem 0 i) ->
+        | TUntil (L, i, f, g) when not (Interval.has_zero i) ->
            (convert Sup f) >>| (fun f' -> Eformula.EUntil (L, i, true, f', Eformula.of_tformula g))
-        | TUntil (R, i, f, g) when not (Interval.mem 0 i) ->
+        | TUntil (R, i, f, g) when not (Interval.has_zero i) ->
            (convert Sup g) >>| (fun g' -> Eformula.EUntil (R, i, true, Eformula.of_tformula f, g'))
-        | TUntil (_, i, f, g) when not (Interval.mem 0 i) ->
+        | TUntil (_, i, f, g) when not (Interval.has_zero i) ->
            begin
              match convert Sup f with
              | Some f' -> Some (Eformula.EUntil (L, i, true, f', Eformula.of_tformula g))
@@ -504,22 +504,31 @@ let convert_transparently_enforceable pols f b pos =
                      (Tformula.to_string f) in
     Util.type_error err_msg pos
 
+let epattern_of_tpattern = function
+  | TPPresent -> EPPresent
+  | TPEventually i -> EPEventually i
+  | TPAlways i -> EPAlways i
+  | TPUntil (i, f) -> EPUntil (i, Eformula.of_tformula f)
+  | TPOnce i -> EPOnce i
+  | TPHistorically i -> EPHistorically i
+  | TPSince (i, f) -> EPSince (i, Eformula.of_tformula f)
+
 (* TODO: type check formulas with information in pols *)
 (* let type_trule pols = function *)
 let type_trule _ = function
   | TSRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let rule =  (*[FH] todo, filler code!*) 
         match rule with
-        | TException (f1, refs, f2) -> 
-           EException (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), refs, Eformula.of_tformula f2)
-        | TScope (f1, refs, f2) -> 
-           EScope (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), refs, Eformula.of_tformula f2)
-        | TObligation (f1, f2) ->
-           EObligation (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
-        | TPermission (f1, f2) ->
-           EPermission (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
-        | TConstitutive (f1, f2) ->
-           EConstitutive (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
+        | TException (f1, p, refs, f2) -> 
+           EException (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, refs, Eformula.of_tformula f2)
+        | TScope (f1, p, refs, f2) -> 
+           EScope (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, refs, Eformula.of_tformula f2)
+        | TObligation (f1, p, f2, q) ->
+           EObligation (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern q)
+        | TPermission (f1, p, f2, q) ->
+           EPermission (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern q)
+        | TConstitutive (f1, p, f2) ->
+           EConstitutive (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
       in
       ESRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string)
     end

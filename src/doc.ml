@@ -49,17 +49,55 @@ let rec html_of_formula_ formula_id l f =
 
 let html_of_formula formula_id f =
   div "lex-formula" (html_of_formula_ formula_id 0 f)
+
+let html_of_span s = const (Lextime.Span.to_string s)
+
+let html_of_interval future = function
+  | Interval.U (C s) when Interval.is_zero s -> ""
+  | U (C s) ->
+     (if future then kw "after" else kw "before") ^ html_of_span s
+  | U (O s) ->
+     kw "strictly" ^ (if future then kw "after" else kw "before") ^ html_of_span s
+  | B (C ls, C rs) when Interval.is_zero ls -> kw "within" ^ html_of_span rs
+  | B (C ls, C rs) ->
+     kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs
+  | B (O ls, O rs) ->
+     kw "strictly" ^ kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs
+  | B (C ls, O rs) ->
+     kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs ^ kw "excluded"
+  | B (O ls, C rs) ->
+     kw "between" ^ html_of_span ls ^ kw "excluded" ^ kw "and" ^ html_of_span rs
+    
+
+let html_of_pattern formula_id = function
+  | EPPresent -> ""
+  | EPEventually i -> kw "eventually"
+                      ^ html_of_interval true i
+  | EPAlways i -> kw "always" ^ kw "in" ^ kw "the" ^ kw "past"
+                  ^ html_of_interval true i
+  | EPUntil (i, f) -> kw "eventually" ^ kw "delaying" ^ kw "if"
+                      ^ html_of_formula formula_id f
+                      ^ html_of_interval true i
+  | EPOnce i -> kw "once"
+                ^ html_of_interval false i
+  | EPHistorically i -> kw "always" ^ kw "in" ^ kw "the" ^ kw "future"
+                        ^ html_of_interval false i
+  | EPSince (i, f) -> kw "always" ^ kw "since"
+                      ^ html_of_formula formula_id f
+                      ^ html_of_interval false i
   
 let html_of_erule rule_id erule =
   let formula_id infix =
     Printf.sprintf "%s-%s-%d" rule_id infix in
-  let string_of_imp_rule verb f g =
+  let string_of_imp_rule verb f p g q =
     div "lex-rule-if" (
         kw "whenever"
+        ^ html_of_pattern "if-pattern" p
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
       )
     ^ div "lex-rule-then" (
           kw verb
+          ^ html_of_pattern "then-pattern" q
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
@@ -67,9 +105,10 @@ let html_of_erule rule_id erule =
     let refs = List.map labels ~f:Label.reference_of_label in
     String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: pretty print reference, e.g. with syntax highlighting of keywords *)
   in 
-  let string_of_ref_rule verb f refs =
+  let string_of_ref_rule verb f p refs =
     div "lex-rule-if" (
         kw "whenever"
+        ^ html_of_pattern "if-pattern" p
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
       )
     ^ div "lex-rule-then" (
@@ -78,18 +117,19 @@ let html_of_erule rule_id erule =
         )
   in
   match erule with
-  | EObligation (f, g)
-  | EPermission (f, g)
-  | EConstitutive (f, g)
-    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd g)
-  | EException (f, refs, _)
-  | EScope (f, refs, _)
-    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f: snd refs)
+  | EObligation (f, p, g, q)
+    | EPermission (f, p, g, q)
+    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q
+  | EConstitutive (f, p, g)
+    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
+  | EException (f, p, refs, _)
+  | EScope (f, p, refs, _)
+    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f: snd refs)
 
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
   | Enforceable -> "enforceable"
-  | Transparent -> "transUtil.paren_stringtly enforceable"
+  | Transparent -> "transparently enforceable"
 
 let html_of_rule_constr_type = function
   | Lex.Suppressing idents -> "suppressing", idents

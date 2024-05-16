@@ -80,7 +80,6 @@ module TypeTerm = struct
     | TypeVar v, TypeVar v' -> String.equal v v'
     | _, _ -> false
       
-
   let to_string = function
     | TypeConst tt -> "TypeConst " ^ Dom.string_of_tt tt
     | TypeVar i    -> "TypeVar " ^ i

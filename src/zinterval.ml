@@ -10,7 +10,7 @@
 (*******************************************************************)
 
 open Core
-open Interval
+open Tinterval
 
 type t = ZB of bt | ZUL of ut | ZUR of ut | ZU
 
@@ -33,9 +33,12 @@ let lclosed_ropen_BI i j = ZB (nonempty_BI i (j - 1))
 let lclosed_rclosed_BI i j = ZB (nonempty_BI i j)
 
 let singleton i = lclosed_rclosed_BI i i
-let of_interval = function
+
+let of_tinterval = function
   | B (BI (a, b)) -> ZB (BI (a, b))
   | U (UI a) -> ZUR (UI a)
+
+let of_interval i = of_tinterval (of_interval i)
 
 let full = ZU
 

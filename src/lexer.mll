@@ -4,7 +4,6 @@
 
   exception SyntaxError of string
 
-  let make_interval _ = Interval.lex (fun () -> raise (SyntaxError "interval lexing did not succeed"))
 }
 
 let white = [' ' '\t']+
@@ -78,6 +77,21 @@ rule read =
   | "scope"        { SCOPE }
   | "suppressing"  { SUPPRESSING }
   | "causing"      { CAUSING }
+  | "within"       { IWITHIN }
+  | "before"       { IBEFORE }
+  | "strictly"     { ISTRICTLY }
+  | "after"        { IAFTER }
+  | "between"      { IBETWEEN }
+  | "excluded"     { IEXCLUDED }
+  | "eventually"   { IEVENTUALLY }
+  | "always"       { IALWAYS }
+  | "once"         { IONCE }
+  | "delaying"     { IDELAYING }
+  | "if"           { IIF }
+  | "in"           { IIN }
+  | "the"          { ITHE }
+  | "future"       { IFUTURE }
+  | "past"         { IPAST }
   | "false" | "⊥"  { FALSE lexbuf.lex_start_p }
   | "true" | "⊤"   { TRUE lexbuf.lex_start_p }
   | "="            { EQ lexbuf.lex_start_p }
@@ -98,8 +112,11 @@ rule read =
   | "EVENTUALLY" | "F" | "◊" { EVENTUALLY lexbuf.lex_start_p }
   | "GLOBALLY_PAST" | "HISTORICALLY" | "■" { HISTORICALLY lexbuf.lex_start_p }
   | "ONCE" | "⧫"   { ONCE lexbuf.lex_start_p }
-  | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)
-                   { INTERVAL (lexbuf.lex_start_p, make_interval lexbuf l i j r) }
+  | '['              { LSB lexbuf.lex_start_p }
+  | ']'              { RSB lexbuf.lex_start_p }
+  | "INFINITY" | "∞" { INFINITY }
+                   (*  | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)*)
+  (*                   { INTERVAL (lexbuf.lex_start_p, make_interval lexbuf l i j r) }*)
   | ident          { IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf) }
   | float1 | float2 { FLOAT (lexbuf.lex_start_p, float_of_string (Lexing.lexeme lexbuf)) }
   | int            { INT (lexbuf.lex_start_p, int_of_string (Lexing.lexeme lexbuf)) }

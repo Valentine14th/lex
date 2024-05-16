@@ -2,12 +2,21 @@ open Core
 open Lex
 open Tlex
 
+type epattern =
+  | EPPresent
+  | EPEventually of Interval.t
+  | EPAlways of Interval.t
+  | EPUntil of Interval.t * Eformula.t
+  | EPOnce of Interval.t
+  | EPHistorically of Interval.t
+  | EPSince of Interval.t * Eformula.t
+
 type erule =
-  | EObligation   of (Lexing.position * Eformula.t) list * (Lexing.position * Eformula.t) list
-  | EPermission   of (Lexing.position * Eformula.t) list * (Lexing.position * Eformula.t) list
-  | EConstitutive of (Lexing.position * Eformula.t) list * (Lexing.position * Eformula.t) list
-  | EException    of (Lexing.position * Eformula.t) list * (Lexing.position * Label.t) list * Eformula.t
-  | EScope        of (Lexing.position * Eformula.t) list * (Lexing.position * Label.t) list * Eformula.t
+  | EObligation   of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list * epattern
+  | EPermission   of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list * epattern
+  | EConstitutive of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list
+  | EException    of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t) list * Eformula.t
+  | EScope        of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t) list * Eformula.t
 
 type estmt =
   | ESImport  of Lexing.position * string list * import_format
@@ -55,38 +64,42 @@ let verb_of_erule = function
   | EException _ -> "except"
   | EScope _ -> "scope"
 
+let string_of_epattern = function
+  | EPPresent -> ""
+  | EPEventually i -> " eventually " ^ Interval.to_string i 
+  | EPAlways i -> " always in the future " ^ Interval.to_string i 
+  | EPUntil (i, f) -> " eventually delaying if " ^ Eformula.to_string f ^ " " ^ Interval.to_string i
+  | EPOnce i -> " once " ^ Interval.to_string i
+  | EPHistorically i -> " always in the past " ^ Interval.to_string i
+  | EPSince (i, f) -> " always since " ^ Eformula.to_string f ^ " " ^ Interval.to_string i
+
+
 let string_of_erule i erule =
   let to_string f =
     Etc.tabs (i+1) ^ Eformula.to_string f
   in
-  let string_of_imp_rule verb f g =
-    Printf.sprintf "%swhenever\n%s\n%s%s\n%s"
-      (Etc.tabs i)
-      (String.concat ~sep:"\n" (List.map ~f:to_string f))
-      (Etc.tabs i)
-      verb
-      (String.concat ~sep:"\n" (List.map ~f:to_string g))
+  let string_of_imp_rule verb f p g q =
+    Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ Etc.tabs i     ^ verb       ^ string_of_epattern q ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
   in
-  let string_of_ref_rule verb f erefs =
-    let string_of_erefs labels = 
-      let refs = List.map labels ~f:Label.reference_of_label in
-      String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
-    in
-    Printf.sprintf "%swhenever\n%s\n%s%s \"%s\""
-      (Etc.tabs i)
-      (String.concat ~sep:"\n" (List.map ~f:to_string f))
-      (Etc.tabs i)
-      verb
-      (string_of_erefs erefs)
+  let string_of_ref_rule verb f p trefs =
+    let refs = List.map trefs ~f:Label.reference_of_label in
+    Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ Etc.tabs i   ^ verb                             ^ "\n"
+    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
   in
   match erule with
-  | EObligation (f, g)
-  | EPermission (f, g)
-  | EConstitutive (f, g)
-    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd g)
-  | EException (f, erefs, _)
-  | EScope (f, erefs, _)
-    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) (List.map ~f:snd erefs)
+  | EObligation (f, p, g, q)
+    | EPermission (f, p, g, q)
+    -> string_of_imp_rule (verb_of_erule erule) f p g q
+  | EConstitutive (f, p, g)
+    -> string_of_imp_rule (verb_of_erule erule) f p g EPPresent
+  | EException (f, p, erefs, _)
+  | EScope (f, p, erefs, _)
+    -> string_of_ref_rule (verb_of_erule erule) f p (List.map ~f:snd erefs)
 
 let string_of_estmt ?(i=0) =
   function

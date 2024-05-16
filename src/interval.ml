@@ -8,36 +8,62 @@
 (*  Leonardo Lima (UCPH)                                           *)
 (*******************************************************************)
 
+open Lextime
 
-(* Unbounded [i,+∞) *)
-type ut = UI of int
+type bound = C of Span.t | O of Span.t
 
-(* Bounded [i,j] *)
-type bt = BI of int * int
+let equal_bound b b' = match b, b' with
+  | C s, C s' -> Span.equal s s'
+  | O s, O s' -> Span.equal s s'
+  | _         -> false
 
-type t = B of bt | U of ut
+let leq_bounds b b' = match b, b' with
+  | C s, C s' -> Span.(s <= s')
+  | O s, O s' -> Span.(s <= s')
+  | C s, O s' -> Span.(s < s')
+  | O s, C s' -> Span.(s < s')
+
+let lt_bounds b b' = match b, b' with
+  | C s, C s' -> Span.(s < s')
+  | O s, O s' -> Span.(s < s')
+  | C s, O s' -> Span.(s < s')
+  | O s, C s' -> Span.(s < s')
+
+type t = B of bound * bound | U of bound
 
 let equal i i' = match i, i' with
-  | B (BI (a, b)), B (BI (a', b')) -> Int.equal a a' && Int.equal b b'
-  | U (UI a), U (UI a') -> Int.equal a a'
+  | B (lb, ub), B (lb', ub') -> equal_bound lb lb' && equal_bound ub ub'
+  | U lb,       U lb'        -> equal_bound lb lb'
+  | _                        -> false
+
+let lclosed_UI s = U (C s)
+let lopen_UI s   = U (O s)
+
+let nonempty_BI lb rb =
+  if lt_bounds lb rb then
+    true
+  else
+    raise (Invalid_argument "empty interval")
+
+let lopen_ropen_BI ls rs = B (O ls, O rs)
+let lopen_rclosed_BI ls rs = B (O ls, C rs)
+let lclosed_ropen_BI ls rs = B (C ls, O rs)
+let lzero_ropen_BI s = B (C Span.zero, O s)
+let lclosed_rclosed_BI ls rs = B (C ls, C rs)
+let lzero_rclosed_BI s = B (C Span.zero, C s)
+
+let singleton s = lclosed_rclosed_BI s s
+let is_zero s = Span.equal s Span.zero
+
+let has_zero = function
+  | B (C s, _) 
+    | U (C s) when Span.equal s Span.zero -> true
   | _ -> false
 
-let lclosed_UI i = U (UI i)
-let lopen_UI i = U (UI (i + 1))
-
-let nonempty_BI l r = if l <= r then BI (l, r) else raise (Invalid_argument "empty interval")
-let lopen_ropen_BI i j = B (nonempty_BI (i + 1) (j - 1))
-let lopen_rclosed_BI i j = B (nonempty_BI (i + 1) j)
-let lclosed_ropen_BI i j = B (nonempty_BI i (j - 1))
-let lclosed_rclosed_BI i j = B (nonempty_BI i j)
-
-let singleton i = lclosed_rclosed_BI i i
-let is_zero i = i == singleton 0
-
-let full = U (UI 0)
+let full = U (C Span.zero)
 
 let case f1 f2 = function
-  | B i -> f1 i
+  | B (i, j) -> f1 (i, j)
   | U i -> f2 i
 
 let is_bounded = function
@@ -48,69 +74,13 @@ let is_bounded_exn op = function
   | B _ -> ()
   | U _ -> raise (Invalid_argument (Printf.sprintf "unbounded future operator: %s" op))
 
-let sub i t = match i with
-  | B (BI (a, b)) -> B (BI (a, b - t))
-  | U _ -> raise (Invalid_argument (Printf.sprintf "unbounded future operator"))
-
-let sub2 i t = match i with
-  | B (BI (a, b)) -> B (BI (max 0 (a - t), max 0 (b - t)))
-  | U (UI a) -> U (UI (max 0 (a - t)))
-
-let boundaries = function
-  | B (BI (a, b)) -> (a, b)
-  | U _ -> raise (Invalid_argument (Printf.sprintf "unbounded future operator"))
-
-let map f1 f2 = case (fun i -> B (f1 i)) (fun i -> U (f2 i))
-
-let mem t =
-  let mem_UI t (UI l) = l <= t in
-  let mem_BI t (BI (l, r)) = l <= t && t <= r in
-  case (mem_BI t) (mem_UI t)
-
-let left =
-  let left_UI (UI l) = l in
-  let left_BI (BI (l, _)) = l in
-  case left_BI left_UI
-
-let right =
-  let right_UI (UI _) = None in
-  let right_BI (BI (_, r)) = Some(r) in
-  case right_BI right_UI
-
-let lub i i' =
-  let l = min (left i) (left i') in
-  match right i, right i' with
-  | Some r, Some r' -> lclosed_rclosed_BI l (max r r')
-  | _ -> lclosed_UI l
-
-let below_UI t (UI l) = t < l
-let below_BI t (BI (l, _)) = t < l
-let below t = case (below_BI t) (below_UI t)
-
-(* Check if t > interval *)
-let above_UI _ (UI _) = false
-let above_BI t (BI (_, r)) = t > r
-let above t = case (above_BI t) (above_UI t)
-
-let to_string_BI = function
-  | BI (i, j) -> Printf.sprintf "[%d,%d]" i j
+let map f1 f2 = case (fun (i, j) -> let i', j' = f1 (i, j) in B (i', j')) (fun i -> U (f2 i))
 
 let to_string = function
-  | U (UI 0) -> ""
-  | U (UI i) -> Printf.sprintf "[%d,∞)" i
-  | B i -> Printf.sprintf "%a" (fun _ -> to_string_BI) i
-
-let lex error l i j r =
-  (match j with
-   | "INFINITY" | "∞" | "*" ->
-      (match l with
-       | '[' -> lclosed_UI (int_of_string i)
-       | '(' -> lopen_UI (int_of_string i)
-       | _ -> error ())
-   | _ ->
-      (match l, r with
-       | '[',']' -> lclosed_rclosed_BI (int_of_string i) (int_of_string j)
-       | '(',']' -> lopen_rclosed_BI (int_of_string i) (int_of_string j)
-       | '[',')' -> lclosed_ropen_BI (int_of_string i) (int_of_string j)
-       | '(',')' -> lopen_ropen_BI (int_of_string i) (int_of_string j)
-       | _ -> error ()))
+  | U (C s) when Span.equal s Span.zero -> ""
+  | U (C s) -> Printf.sprintf "[%s,∞)" (Span.to_string s)
+  | U (O s) -> Printf.sprintf "(%s,∞)" (Span.to_string s)
+  | B (C ls, C rs) -> Printf.sprintf "[%s,%s]" (Span.to_string ls) (Span.to_string rs)
+  | B (C ls, O rs) -> Printf.sprintf "[%s,%s)" (Span.to_string ls) (Span.to_string rs)
+  | B (O ls, C rs) -> Printf.sprintf "(%s,%s]" (Span.to_string ls) (Span.to_string rs)
+  | B (O ls, O rs) -> Printf.sprintf "(%s,%s)" (Span.to_string ls) (Span.to_string rs)
