@@ -75,19 +75,21 @@ let string_of_epattern = function
 
 
 let string_of_erule i erule =
-  let to_string f =
-    Etc.tabs (i+1) ^ Eformula.to_string f
-  in
+  let to_string f = Etc.tabs (i+1) ^ Eformula.to_string f in
+  let string_of_formula_list f =
+    String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
+  (*let string_of_formula_list_list fs =
+    String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb f p g q =
     Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i     ^ verb       ^ string_of_epattern q ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
+    ^ string_of_formula_list g
   in
   let string_of_ref_rule verb f p trefs =
     let refs = List.map trefs ~f:Label.reference_of_label in
     Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb                             ^ "\n"
     ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
   in

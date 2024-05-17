@@ -73,7 +73,7 @@ type import_format =
   | IFormex
   | IAkomaNtoso
 
-type event_type = Event | Predicate
+type event_type = Event of bool | Predicate
 
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
@@ -160,18 +160,20 @@ let string_of_pattern = function
   | PSince (i, f) -> " always since " ^ Formula.to_string f ^ " " ^ Interval.to_string i
 
 let string_of_rule i rule =
-  let to_string f =
-    Etc.tabs (i+1) ^ Formula.to_string f
-  in
+  let to_string f = Etc.tabs (i+1) ^ Formula.to_string f in
+  let string_of_formula_list f =
+    String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
+  (*let string_of_formula_list_list fs =
+    String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb f p g q =
-      Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i     ^ verb       ^ string_of_pattern q ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
+    ^ string_of_formula_list g
   in
   let string_of_exc_rule verb f p rs =
-      Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i     ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,r') -> string_of_reference r') rs)
   in
@@ -200,7 +202,7 @@ let string_of_import_format = function
   | IAkomaNtoso -> " akomaNtoso "
 
 let string_of_event_type = function
-  | Event -> "event"
+  | Event b -> (if b then "external " else "") ^ "event"
   | Predicate -> "predicate"
 
 let string_of_type_fixes i = function

@@ -259,7 +259,7 @@ let rec type_term tfunctions typed_vars pos v t_alias =
 
 let type_terms event_name trms t_vars pos tevents tfunctions =
   let args = match Map.find tevents event_name with
-    | Some (args, _, _) -> args
+    | Some (_, args, _, _) -> args
     | None -> let err_msg = Printf.sprintf
                               "Event '%s' is undefined"
                               event_name

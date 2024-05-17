@@ -34,7 +34,7 @@ type tstmt =
   | TSFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | TSNote    of string
 
-type tevent = (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
+type tevent = event_type * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
 type tfunction = (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
 
 type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map.t
@@ -66,7 +66,7 @@ let tempty =
   }
 
 let pol_map tprog =
-  Map.map tprog.tevents ~f:(fun (_, pol, _) -> pol)
+  Map.map tprog.tevents ~f:(fun (_, _, pol, _) -> pol)
 
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
@@ -79,7 +79,7 @@ let add_talias name typ doc_string tprog pos =
   { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
 
 let add_tevent event_type name args pol ds tprog pos =
-  let event = (args, pol, ds) in
+  let event = (event_type, args, pol, ds) in
   (* TODO: (potentially in the future) allow for overwriting/reusing event names *)
   let events =
     try Map.add_exn tprog.tevents ~key:name ~data:event
@@ -154,19 +154,21 @@ let string_of_tpattern = function
 
 
 let string_of_trule i trule =
-  let to_string f =
-    Etc.tabs (i+1) ^ Tformula.to_string f
-  in
+  let to_string f = Etc.tabs (i+1) ^ Tformula.to_string f in
+  let string_of_formula_list f =
+    String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
+  (*let string_of_formula_list_list fs =
+    String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb f p g q =
     Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb     ^ string_of_tpattern q ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') g)
+    ^ string_of_formula_list g
   in
   let string_of_ref_rule verb f p trefs =
     let refs = List.map trefs ~f:Label.reference_of_label in
     Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb                             ^ "\n"
     ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
   in

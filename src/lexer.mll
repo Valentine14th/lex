@@ -44,6 +44,7 @@ rule read =
   | "import"       { IMPORT lexbuf.lex_start_p }
   | "formex"       { FORMEX }
   | "akomaNtoso"   { AKOMANTOSO }
+  | "function"     { FUNCTION }
   | "event"        { EVENT }
   | "predicate"    { PREDICATE }
   | "string"       { TSTRING }

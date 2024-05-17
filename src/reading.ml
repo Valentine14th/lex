@@ -55,7 +55,7 @@ let rec reading_of_formula formula_id eprog f =
                            (Tformula.Term.value_to_string x) (const (Dom.to_string d))
     | EPredicate (name, trms) as f ->
        (match Map.find Elex.(eprog.eevents) name with
-        | Some (args, _, doc_string) -> 
+        | Some (_, args, _, doc_string) -> 
            let names = List.map ~f:(fun (_, name, _) -> name) args in
            (match doc_string with
             | None   -> Eformula.to_string_core f

@@ -515,20 +515,23 @@ let epattern_of_tpattern = function
 
 (* TODO: type check formulas with information in pols *)
 (* let type_trule pols = function *)
-let type_trule _ = function
+let type_trule _ =
+  let of_tformulas f =
+    List.map f ~f:(fun (p,f') -> (p, Eformula.of_tformula f')) in
+  function
   | TSRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
       let rule =  (*[FH] todo, filler code!*) 
         match rule with
         | TException (f1, p, refs, f2) -> 
-           EException (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, refs, Eformula.of_tformula f2)
+           EException (of_tformulas f1, epattern_of_tpattern p, refs, Eformula.of_tformula f2)
         | TScope (f1, p, refs, f2) -> 
-           EScope (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, refs, Eformula.of_tformula f2)
+           EScope (of_tformulas f1, epattern_of_tpattern p, refs, Eformula.of_tformula f2)
         | TObligation (f1, p, f2, q) ->
-           EObligation (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern q)
+           EObligation (of_tformulas f1, epattern_of_tpattern p, of_tformulas f2, epattern_of_tpattern q)
         | TPermission (f1, p, f2, q) ->
-           EPermission (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern q)
+           EPermission (of_tformulas f1, epattern_of_tpattern p, of_tformulas f2, epattern_of_tpattern q)
         | TConstitutive (f1, p, f2) ->
-           EConstitutive (List.map f1 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')), epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
+           EConstitutive (of_tformulas f1, epattern_of_tpattern p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula f')))
       in
       ESRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string)
     end

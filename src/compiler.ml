@@ -122,17 +122,17 @@ let compile_erule eprog =
   | _ -> assert false
 
 type signature_item =
-  | CEvent of ident * pol * ((ident * Dom.tt) list)
+  | CEvent of ident * event_type * pol * ((ident * Dom.tt) list)
   | CFunction of ident * ((ident * Dom.tt) list) * Dom.tt
 
 let compile_events events aliases =
   let event_list = Map.to_alist events in
-  let compile_event (name, (args, pol, _)) =
+  let compile_event (name, (event_type, args, pol, _)) =
     let type_args (_, name, typ_alias) =
       (name, Formula.TypeTerm.eval aliases typ_alias)
     in
     let typed_args = List.map args ~f:type_args in
-    CEvent (name, pol, typed_args)
+    CEvent (name, event_type, pol, typed_args)
   in
   List.map event_list ~f:compile_event
 
@@ -179,7 +179,7 @@ let compile_exception_or_scope_signature predicate_map aliases variables =
       (* TODO: constants are not actually possible to be part of an exception predicate *)
     in
     let typed_terms = List.map terms ~f:type_term in
-    CEvent (fst pred_name_and_terms, Lex.TInternal, typed_terms)
+    CEvent (fst pred_name_and_terms, Event false, Lex.TInternal, typed_terms)
   in
   List.map indexed_predicates ~f:compile_predicate
 
@@ -199,11 +199,15 @@ let pol_to_symbol_string pol =
   | TObs -> ""
 
 let string_of_signatures signatures =
-  let string_of_event_signature (name, pol, args) =
+  let string_of_event_type = function
+    | Event true  -> "ext "
+    | Event false -> ""
+    | Predicate   -> "pred" in
+  let string_of_event_signature (name, event_type, pol, args) =
     let arg_strs = List.map args ~f:(fun (name, tt) ->
       Printf.sprintf "%s: %s" name (Dom.string_of_tt tt)) in
     let args_str = String.concat ~sep:", " arg_strs in
-    Printf.sprintf "%s(%s)%s" name args_str (pol_to_symbol_string pol)
+    Printf.sprintf "%s%s(%s)%s" name (string_of_event_type event_type) args_str (pol_to_symbol_string pol)
   in
   let string_of_function_signature (name, args, ret_tt) =
     let arg_strs = List.map args ~f:(fun (name, tt) ->
@@ -212,8 +216,8 @@ let string_of_signatures signatures =
     Printf.sprintf "fun %s(%s) -> %s" name args_str (Dom.string_of_tt ret_tt)
   in
   let string_of_signature_item = function
-    | CEvent (name, pol, args) ->
-       string_of_event_signature (name, pol, args)
+    | CEvent (name, event_type, pol, args) ->
+       string_of_event_signature (name, event_type, pol, args)
     | CFunction (name, args, ret_tt) ->
        string_of_function_signature (name, args, ret_tt) in
   let signature_strs = List.map signatures ~f:string_of_signature_item in
