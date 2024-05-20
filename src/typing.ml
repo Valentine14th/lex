@@ -11,6 +11,7 @@ type t =
     label: Label.t;
     exceptions_first_pass: (int * Tformula.t * (Lexing.position * Label.t) list) list;
     scopes_first_pass: (int * Tformula.t * (Lexing.position * Label.t) list) list;
+    articles: (ident, ident, String.comparator_witness) Map.t; (* map from law[0] identifiers to all article[0] identifiers in a particular law, used to enforce unique article identifiers *)
   }
 
 let empty =
@@ -19,6 +20,7 @@ let empty =
     label = Label.empty;
     exceptions_first_pass = [];
     scopes_first_pass = [];
+    articles = Map.empty (module String);
   }
 
 let add_tstmt tstmt s =
@@ -55,8 +57,21 @@ let add_scope i f refs s =
   { s with tprog = Tlex.add_scope i f refs s.tprog; }
 
 let set_labels pos section_kind label s =
+  let articles = match section_kind with
+    | Article 0 ->
+      let law_name = begin
+        try Label.qualified_name_of_law ~exn:true s.label.law
+          with _ -> Util.label_error ("Article \"" ^ fst label ^ "\" must be inside a law, but is not") pos 
+        end in
+      begin try Map.add_exn s.articles ~key:law_name ~data:(fst label)
+        with _ -> Util.label_error ("Article \"" ^ fst label ^ "\" already exists in Law \"" ^ law_name ^ "\"") pos
+      end
+    | _ -> s.articles
+  in
   let l = Label.set pos section_kind label s.label in
-  { s with label = l; tprog = Tlex.set_labels pos l s.tprog }
+  { s with label = l;
+           tprog = Tlex.set_labels pos l s.tprog;
+           articles = articles }
 
 let c = ref 0
 let fresh () = incr c; !c

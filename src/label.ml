@@ -151,8 +151,11 @@ let reference_of_label label =
 
 let string_of_label l = string_of_reference (reference_of_label l)
 
-let qualified_name_of_law = function
-  | [] -> ""
+let qualified_name_of_law ?(exn=false) = function
+  | [] -> begin match exn with
+    | false -> ""
+    | true -> failwith "No 'law' section defined (yet). A rule must be inside of a 'law' section"
+    end
   | (name, _) :: _ -> name
 
 let qualified_filters_of_law = function
