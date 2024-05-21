@@ -107,7 +107,7 @@ let add_tfunction name arg_types return_type ds tprog pos =
 
 let add_exception i f refs tprog =
   { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f;
-                rule_tree = Label.RuleTree.add_exception i refs tprog.rule_tree }
+               rule_tree = Label.RuleTree.add_exception i refs tprog.rule_tree }
 
 let add_scope i f refs tprog =
   { tprog with scope_predicates = Map.add_exn tprog.scope_predicates ~key:i ~data:f;

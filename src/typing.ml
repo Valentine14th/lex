@@ -494,22 +494,22 @@ let update_var_ts_with_exceptions vars exceptions =
     Map.update m name ~f:(fun _ -> new_vars)
   in Map.fold exceptions ~init:vars ~f:type_exception
 
-let merge_type_maps m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
+let merge_type_maps pos m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
   | `Both (a1, a2) when Formula.TypeTerm.equal a1 a2 -> Some a1
   | `Both (a1, a2) -> let err_msg = Printf.sprintf
         "Variable '%s' has type '%s' in rule '%s', but was expected to have type '%s'"
-        k (Formula.TypeTerm.to_string a1) label (Formula.TypeTerm.to_string a2)
-      in Util.type_error err_msg Lexing.dummy_pos
+        k (Formula.TypeTerm.to_string a2) label (Formula.TypeTerm.to_string a1)
+      in Util.type_error err_msg pos
   | `Left t
   | `Right t -> Some t)
 
-(* let check_var_types tprog = tprog.variables *)
 let check_var_types tprog =
   let var_equivalence_classes = Label.RuleTree.rules_with_shared_variables tprog.rule_tree in
   let f0 acc' key =
       let var_types = Map.find_exn tprog.variables key in
       let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree key in
-      merge_type_maps var_types acc' label
+      let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree key in
+      merge_type_maps pos var_types acc' label
   in
   let f1 keys = (keys, Set.fold keys ~init:(Map.empty (module String)) ~f:f0) in
   let updated_vars = List.map var_equivalence_classes ~f:f1 in
@@ -524,14 +524,13 @@ let do_type _ prog =
   (* Second pass: exceptions *)
   let tprog' = List.fold s.exceptions_first_pass ~init:s.tprog ~f:(fun acc (i,f,refs) -> Tlex.add_exception i f refs acc) in
   let tprog'' = List.fold s.scopes_first_pass ~init:tprog' ~f:(fun acc (i,f,refs) -> Tlex.add_scope i f refs acc) in
-  (* TODO: check that variables in exceptions have the same type as in the original rules *)
-  (* let vars = check_var_types tprog'' in *)
+  let vars = check_var_types tprog'' in
   {
     tstmts = List.rev tprog''.tstmts;
     taliases = tprog''.taliases;
     tevents = tprog''.tevents;
     tfunctions = tprog''.tfunctions;
-    variables = tprog''.variables;
+    variables = vars;
     rule_tree = tprog''.rule_tree;
     exception_predicates = tprog''.exception_predicates;
     scope_predicates = tprog''.scope_predicates

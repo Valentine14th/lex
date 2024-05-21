@@ -115,8 +115,8 @@ let compile_erule eprog =
   | ESRule (_, idx, _, _, rule, _, _, _) ->
     let exception_idxs = Map.find_multi eprog.rule_tree.exceptions idx in
     let scope_idxs = Map.find_multi eprog.rule_tree.scopes idx in
-    let exceptions = List.map exception_idxs ~f:(Map.find_exn eprog.exception_predicates) in
-    let scopes = List.map scope_idxs ~f:(Map.find_exn eprog.scope_predicates) in
+    let exceptions = List.map exception_idxs ~f:(try Map.find_exn eprog.exception_predicates with _ -> assert false) in
+    let scopes = List.map scope_idxs ~f:(try Map.find_exn eprog.scope_predicates with _ -> assert false) in
     let f' = List.map exceptions ~f:(fun x -> make (eneg x) Non 0) in
     aux (f'@scopes) rule
   | _ -> assert false
