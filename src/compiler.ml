@@ -26,10 +26,11 @@ let compile_erule eprog =
   in
   function
   | ESRule (_, idx, _, _, rule, _, _, _) ->
+    print_endline ("idx " ^ string_of_int idx);
     let exception_idxs = Map.find_multi eprog.rule_tree.exceptions idx in
     let scope_idxs = Map.find_multi eprog.rule_tree.scopes idx in
-    let exceptions = List.map exception_idxs ~f:(Map.find_exn eprog.exception_predicates) in
-    let scopes = List.map scope_idxs ~f:(Map.find_exn eprog.scope_predicates) in
+    let exceptions = List.map exception_idxs ~f:(try Map.find_exn eprog.exception_predicates with _ -> assert false) in
+    let scopes = List.map scope_idxs ~f:(try Map.find_exn eprog.scope_predicates with _ -> assert false) in
     let f' = List.map exceptions ~f:(fun x -> make (tneg x) Non 0) in
     aux (f'@scopes) rule
   | _ -> assert false
@@ -38,7 +39,7 @@ let compile_events events aliases =
   let event_list = Map.to_alist events in
   let compile_event (name, (args, pol, _)) =
     let type_args (_, name, typ_alias) =
-      let typ = fst (Map.find_exn aliases typ_alias) in
+      let typ = try fst (Map.find_exn aliases typ_alias) with _ -> assert false in
       (name, typ)
     in
     let typed_args = List.map args ~f:type_args in

@@ -12,10 +12,10 @@ type loc =
   | LNone
 
 let string_of_loc = function
-  | LSection (sk, n) -> string_of_section_kind sk ^ " \"" ^ n ^ "\""
+  | LSection (sk, n) -> "LSection " ^ string_of_section_kind sk ^ " \"" ^ n ^ "\""
   (* | LRule n -> "rule " ^ n *)
-  | LRule n -> n (* TODO: choose sensible string representation for rule locations *)
-  | LNone -> ""
+  | LRule n -> "LRule \"" ^ n ^ "\"" (* TODO: choose sensible string representation for rule locations *)
+  | LNone -> "LNone"
 
 
 type t =
@@ -254,7 +254,7 @@ module RuleTree = struct
 
   type s = 
     {
-      label_of_rule: (int, t, Int.comparator_witness) Map.t;
+      label_of_rule: (int, (t*Lexing.position), Int.comparator_witness) Map.t;
       tree: level_tree; (* entire tree, specifically containing every level between law[0] and article[0] *)
       exceptions: (int, int list, Int.comparator_witness) Map.t; (* map from rule index i to list of rule indeces of except-rules for rule i *)
       scopes: (int, int list, Int.comparator_witness) Map.t; (* map from rule index i to list of rule indeces of scope-rules for rule i *)
@@ -382,7 +382,8 @@ module RuleTree = struct
     let highest = highest_level label in
     let key = Location.t_of_loc highest in
     begin match highest with
-    | LNone -> collect_rules_in_tree (Intermediate map)
+    | LNone ->
+      collect_rules_in_tree (Intermediate map)
     | LRule _ -> assert false
     | LSection (sk, n) ->
       let map' = begin match sk with
@@ -392,9 +393,12 @@ module RuleTree = struct
       begin match highest_level label' with
       | LRule r -> begin try [Map.find_exn map' key |> snd |> (fun x -> Map.find_exn x r)]
                    with _ -> Util.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos end
-      | _ ->
-        let tree' = begin try Map.find_exn map' key |> fst
-                    with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos end
+      | LNone -> let rm = begin try Map.find_exn map' key |> snd
+                 with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos
+        end in
+        Map.data rm
+      | _ -> let tree' = begin try Map.find_exn map' key |> fst
+             with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos end
         in find_rules_in_tree pos label' tree'
       end
     end
@@ -405,19 +409,23 @@ module RuleTree = struct
 
   let add_rule pos ri label s =
     { s with tree = insert_rule_in_tree pos s.tree label ri;
-             label_of_rule = Map.add_exn s.label_of_rule ~key:ri ~data:label
+             label_of_rule = Map.add_exn s.label_of_rule ~key:ri ~data:(label,pos)
     }
   
   let add_section pos label s =
     { s with tree = insert_section_in_tree pos s.tree label }
 
+  let string_of_rule_idx s i = string_of_reference (reference_of_label (fst (Map.find_exn s.label_of_rule i)))
+  let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx refs s =
     let rule_idxs = List.concat_map refs ~f:(fun (pos, l) -> find_rules_in_tree pos l s.tree) in
-    { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:idx ~data:r_idx) }
+    if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx);
+    { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
   let add_scope idx refs s =
     let rule_idxs = List.concat_map refs ~f:(fun (pos, l) -> find_rules_in_tree pos l s.tree) in
-    { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:idx ~data:r_idx) }
+    if List.is_empty rule_idxs then Util.warning ("No rules found for scope " ^ string_of_rule_idx s idx);
+    { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
 
   let rules_with_shared_variables s =
@@ -449,16 +457,22 @@ module RuleTree = struct
     let f2 acc x = Map.update acc x ~f:(f1 x) in
     let full_map = List.fold rules ~init:class_map ~f:f2 in
     let full_list = Map.data full_map in
-    let f3 acc' y = Set.union acc' y in
-    let f4 acc x = match Set.length (List.fold acc ~init:x ~f:f3) with
+    let f3 acc' y = Set.inter acc' y in
+    let f4 acc' y =
+      let acc'' = List.filter_map acc' ~f:(fun z -> if (Set.is_empty (Set.inter y z)) then None else Some (Set.union y z)) in
+      List.fold acc'' ~f:Set.union ~init:y
+      in
+    let f5 acc x =
+      match Set.length (List.fold acc ~init:x ~f:f3) with
       | 0 -> x::acc
-      | _ -> acc
+      | _ -> [f4 acc x]
     in
-    let filtered_list = List.fold full_list ~init:[] ~f:f4 in
+    let full_list' = List.dedup_and_sort full_list ~compare:(fun a b -> if Set.equal a b then 0 else 1)  in
+    let filtered_list = List.filter full_list' ~f:(fun x -> if List.exists full_list ~f:(fun y -> Set.is_subset x ~of_:y && not (Set.equal x y)) then false else true) in
+    let filtered_list' = List.fold filtered_list ~init:[] ~f:f5 in
     assert (List.length full_list = List.length rules);
-    assert (List.length (List.concat_map filtered_list ~f:Set.to_list) = List.length rules);
-    filtered_list
+    assert (List.length (List.concat_map filtered_list' ~f:Set.to_list) = List.length rules);
+    filtered_list'
 
-  let string_of_rule_idx s i = string_of_reference (reference_of_label (Map.find_exn s.label_of_rule i))
 
 end

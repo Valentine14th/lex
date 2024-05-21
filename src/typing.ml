@@ -64,7 +64,7 @@ let type_check_constant c t = match (c, t) with
 
 let string_of_const = function
   | Dom.Int i -> string_of_int i
-  | Dom.Str s -> s
+  | Dom.Str s -> "\"" ^ s ^ "\""
   | Dom.Float f -> string_of_float f
 
 let typ_of_const = function
@@ -72,37 +72,39 @@ let typ_of_const = function
   | Dom.Str _ -> TString
   | Dom.Float _ -> TFloat
 
-let type_var (pos, v, t_alias) typed_vars taliases =
+let type_var pos2 (pos1, v, t_alias) typed_vars taliases =
   let t = match Map.find taliases t_alias with
     | Some (typ, _) -> typ
     | None -> let err_msg =
         Printf.sprintf "Type alias '%s' is undefined" t_alias in
-      Util.type_error err_msg pos
+      Util.type_error err_msg pos1
   in
   match v with
   | Formula.Term.Var x -> begin match Map.find typed_vars x with
     | Some a' when (String.equal t_alias a') -> typed_vars
     | Some a' ->
-      let err_msg = Printf.sprintf "Variable '%s' has type '%s' but was expected to have type '%s'" x a' t_alias in
-      Util.type_error err_msg pos
+      let err_msg = Printf.sprintf "Variable '%s' has type '%s' but was expected to have type '%s' as defined at %s"
+                    x a' t_alias (Util.string_of_pos pos2)
+                  in
+      Util.type_error err_msg pos1
     | None -> Map.add_exn typed_vars ~key:x ~data:t_alias
     end
   | Const c when type_check_constant c t -> typed_vars
   | Const c ->
-    let err_msg = Printf.sprintf "Constant %s has type '%s' but expected '%s'"
-      (string_of_const c) (string_of_typ (typ_of_const c)) (string_of_typ t)
+    let err_msg = Printf.sprintf "Constant %s has type '%s' but expected '%s' as defined at %s"
+      (string_of_const c) (string_of_typ (typ_of_const c)) (string_of_typ t) (Util.string_of_pos pos2)
     in
-    Util.type_error err_msg pos
+    Util.type_error err_msg pos1
 
-let type_vars event_name vars t_vars pos tevents taliases =
+let type_vars event_name vars t_vars pos_event tevents taliases =
   let args = match Map.find tevents event_name with
       | Some (args, _, _) -> args
       | None -> let err_msg = Printf.sprintf
                               "Event '%s' is undefined"
                               event_name
-                in Util.type_error err_msg pos
+                in Util.type_error err_msg pos_event
     in
-    let acc_function t_vars (pos, _, type_alias) v = type_var (pos, v, type_alias) t_vars taliases in
+    let acc_function t_vars (pos, _, type_alias) v = type_var pos (pos_event, v, type_alias) t_vars taliases in
     match List.fold2 args vars ~init:t_vars ~f:acc_function with
       | Ok t_vars' -> t_vars'
       | Unequal_lengths ->
@@ -110,7 +112,7 @@ let type_vars event_name vars t_vars pos tevents taliases =
           "Number of arguments doesn't match for event '%s'"
           event_name
         in
-        Util.type_error err_msg pos
+        Util.type_error err_msg pos_event
 
 (* TODO: currently the error location `pos` is the beginning of the rule
          it might be helpful to have pointers inside the rule,
@@ -212,12 +214,12 @@ let update_var_ts_with_exceptions vars exceptions =
     Map.update m name ~f:(fun _ -> new_vars)
   in Map.fold exceptions ~init:vars ~f:type_exception
 
-let merge_type_maps m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
+let merge_type_maps pos m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
   | `Both (a1, a2) when String.equal a1 a2 -> Some a1
   | `Both (a1, a2) -> let err_msg = Printf.sprintf
         "Variable '%s' has type '%s' in rule '%s', but was expected to have type '%s'"
-        k a1 label a2
-      in Util.type_error err_msg Lexing.dummy_pos
+        k a2 label a1
+      in Util.type_error err_msg pos
   | `Left t
   | `Right t -> Some t)
 
@@ -227,7 +229,8 @@ let check_var_types tprog =
   let f0 acc' key =
       let var_types = Map.find_exn tprog.variables key in
       let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree key in
-      merge_type_maps var_types acc' label
+      let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree key in
+      merge_type_maps pos var_types acc' label
   in
   let f1 keys = (keys, Set.fold keys ~init:(Map.empty (module String)) ~f:f0) in
   let updated_vars = List.map var_equivalence_classes ~f:f1 in
@@ -242,14 +245,12 @@ let do_type _ prog =
   (* Second pass: exceptions *)
   let tprog' = List.fold s.exceptions_first_pass ~init:s.tprog ~f:(fun acc (i,f,refs) -> Tlex.add_exception i f refs acc) in
   let tprog'' = List.fold s.scopes_first_pass ~init:tprog' ~f:(fun acc (i,f,refs) -> Tlex.add_scope i f refs acc) in
-  (* TODO: check that variables in exceptions have the same type as in the original rules *)
-  (* let vars = check_var_types tprog'' in *)
+  let vars = check_var_types tprog'' in
   {
     tstmts = List.rev tprog''.tstmts;
     taliases = tprog''.taliases;
     tevents = tprog''.tevents;
-    (* variables = vars; *)
-    variables = tprog''.variables;
+    variables = vars;
     rule_tree = tprog''.rule_tree;
     exception_predicates = tprog''.exception_predicates;
     scope_predicates = tprog''.scope_predicates

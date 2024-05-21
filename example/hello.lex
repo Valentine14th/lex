@@ -1,6 +1,6 @@
 law "GDPR"
 
-import formex GDPR
+import formex GDPR.GDPR
 
 type processingid is int
 type processorid is int
@@ -91,7 +91,6 @@ rule
         x: processorid
         y: dataid
     whenever
-
         PersonalDataProcessing(ep, x, z)
     oblige
         lawfulness(ep)
@@ -121,7 +120,7 @@ rule
     constitute
         lawfulness(ep)
 enforceable causing lawfulness
-       
+
 article "8"
 # article[1] "II" "dummy level to try out sublevels"
 # article[2] "A" "dummy level to try out sublevels"
@@ -133,9 +132,11 @@ rule
         w: userid
     whenever
         isMinor(w) # {w} is the same type as {w} in "6(1)(a)"
+        # isMinor(c) # will cause an error, because 'c' has the wrong type in article 6(1)(1)(a)
     except
         { article "6" paragraph "1" point "1" subpoint "a" } 
         { section "2" } 
+        # { section "4" } # will raise an error, because section "4" is undefined
         { chapter "IV" section "3" }
 
 section "2"
