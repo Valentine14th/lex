@@ -6,13 +6,14 @@
 %token EOF
 %token <Lexing.position * string> IDENT
 %token <Lexing.position * int> INT
+%token <Lexing.position * Lextime.Span.t> SPAN
 %token <Lexing.position * float> FLOAT
 %token <Lexing.position * string> STRING
 %token <Lexing.position * Lextime.Time.t> TIME
 %token COM COL
 %token <Lexing.position> SUB
 %token <Lexing.position> NOT
-%token ADD MUL DIV POW XOR NEQ LT LEQ GT GEQ
+%token LOR LAND ADD MUL DIV POW XOR NEQ LT LEQ GT GEQ
 %token <Lexing.position> LPA RPA
 %token <Lexing.position> LBR RBR
 %token <Lexing.position> LSB RSB
@@ -32,6 +33,8 @@
 %token DOT
 %token <Lexing.position> FALSE
 %token <Lexing.position> TRUE
+%token <Lexing.position> CFALSE
+%token <Lexing.position> CTRUE
 %token <Lexing.position> EQ
 %token <Lexing.position> NEG
 %token <Lexing.position> AND
@@ -58,9 +61,20 @@
 %nonassoc PREV NEXT ONCE EVENTUALLY HISTORICALLY ALWAYS
 %nonassoc EXISTS FORALL
 %right IFF IMP
+
 %left OR
 %left AND
+%left LOR
+%left LAND
+%left XOR
+%left EQ NEQ LT LEQ GT GEQ
+%left ADD
+%left MUL DIV
+%left SUB
+%left POW
+%nonassoc NOT
 %nonassoc NEG
+
 
 %start <Lex.prog> prog
 %%
@@ -182,7 +196,7 @@ type_fixes:
   | FIX list(type_fix) { $2 }
 
 fun_args:
-  | separated_list(COM, type_fix) { $1 }
+  | list(type_fix) { $1 }
 
 srule:
   | RULE DOCSTRING type_fixes rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, $6, Some $2) }
@@ -191,13 +205,13 @@ srule:
   | RULE STRING type_fixes rule rule_type rule_constrs           { SRule ($1, Some (snd $2), $3, $4, $5, $6, None) }
 
 event_def:
-  | pol event_type IDENT list(arg) { SEvent (fst $3, $2, snd $3, $4, $1, None) }
+  | pol event_type IDENT list(arg)           { SEvent (fst $3, $2, snd $3, $4, $1, None) }
   | pol event_type IDENT DOCSTRING list(arg) { SEvent (fst $3, $2, snd $3, $5, $1, Some $4) }
 
 event_type:
   | EXTERNAL EVENT { Lex.Event true }
-  | EVENT     { Lex.Event false }
-  | PREDICATE { Lex.Predicate }
+  | EVENT          { Lex.Event false }
+  | PREDICATE      { Lex.Predicate }
 
 arg:
   | IDENT COL type_term { (fst $1, snd $1, $3) }
@@ -209,7 +223,7 @@ ee:
 | LPA e RPA                            { $1, snd $2 }
 | TRUE                                 { $1, tt }
 | FALSE                                { $1, ff }
-| term EQ term                         { fst $1, eqconst (snd $1) (snd $3)}
+| LBR term EQ term RBR                 { fst $2, eqconst (snd $2) (snd $4) }
 | NEG e                                { $1, neg (snd $2) }
 | PREV interval e                      { $1, prev (snd $2) (snd $3) }
 | PREV e                               { $1, prev Interval.full (snd $2) }
@@ -270,41 +284,34 @@ const:
 | INT                                  { fst $1, Term.Const (Int (snd $1)) }
 | STRING                               { fst $1, Term.Const (Str (snd $1)) }
 | FLOAT                                { fst $1, Term.Const (Float (snd $1)) }
-| TRUE                                 { $1, Term.Const (Bool true) }
-| FALSE                                { $1, Term.Const (Bool false) }
+| CTRUE                                { $1, Term.Const (Bool true) }
+| CFALSE                               { $1, Term.Const (Bool false) }
 | TIME                                 { fst $1, Term.Const (Time (snd $1)) }
-| span                                 { fst $1, Term.Const (Span (snd $1)) }
+| SPAN                                 { fst $1, Term.Const (Span (snd $1)) }
 | money                                { fst $1, Term.Const (Money (snd $1)) }
 
 terms:
 | trms=separated_list(COM, term)      { trms }
 
-binop:
-| ADD { Term.BAdd }
-| SUB { Term.BSub }
-| MUL { Term.BMul }
-| DIV { Term.BDiv }
-| POW { Term.BPow }
-| AND { Term.BAnd }
-| OR  { Term.BOr }
-| XOR { Term.BXor }
-| EQ  { Term.BEq }
-| NEQ { Term.BNeq }
-| LT  { Term.BLt }
-| LEQ { Term.BLeq }
-| GT  { Term.BGt }
-| GEQ { Term.BGeq }
+%inline binop:
+| ADD   { Term.BAdd }
+| SUB   { Term.BSub }
+| MUL   { Term.BMul }
+| DIV   { Term.BDiv }
+| POW   { Term.BPow }
+| LAND  { Term.BAnd }
+| LOR   { Term.BOr }
+| XOR   { Term.BXor }
+| EQ EQ { Term.BEq }
+| NEQ   { Term.BNeq }
+| LT    { Term.BLt }
+| LEQ   { Term.BLeq }
+| GT    { Term.BGt }
+| GEQ   { Term.BGeq }
 
-unop:
+%inline unop:
 | SUB { $1, Term.USub }
 | NOT { $1, Term.UNot }
-
-span:
-| span_atom { $1 }
-| span_atom span { fst $1, Lextime.Span.((snd $1) + (snd $2)) }
-
-span_atom:
-| INT IDENT { fst $1, Lextime.Span.of_value_with_string_unit (snd $1) (fst $2) (snd $2) }
 
 money:
 | IDENT FLOAT { fst $1, Money.( (snd $2) $ (snd $1) ) }
@@ -317,6 +324,7 @@ ty:
 | TSUPPRESSABLE                        { Sup }
 
 pattern:
+|                                               { PPresent }
 | IEVENTUALLY past_interval                     { PEventually $2 }
 | IONCE past_interval                           { POnce $2 }
 | IALWAYS IIN ITHE IPAST past_interval          { PHistorically $5 }
@@ -326,21 +334,21 @@ pattern:
 
 past_interval:
 | common_interval                      { $1 }
-| IBEFORE span                         { Interval.lclosed_UI (snd $2) }
-| ISTRICTLY IBEFORE span               { Interval.lopen_UI (snd $3) }
+| IBEFORE SPAN                         { Interval.lclosed_UI (snd $2) }
+| ISTRICTLY IBEFORE SPAN               { Interval.lopen_UI (snd $3) }
 
 future_interval:
 | common_interval                      { $1 }
-| IAFTER span                          { Interval.lclosed_UI (snd $2) }
-| ISTRICTLY IAFTER span                { Interval.lopen_UI (snd $3) }
+| IAFTER SPAN                          { Interval.lclosed_UI (snd $2) }
+| ISTRICTLY IAFTER SPAN                { Interval.lopen_UI (snd $3) }
 
 common_interval:
 |                                      { Interval.full }
-| IWITHIN span                         { Interval.lzero_rclosed_BI (snd $2) }
-| IBETWEEN span AND span               { Interval.lclosed_rclosed_BI (snd $2) (snd $4) }
-| ISTRICTLY IBETWEEN span AND span     { Interval.lopen_ropen_BI (snd $3) (snd $5) }
-| IBETWEEN span AND span IEXCLUDED     { Interval.lclosed_ropen_BI (snd $2) (snd $4) }
-| IBETWEEN span IEXCLUDED AND span     { Interval.lopen_rclosed_BI (snd $2) (snd $5) }
+| IWITHIN SPAN                         { Interval.lzero_rclosed_BI (snd $2) }
+| IBETWEEN SPAN AND SPAN               { Interval.lclosed_rclosed_BI (snd $2) (snd $4) }
+| ISTRICTLY IBETWEEN SPAN AND SPAN     { Interval.lopen_ropen_BI (snd $3) (snd $5) }
+| IBETWEEN SPAN AND SPAN IEXCLUDED     { Interval.lclosed_ropen_BI (snd $2) (snd $4) }
+| IBETWEEN SPAN IEXCLUDED AND SPAN     { Interval.lopen_rclosed_BI (snd $2) (snd $5) }
 					   
 interval:
 | LSB ib COM ib RSB        { $1, Interval.lclosed_rclosed_BI $2 $4 }
@@ -351,4 +359,4 @@ interval:
 | LPA ib COM INFINITY RPA  { $1, Interval.lopen_UI $2 }
 
 ib:
-| span { snd $1 }
+| SPAN { snd $1 }

@@ -175,6 +175,10 @@ let string_of_rule_id = function
   | None -> ""
   | Some s -> "#" ^ s
 
+let string_of_rule_id2 = function
+  | None -> ""
+  | Some s -> s
+
 let qualified_name l = match
   Printf.sprintf "%s %s%s%s%s%s"
   (qualified_name_of_law l.law)
@@ -194,7 +198,7 @@ let qualified_id l =
   (qualified_name_of_level_simple l.paragraph)
   (qualified_name_of_level_simple l.point)
   (qualified_name_of_level_simple l.subpoint)
-  (string_of_rule_id l.rule_id)
+  (string_of_rule_id2 l.rule_id)
 
 let qualified_filters l =
   (qualified_filters_of_law l.law)

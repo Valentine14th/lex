@@ -176,8 +176,7 @@ let type_blt = function
     -> Some (TypeConst Dom.TBool)
   | _ -> None
 
-
-let rec type_term tfunctions typed_vars pos v t_alias =
+let rec type_term tfunctions taliases typed_vars pos v t_alias =
   (*let t = match Map.find taliases t_alias with
     | Some (typ, _) -> typ
     | None -> let err_msg =
@@ -196,7 +195,7 @@ let rec type_term tfunctions typed_vars pos v t_alias =
   | App (f_name, trms) ->
      begin
        let f (typed_vars, trms) trm (arg_name, arg_type) =
-         let typed_vars, trm = type_term tfunctions typed_vars pos trm (Some arg_type) in
+         let typed_vars, trm = type_term tfunctions taliases typed_vars pos trm (Some arg_type) in
          if Formula.TypeTerm.equal trm.tt arg_type then
            (typed_vars, trm :: trms)
          else
@@ -223,7 +222,7 @@ let rec type_term tfunctions typed_vars pos v t_alias =
      end
   | Unop (op, trm) ->
      begin
-       let typed_vars, trm = type_term tfunctions typed_vars pos trm None in
+       let typed_vars, trm = type_term tfunctions taliases typed_vars pos trm None in
        let f_op = match op with
          | UNot -> type_unot
          | USub -> type_usub in
@@ -236,8 +235,8 @@ let rec type_term tfunctions typed_vars pos v t_alias =
      end
   | Binop (trm, op, trm') ->
      begin
-       let typed_vars, trm  = type_term tfunctions typed_vars pos trm None in
-       let typed_vars, trm' = type_term tfunctions typed_vars pos trm' None in
+       let typed_vars, trm  = type_term tfunctions taliases typed_vars pos trm None in
+       let typed_vars, trm' = type_term tfunctions taliases typed_vars pos trm' None in
        let f_op = match op with
          | BAdd -> type_badd
          | BSub -> type_bsub
@@ -257,7 +256,7 @@ let rec type_term tfunctions typed_vars pos v t_alias =
           Util.type_error err_msg pos
      end
 
-let type_terms event_name trms t_vars pos tevents tfunctions =
+let type_terms event_name trms t_vars pos tevents tfunctions taliases =
   let args = match Map.find tevents event_name with
     | Some (_, args, _, _) -> args
     | None -> let err_msg = Printf.sprintf
@@ -265,12 +264,12 @@ let type_terms event_name trms t_vars pos tevents tfunctions =
                               event_name
               in Util.type_error err_msg pos
   in
-  let acc_function (t_vars, trms) (pos, arg_name, type_alias) trm =
-    let t_vars, trm = type_term tfunctions t_vars pos trm (Some type_alias) in
+  let acc_function (t_vars, trms) (_, arg_name, type_alias) trm =
+    let t_vars, trm = type_term tfunctions taliases t_vars pos trm (Some type_alias) in
     let ty = Tformula.Term.(trm.tt) in
-    if Formula.TypeTerm.equal ty type_alias then
-      (t_vars, trm :: trms)
-    else
+    match Formula.TypeTerm.lub ty type_alias taliases with
+    | Some tt -> let trm = { trm with tt } in (t_vars, trm :: trms)
+    | None ->
       let err_msg = Printf.sprintf "Type mismatch for argument %s of event %s: expected '%s', found '%s'"
                       arg_name event_name (Formula.TypeTerm.value_to_string type_alias)
                       (Formula.TypeTerm.value_to_string ty) in
@@ -290,8 +289,8 @@ let rec type_formula s pos t_vars = function
   | FF -> t_vars, TFF
   | EqConst (x, y) ->
      begin
-       let t_vars, x' = type_term s.tfunctions t_vars pos x None in
-       let t_vars, y' = type_term s.tfunctions t_vars pos y None in
+       let t_vars, x' = type_term s.tfunctions s.taliases t_vars pos x None in
+       let t_vars, y' = type_term s.tfunctions s.taliases t_vars pos y None in
        if Formula.TypeTerm.equal x'.tt y'.tt then
          (t_vars, TEqConst (x', y'))
        else
@@ -300,7 +299,7 @@ let rec type_formula s pos t_vars = function
          Util.type_error err_msg pos
      end
   | Predicate (event_name, trms) ->
-     let t_vars, trms = type_terms event_name trms t_vars pos s.tevents s.tfunctions in
+     let t_vars, trms = type_terms event_name trms t_vars pos s.tevents s.tfunctions s.taliases in
      (t_vars, TPredicate (event_name, trms))
   | Neg f ->
      let t_vars, f = type_formula s pos t_vars f in

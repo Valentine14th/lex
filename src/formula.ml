@@ -92,6 +92,14 @@ module TypeTerm = struct
     | TypeConst tt -> tt
     | TypeVar v    -> fst (Map.find_exn aliases v)
 
+  let lub t t' aliases =
+    match t, t' with
+    | TypeConst tt, TypeConst tt' when Dom.tt_equal tt tt' -> Some (TypeConst tt)
+    | TypeVar v   , TypeVar v' when String.equal v v' -> Some (TypeVar v)
+    | TypeVar v   , TypeConst tt' when Dom.tt_equal (fst (Map.find_exn aliases v)) tt' -> Some (TypeVar v)
+    | TypeConst tt, TypeVar v' when Dom.tt_equal (fst (Map.find_exn aliases v')) tt -> Some (TypeVar v')
+    | _, _ -> None
+
   let eval_with_doc_string aliases = function
     | TypeConst tt -> (tt, None) 
     | TypeVar v    -> Map.find_exn aliases v

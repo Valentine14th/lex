@@ -7,9 +7,10 @@
 }
 
 let white = [' ' '\t']+
+
 let newline = '\r' | '\n' | "\r\n"
 let comment = '#' [^ '\r' '\n']*
-
+                                
 let ident = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 let int = ['0'-'9']*
 let float1 = ['0'-'9']+ '.' ['0'-'9']*
@@ -18,7 +19,8 @@ let float2 = '.' ['0'-'9']+
 rule read =
   parse
   | white          { read lexbuf }
-  | comment? newline { new_line lexbuf; read lexbuf }
+  | newline        { new_line lexbuf; read lexbuf }
+  | comment?       { read lexbuf }
   | '('            { LPA lexbuf.lex_start_p }
   | ')'            { RPA lexbuf.lex_start_p }
   | '{'            { LBR lexbuf.lex_start_p }
@@ -33,6 +35,8 @@ rule read =
   | '^'            { POW }
   | "and"          { AND lexbuf.lex_start_p }
   | "or"           { OR lexbuf.lex_start_p }
+  | "&&"           { LAND }
+  | "||"           { LOR }
   | "xor"          { XOR }
   | "<>"           { NEQ }
   | '<'            { LT }
@@ -93,8 +97,10 @@ rule read =
   | "the"          { ITHE }
   | "future"       { IFUTURE }
   | "past"         { IPAST }
-  | "false" | "⊥"  { FALSE lexbuf.lex_start_p }
-  | "true" | "⊤"   { TRUE lexbuf.lex_start_p }
+  | "false"        { CFALSE lexbuf.lex_start_p }
+  | "true"         { CTRUE lexbuf.lex_start_p }
+  | "FALSE" | "⊥"  { FALSE lexbuf.lex_start_p }
+  | "TRUE" | "⊤"   { TRUE lexbuf.lex_start_p }
   | "="            { EQ lexbuf.lex_start_p }
   | "¬" | "NOT"    { NEG lexbuf.lex_start_p }
   | "∧" | "AND"    { AND lexbuf.lex_start_p }
@@ -116,11 +122,10 @@ rule read =
   | '['              { LSB lexbuf.lex_start_p }
   | ']'              { RSB lexbuf.lex_start_p }
   | "INFINITY" | "∞" { INFINITY }
-                   (*  | (['(' '['] as l) white (int as i) white ',' white ((int | "INFINITY" | "∞" | "*") as j) white ([')' ']'] as r)*)
-  (*                   { INTERVAL (lexbuf.lex_start_p, make_interval lexbuf l i j r) }*)
   | ident          { IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf) }
   | float1 | float2 { FLOAT (lexbuf.lex_start_p, float_of_string (Lexing.lexeme lexbuf)) }
   | int            { INT (lexbuf.lex_start_p, int_of_string (Lexing.lexeme lexbuf)) }
+  | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s) { SPAN (lexbuf.lex_start_p, Lextime.Span.of_value_with_unit (int_of_string i) lexbuf.lex_start_p s) }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | comment? eof   { EOF }
 

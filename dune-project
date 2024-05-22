@@ -1,8 +1,8 @@
-(lang dune 3.9)
+(lang dune 3.13)
 
 (name lex)
 
-(using menhir 2.1)
+(using menhir 3.0)
 
 (generate_opam_files true)
 

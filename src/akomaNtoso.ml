@@ -118,7 +118,7 @@ let read_file filepath filename =
                        (Filename.chop_extension filename) (Some title) in
   let body = get_body xml in
   let node = fill_in body initial_node in
-  print_endline (to_string node);
+  (*print_endline (to_string node);*)
   node    
 
 (* Does not currently support levels above chapters  *)

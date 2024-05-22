@@ -97,6 +97,23 @@ module Term = struct
     Printf.sprintf (Util.paren l 0 "%a : %s")
       (fun _ -> value_to_string_core ~l:5) t.trm (TypeTerm.value_to_string t.tt)
 
+  let rec untyped_value_to_string_core ?(l=0) = function
+    | TVar x -> Printf.sprintf "%s" x
+    | TConst d -> Printf.sprintf "%s" (Dom.to_string d)
+    | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (untyped_list_to_string trms)
+    | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                       (Formula.Term.string_of_unop o)
+                       (untyped_value_to_string ~l:10 t)
+    | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+                           Printf.sprintf (Util.paren l l' "%s %s %s")
+                             (untyped_value_to_string ~l:l' t)
+                             (Formula.Term.string_of_binop o)
+                             (untyped_value_to_string ~l:l' t')
+  and untyped_list_to_string trms = String.concat ~sep:", " (List.map trms ~f:untyped_value_to_string)
+  
+  and untyped_value_to_string ?(l=0) t = 
+    Printf.sprintf (Util.paren l 0 "%a") (fun _ -> untyped_value_to_string_core ~l:5) t.trm
+
 end
 
 let term trm tt = Term.({ trm; tt })

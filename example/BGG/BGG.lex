@@ -7,8 +7,10 @@ type recht is string
 type gericht is string
 type gebiet is string
 type gegenstand is string
-type beschwerde is int """ eine Beschwerde """
-type akt is int """ ein Akt """
+type beschwerde is int
+  """ eine Beschwerde """
+type akt is int
+  """ ein Akt """
 type person is string
 type staat is string
 
@@ -87,7 +89,6 @@ rule
     beurteilt(g, b)
   oblige
     zulaessig(g, b)
-  
 
 paragraph "1"
 point "a"
@@ -128,14 +129,14 @@ rule
   whenever
     gebiet(a, "auswärtige Angelegenheiten")
     NOT beurteilungsAnspruch("Völkerrecht", a)
-  except "82(1)(a)"
+  except { article "82" }
   
 point "b"
 
 rule
   whenever
     betrifft(a, "ordentliche Einbürgerung")
-  except "82(1)(a)"
+  except { article "82" }
 
 point "c"
 subpoint "1"
@@ -144,7 +145,7 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Einreise")
-  except "82(1)(a)"
+  except { article "82" }
 
 subpoint "2"
 
@@ -155,7 +156,7 @@ rule
     bewilligung(bew)
     NOT raeumtAnspruchEin("Bundesrecht", bew)
     NOT raeumtAnspruchEin("Völkerrecht", bew)
-  except "82(1)(a)"
+  except { article "82" }
 
 subpoint "3"
 
@@ -163,7 +164,7 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "vorläufige Aufnahme")
-  except "82(1)(a)"
+  except { article "82" }
 
 subpoint "4"
 
@@ -171,7 +172,7 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Ausweisung (nach Art. 121 Abs. 2 BV)") OR betrifft(a, "Wegweisung")
-  except "82(1)(a)"
+  except { article "82" }
 
 subpoint "5"
 
@@ -179,7 +180,7 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Abweichungen von den Zulassungsvoraussetzungen")
-  except "82(1)(a)"
+  except { article "82" }
 
 subpoint "6"
 
@@ -187,7 +188,7 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Verlängerung der Grenzgängerbewilligung") OR betrifft(a, "Kantonswechsel") OR betrifft(a, "Stellenwechsel von Personen mit Grenzgängerbewilligung") OR betrifft(a, "Erteilung von Reisepapieren an schriftenlose AusländerInnen")
-  except "82(1)(a)"
+  except { article "82" }
 
 point "d"
   
@@ -198,7 +199,7 @@ rule
     gebiet(a, "Asyl")
     ONCE trifft("Bundesverwaltungsgericht", a)
     NOT (EXISTS p. EXISTS s. betrifftPerson(a, p) AND (suchtSchutz(p, s) AND ONCE (stelltAuslieferungsersuchen(s, p))))
-  except "82(1)(a)"
+  except { article "82" }
   
 subpoint "2"
 
@@ -210,14 +211,14 @@ rule
     bewilligung(bew)
     NOT (raeumtAnspruchEin("Bundesrecht", bew))
     NOT (raeumtAnspruchEin("Völkerrecht", bew))
-  except "82(1)(a)"
+  except { article "82" }
 
 point "e"
 
 rule
   whenever
     betrifft(a, "Verweigerung der Ermächtigung zur Strafverfolgung von Behördenmitgliedern oder von Bundespersonal")
-  except "82(1)(a)"
+  except { article "82" }
 
 point "f"
   

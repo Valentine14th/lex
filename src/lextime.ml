@@ -41,13 +41,15 @@ module Span = struct
 
   let seconds = second
 
-  let of_value_with_string_unit x pos = function
+  let of_value_with_unit x pos = function
     | "s" -> second x
     | "m" -> minute x
     | "h" -> hour x
     | "d" -> day x
     | "M" -> month x
     | "y" -> year x
+    | "" when x = 0 -> second 0
+    | "" -> Util.type_error (Printf.sprintf "Time span without unit must be zero") pos
     | s -> Util.type_error (Printf.sprintf "Invalid time span unit %s" s) pos
 
   let (+) = add

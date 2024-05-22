@@ -8,7 +8,7 @@ license: "LICENSE"
 doc: "https://url/to/documentation"
 depends: [
   "ocaml"
-  "dune" {>= "3.9"}
+  "dune" {>= "3.13"}
   "odoc" {with-doc}
 ]
 build: [

@@ -20,7 +20,7 @@ module Placeholders = struct
 end
 
 let reading_of_term term =
-  span "lex-formula-term" (Tformula.Term.value_to_string term)
+  span "lex-formula-term" (Tformula.Term.untyped_value_to_string term)
 
 let reading_of_span span = Lextime.Span.to_string span
 
