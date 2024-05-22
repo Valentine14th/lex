@@ -45,11 +45,10 @@ type tprog =
     taliases: (ident, Dom.tt * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     tfunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
-variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
+    variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
     rule_tree: Label.RuleTree.s;
     exception_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
     scope_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
-    (*exceptions: (ident, (ident * Tformula.t) list, Base.String.comparator_witness) Map.t*)
   }
 
 
@@ -108,7 +107,7 @@ let add_tfunction name arg_types return_type ds tprog pos =
 
 let add_exception i f refs tprog =
   { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f;
-                rule_tree = Label.RuleTree.add_exception i refs tprog.rule_tree }
+               rule_tree = Label.RuleTree.add_exception i refs tprog.rule_tree }
 
 let add_scope i f refs tprog =
   { tprog with scope_predicates = Map.add_exn tprog.scope_predicates ~key:i ~data:f;
