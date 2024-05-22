@@ -190,8 +190,8 @@ let reading_of_rule_then prefix_id eprog verb g pat =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let reading_of_refs labels =
-    let refs = List.map labels ~f:Label.reference_of_label in
+let reading_of_refs refs =
+    (* let refs = List.map labels ~f:Label.reference_of_label in *)
     String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: check reading of references and possibly make additions *)
 
 let reading_of_rule_except refs =
@@ -255,7 +255,7 @@ let reading_of_erule rule_id eprog type_fixes erule =
     -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q
   | EConstitutive (f, p, g)
     -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
-  | EException (f, p, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:snd refs)
-  | EScope (f, p, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:snd refs)
+  | EException (f, p, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,_,x) -> x) refs)
+  | EScope (f, p, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,_,x) -> x) refs)
 
 let reading_of_doc_string = Placeholders.mark_all

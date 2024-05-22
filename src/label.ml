@@ -49,9 +49,9 @@ let is_empty = function
   | _ -> false
 
 let qualified_label l =
-  let h =  match List.hd l.law with
-  | Some h -> [h]
-  | None -> []
+  let h =  match l.law with
+  | h::_ -> [h]
+  | [] -> []
   in {l with law = h; title = []; chapter = []; section = []; }
 
 let lowest_level = function
@@ -425,12 +425,12 @@ module RuleTree = struct
   let string_of_rule_idx s i = string_of_reference (reference_of_label (fst (Map.find_exn s.label_of_rule i)))
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx refs s =
-    let rule_idxs = List.concat_map refs ~f:(fun (pos, l) -> find_rules_in_tree pos l s.tree) in
+    let rule_idxs = List.concat_map refs ~f:(fun (pos, l, _) -> find_rules_in_tree pos l s.tree) in
     if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx);
     { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
   let add_scope idx refs s =
-    let rule_idxs = List.concat_map refs ~f:(fun (pos, l) -> find_rules_in_tree pos l s.tree) in
+    let rule_idxs = List.concat_map refs ~f:(fun (pos, l, _) -> find_rules_in_tree pos l s.tree) in
     if List.is_empty rule_idxs then Util.warning ("No rules found for scope " ^ string_of_rule_idx s idx);
     { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 

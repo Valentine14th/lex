@@ -9,8 +9,8 @@ type t =
   {
     tprog: tprog;
     label: Label.t;
-    exceptions_first_pass: (int * Tformula.t * (Lexing.position * Label.t) list) list;
-    scopes_first_pass: (int * Tformula.t * (Lexing.position * Label.t) list) list;
+    exceptions_first_pass: (int * Tformula.t * (Lexing.position * Label.t * Lex.reference) list) list;
+    scopes_first_pass: (int * Tformula.t * (Lexing.position * Label.t * Lex.reference) list) list;
     articles: (ident, ident list, String.comparator_witness) Map.t; (* map from law[0] identifiers to all article[0] identifiers in a particular law, used to enforce unique article identifiers *)
   }
 
@@ -404,10 +404,16 @@ let type_rule s pos = function
         | (r::rs), _ -> List.fold ~init:r ~f:section_kinds_are_in_order rs
       in
       let s, rule = 
+        let merge_reference_with_label pos l rs rule_id =
+          begin match Label.highest_level l with
+          | (Label.LSection (Article 0, _)) -> (pos, Label.set_rule_id rule_id (List.fold ~init:(Label.qualified_label l) ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs), (rs, rule_id))
+          | _ -> (pos, Label.set_rule_id rule_id (List.fold ~init:l ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs), (rs, rule_id))
+          end in
         match rule with
         | Exception (f, p, refs) ->
           let _ = List.map ~f:(decreasing_section_kinds) refs in
-          let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> (pos', Label.set_rule_id rule_id (List.fold ~init:s.label ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs))) refs in
+          (* let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> (pos', Label.set_rule_id rule_id (List.fold ~init:s.label ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs))) refs in *)
+          let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> merge_reference_with_label pos' s.label rs rule_id) refs in
           let p_name = "Exception" ^ string_of_int rule_num in
           let t_vars, f = List.fold_map f ~init:t_vars ~f:(type_formula_pos s pos) in
           let vars = Set.elements (Set.union_list (module String)
@@ -421,7 +427,8 @@ let type_rule s pos = function
           s', TException (f, p, reference_labels, pred)
         | Scope (f, p, refs) ->
           let _ = List.map ~f:decreasing_section_kinds refs in
-          let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> (pos', Label.set_rule_id rule_id (List.fold ~init:s.label ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs))) refs in
+          (* let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> (pos', Label.set_rule_id rule_id (List.fold ~init:s.label ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs))) refs in *)
+          let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> merge_reference_with_label pos' s.label rs rule_id) refs in
           let p_name = "Scope" ^ string_of_int rule_num in
           let t_vars, f = List.fold_map f ~init:t_vars ~f:(type_formula_pos s pos) in
           let vars = Set.elements (Set.union_list (module String)

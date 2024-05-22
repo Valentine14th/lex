@@ -101,8 +101,7 @@ let html_of_erule rule_id erule =
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
-  let string_of_refs labels =
-    let refs = List.map labels ~f:Label.reference_of_label in
+  let string_of_refs refs =
     String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: pretty print reference, e.g. with syntax highlighting of keywords *)
   in 
   let string_of_ref_rule verb f p refs =
@@ -124,7 +123,7 @@ let html_of_erule rule_id erule =
     -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
   | EException (f, p, refs, _)
   | EScope (f, p, refs, _)
-    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f: snd refs)
+    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,_,x) -> x) refs)
 
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
