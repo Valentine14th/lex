@@ -15,8 +15,8 @@ type erule =
   | EObligation   of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list * epattern
   | EPermission   of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list * epattern
   | EConstitutive of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list
-  | EException    of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t) list * Eformula.t
-  | EScope        of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t) list * Eformula.t
+  | EException    of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t * Lex.reference) list * Eformula.t
+  | EScope        of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t * Lex.reference) list * Eformula.t
 
 type estmt =
   | ESImport  of Lexing.position * string list * import_format
@@ -86,8 +86,7 @@ let string_of_erule i erule =
     ^ Etc.tabs i     ^ verb       ^ string_of_epattern q ^ "\n"
     ^ string_of_formula_list g
   in
-  let string_of_ref_rule verb f p trefs =
-    let refs = List.map trefs ~f:Label.reference_of_label in
+  let string_of_ref_rule verb f p refs =
     Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
     ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb                             ^ "\n"
@@ -101,7 +100,7 @@ let string_of_erule i erule =
     -> string_of_imp_rule (verb_of_erule erule) f p g EPPresent
   | EException (f, p, erefs, _)
   | EScope (f, p, erefs, _)
-    -> string_of_ref_rule (verb_of_erule erule) f p (List.map ~f:snd erefs)
+    -> string_of_ref_rule (verb_of_erule erule) f p (List.map ~f:(fun (_,_,x) -> x) erefs)
 
 let string_of_estmt ?(i=0) =
   function

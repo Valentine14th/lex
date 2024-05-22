@@ -14,8 +14,8 @@ type trule =
   | TObligation   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
   | TPermission   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
   | TConstitutive of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list
-  | TException    of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t) list * Tformula.t
-  | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t) list * Tformula.t
+  | TException    of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+  | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
 
 type 'a tannot =
   | TALex of 'a
@@ -164,8 +164,8 @@ let string_of_trule i trule =
     ^ Etc.tabs i   ^ verb     ^ string_of_tpattern q ^ "\n"
     ^ string_of_formula_list g
   in
-  let string_of_ref_rule verb f p trefs =
-    let refs = List.map trefs ~f:Label.reference_of_label in
+  let string_of_ref_rule verb f p refs =
+    (* let refs = List.map trefs ~f:Label.reference_of_label in *)
     Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
     ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb                             ^ "\n"
@@ -179,7 +179,7 @@ let string_of_trule i trule =
     -> string_of_imp_rule (verb_of_trule trule) f p g TPPresent
   | TException (f, p, trefs, _)
   | TScope (f, p, trefs, _)
-    -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:snd trefs)
+    -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:(fun (_,_,x) -> x) trefs)
 
 let string_of_tstmt ?(i=0) =
   function
