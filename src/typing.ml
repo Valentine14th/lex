@@ -63,7 +63,6 @@ let set_labels pos section_kind label s =
                      with _ -> Util.label_error ("Article \"" ^ fst label ^ "\" must be inside a law, but is not") pos 
         end in
       let articles = Map.find_multi s.articles law_name in
-      print_endline ("aritcles: " ^ Util.string_of_string_list articles);
       if List.exists articles ~f:(String.equal (fst label)) then Util.label_error ("Article \"" ^ fst label ^ "\" already exists in Law \"" ^ law_name ^ "\"") pos
       else Map.add_multi s.articles ~key:law_name ~data:(fst label)
     | _ -> s.articles

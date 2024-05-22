@@ -191,24 +191,32 @@ let reading_of_rule_then prefix_id eprog verb g pat =
     )
 
 let reading_of_refs refs =
-    (* let refs = List.map labels ~f:Label.reference_of_label in *)
-    String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: check reading of references and possibly make additions *)
+    (* TODO: how best to separate multiple references in the reading*)
+    String.concat ~sep:"<br>" (List.map refs ~f:Lex.string_of_reference) (* TODO: check reading of references and possibly make additions *)
 
 let reading_of_rule_except refs =
+  let suffix = match List.length refs with
+  | 1 -> "does not apply"
+  | _ -> "do not apply"
+  in
   p "lex-reading-then" (
       "Then "
       ^ reading_of_refs refs
       ^ " "
-      ^ strong "lex-reading-verb" "does not apply"
+      ^ strong "lex-reading-verb" suffix
     )
 
 (* TODO: check if reading of scope rules is correct *)
 let reading_of_rule_scope refs =
+  let suffix = match List.length refs with
+  | 1 -> "does apply"
+  | _ -> "do apply"
+  in
   p "lex-reading-then" (
       "Then "
       ^ reading_of_refs refs
       ^ " "
-      ^ strong "lex-reading-verb" "does apply"
+      ^ strong "lex-reading-verb" suffix
     )
 
 let reading_of_type_fixes eprog rule_id type_fixes =

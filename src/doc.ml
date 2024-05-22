@@ -101,8 +101,9 @@ let html_of_erule rule_id erule =
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
+  (* TODO: indentation of references *)
   let string_of_refs refs =
-    String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference) (* TODO: pretty print reference, e.g. with syntax highlighting of keywords *)
+    "<br>" ^ String.concat ~sep:"<br>" (List.map refs ~f:Lex.string_of_reference) (* TODO: pretty print reference, e.g. with syntax highlighting of keywords *)
   in 
   let string_of_ref_rule verb f p refs =
     div "lex-rule-if" (

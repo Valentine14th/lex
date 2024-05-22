@@ -128,25 +128,34 @@ let set_rule_id_force rule_id l = match rule_id with
   | _      -> { l with rule_id = Some "" }
 
 let reference_of_label label =
-  let aux sk acc (n,_) = match sk with
-  | Law i -> (Law (i+1), n) :: acc
-  | Title i -> (Title (i+1), n) :: acc
-  | Chapter i -> (Chapter (i+1), n) :: acc
-  | Section i -> (Section (i+1), n) :: acc
-  | Article i -> (Article (i+1), n) :: acc
-  | Paragraph i -> (Paragraph (i+1), n) :: acc
-  | Point i -> (Point (i+1), n) :: acc
-  | Subpoint i -> (Subpoint (i+1), n) :: acc
+  let rec aux sk ls = match sk, ls with
+  | _, [] -> []
+  | Law i, [(n,_)] -> [(Law i, n)]
+  | Law i, (n,_)::rest -> (Law i, n) :: aux (Law (i+1)) rest
+  | Title i, [(n,_)] -> [(Title i, n)]
+  | Title i, (n,_)::rest -> (Title i, n) :: aux (Title (i+1)) rest
+  | Chapter i, [(n,_)] -> [(Chapter i, n)]
+  | Chapter i, (n,_)::rest -> (Chapter i, n) :: aux (Chapter (i+1)) rest
+  | Section i, [(n,_)] -> [(Section i, n)]
+  | Section i, (n,_)::rest -> (Section i, n) :: aux (Section (i+1)) rest
+  | Article i, [(n,_)] -> [(Article i, n)]
+  | Article i, (n,_)::rest -> (Article i, n) :: aux (Article (i+1)) rest
+  | Paragraph i, [(n,_)] -> [(Paragraph i, n)]
+  | Paragraph i, (n,_)::rest -> (Paragraph i, n) :: aux (Paragraph (i+1)) rest
+  | Point i, [(n,_)] -> [(Point i, n)]
+  | Point i, (n,_)::rest -> (Point i, n) :: aux (Point (i+1)) rest
+  | Subpoint i, [(n,_)] -> [(Subpoint i, n)]
+  | Subpoint i, (n,_)::rest -> (Subpoint i, n) :: aux (Subpoint (i+1)) rest
   in
-  let law = List.fold label.law ~init:[] ~f:(aux (Law 0)) in
-  let title = List.fold label.title ~init:law ~f:(aux (Title 0)) in
-  let chapter = List.fold label.chapter ~init:title ~f:(aux (Chapter 0)) in
-  let section = List.fold label.chapter ~init:chapter ~f:(aux (Section 0)) in
-  let article = List.fold label.chapter ~init:section ~f:(aux (Article 0)) in
-  let paragraph = List.fold label.chapter ~init:article ~f:(aux (Paragraph 0)) in
-  let point = List.fold label.chapter ~init:paragraph ~f:(aux (Point 0)) in
-  let subpoint = List.fold label.chapter ~init:point ~f:(aux (Subpoint 0)) in
-  let levels = List.rev subpoint in
+  let law = aux (Law 0) label.law in
+  let title = aux (Title 0) label.title in
+  let chapter = aux (Chapter 0) label.chapter in
+  let section = aux (Section 0) label.section in
+  let article = aux (Article 0) label.article in
+  let paragraph = aux (Paragraph 0) label.paragraph in
+  let point = aux (Point 0) label.point in
+  let subpoint = aux (Subpoint 0) label.subpoint in
+  let levels = List.rev (List.concat [subpoint; point; paragraph; article; section; chapter; title; law]) in
   levels, label.rule_id
 
 let string_of_label l = string_of_reference (reference_of_label l)
