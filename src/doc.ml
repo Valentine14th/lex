@@ -24,7 +24,7 @@ let rec html_of_formula_ formula_id l f =
     match f.f with
     | ETT -> const "true"
     | EFF -> const "false"
-    | EEqConst (x, c) -> Printf.sprintf "%s = %s" (html_of_trm x.trm) (const (Dom.to_string c))
+    | EEqConst (x, c) -> Printf.sprintf "{%s = %s}" (html_of_trm x.trm) (const (Dom.to_string c))
     | EPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
     | ENeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
     | EAnd (_, fs) -> Util.paren_string l 4 (

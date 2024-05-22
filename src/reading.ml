@@ -19,8 +19,22 @@ module Placeholders = struct
 
 end
 
+let rec html_of_trm ?(l=0) = function
+  | Tformula.Term.TVar x -> ident x
+  | TConst d -> const (Dom.to_string d)
+  | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
+  | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                     (Formula.Term.string_of_unop o)
+                     (html_of_trm ~l:10 t.trm)
+  | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+                        Printf.sprintf (Util.paren l l' "%s %s %s")
+                          (html_of_trm ~l:l' t.trm)
+                          (Formula.Term.string_of_binop o)
+                          (html_of_trm ~l:l' t'.trm)
+and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
+
 let reading_of_term term =
-  span "lex-formula-term" (Tformula.Term.untyped_value_to_string term)
+  span "lex-formula-term" (html_of_trm Tformula.Term.(term.trm))
 
 let reading_of_span span = Lextime.Span.to_string span
 

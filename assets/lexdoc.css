@@ -6,6 +6,10 @@
     color: #e83e8c;
 }
 
+.lex-const {
+    color: #0077b6;
+}
+
 .lex-typ {
     color: #17c274;
 }
