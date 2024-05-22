@@ -11,7 +11,7 @@ type t =
     label: Label.t;
     exceptions_first_pass: (int * Tformula.t * (Lexing.position * Label.t) list) list;
     scopes_first_pass: (int * Tformula.t * (Lexing.position * Label.t) list) list;
-    articles: (ident, ident, String.comparator_witness) Map.t; (* map from law[0] identifiers to all article[0] identifiers in a particular law, used to enforce unique article identifiers *)
+    articles: (ident, ident list, String.comparator_witness) Map.t; (* map from law[0] identifiers to all article[0] identifiers in a particular law, used to enforce unique article identifiers *)
   }
 
 let empty =
@@ -59,13 +59,13 @@ let add_scope i f refs s =
 let set_labels pos section_kind label s =
   let articles = match section_kind with
     | Article 0 ->
-      let law_name = begin
-        try Label.qualified_name_of_law ~exn:true s.label.law
-          with _ -> Util.label_error ("Article \"" ^ fst label ^ "\" must be inside a law, but is not") pos 
+      let law_name = begin try Label.qualified_name_of_law ~exn:true s.label.law
+                     with _ -> Util.label_error ("Article \"" ^ fst label ^ "\" must be inside a law, but is not") pos 
         end in
-      begin try Map.add_exn s.articles ~key:law_name ~data:(fst label)
-        with _ -> Util.label_error ("Article \"" ^ fst label ^ "\" already exists in Law \"" ^ law_name ^ "\"") pos
-      end
+      let articles = Map.find_multi s.articles law_name in
+      print_endline ("aritcles: " ^ Util.string_of_string_list articles);
+      if List.exists articles ~f:(String.equal (fst label)) then Util.label_error ("Article \"" ^ fst label ^ "\" already exists in Law \"" ^ law_name ^ "\"") pos
+      else Map.add_multi s.articles ~key:law_name ~data:(fst label)
     | _ -> s.articles
   in
   let l = Label.set pos section_kind label s.label in
