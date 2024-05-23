@@ -12,7 +12,7 @@
 - Press `ctrl`+`shift`+`p` and search for "remote explorer: Focus on Dev Containers View"
 - Inside the window pane that appeared click on the button to open the current folder in a dev container
 - This might take a few minutes to set up the container
-- In the container, open a terminal window (`ctrl`+` ` `)
+- In the container, open a terminal window (`ctrl`+`` ` ``)
     - Run `dune build` to compile the project
     - To install the VS Code extension for syntax highlighting in `.lex` files, run:
     - `code --install-extension vscode/lex/lex-0.0.1.vsix`
