@@ -12,24 +12,37 @@ let class_list = [
     ("lex-reading-header", "card-header");
     ("lex-reading-body", "card-body");
     ("lex-stmt-section-law", "lex-stmt-section lex-stmt-section-law");
+    ("lex-stmt-section-title", "lex-stmt-section lex-stmt-section-title");
+    ("lex-stmt-section-chapter", "lex-stmt-section lex-stmt-section-chapter");
+    ("lex-stmt-section-section", "lex-stmt-section lex-stmt-section-section");
+    ("lex-stmt-section-article", "lex-stmt-section lex-stmt-section-article");
+    ("lex-stmt-section-paragraph", "lex-stmt-section lex-stmt-section-paragraph");
+    ("lex-stmt-section-point", "lex-stmt-section lex-stmt-section-point");
+    ("lex-stmt-section-subpoint", "lex-stmt-section lex-stmt-section-subpoint");
   ]
 
 
 let class_map = Map.of_alist_exn (module String) class_list
 
+let classes class_ = match Map.find class_map class_ with
+  | Some c -> c
+  | None -> class_
+
+let id_html id = match id with
+  | None -> ""
+  | Some i -> " id=\"" ^ i ^ "\""
+
 let tag name ?id:(id=None) class_ html =
-  let classes = match Map.find class_map class_ with
-    | Some c -> c
-    | None -> class_ in
-  let id_html = match id with
-    | None -> ""
-    | Some i -> " id=\"" ^ i ^ "\"" in
   Printf.sprintf "<%s class=\"%s\"%s>%s</%s>"
-    name classes id_html html name
+    name (classes class_) (id_html id) html name
+
+let a ?id:(id=None) href class_ html =
+  Printf.sprintf "<a href=\"%s\" class=\"%s\"%s>%s</a>"
+    href (classes class_) (id_html id) html 
 
 let span ?id:(id=None) = tag "span" ~id 
 
-let div ?id:(id=None) = tag "div" ~id 
+let div ?id:(id=None) = tag "div" ~id
 
 let p = tag "p"
 
@@ -63,8 +76,11 @@ let string html =
 let two_column left right =
   div "row" (div "col-6" left ^ div "col-6" right)
 
-let one_column html =
-  div "row" (div "col-12" html)
+let one_column ?(title=false) html =
+  if title then
+    div "row title-row" (div "col-12" html)
+  else
+    div "row" (div "col-12" html)
 
 let badge html =
   span "badge" html

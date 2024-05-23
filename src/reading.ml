@@ -204,33 +204,55 @@ let reading_of_rule_then prefix_id eprog verb g pat =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let reading_of_refs refs =
-    (* TODO: how best to separate multiple references in the reading*)
-    String.concat ~sep:"<br>" (List.map refs ~f:Lex.string_of_reference) (* TODO: check reading of references and possibly make additions *)
+let section_id rs =
+  "lex-section-" ^ String.concat ~sep:"-" (List.map ~f:(fun (s, n) -> Lex.string_of_section_kind s ^ "-" ^ n) rs)
 
-let reading_of_rule_except refs =
-  let suffix = match List.length refs with
-  | 1 -> "does not apply"
-  | _ -> "do not apply"
-  in
-  p "lex-reading-then" (
-      "Then "
-      ^ reading_of_refs refs
-      ^ " "
-      ^ strong "lex-reading-verb" suffix
-    )
+let reading_of_reference (l, (rs, rule)) =
+  let rule_id = match rule with
+    | Some r -> kw "rule" ^ r
+    | None ->  "" in
+  let reading_of_section_kind_and_name (s, n) =
+    span "lex-section-kind" (Lex.string_of_section_kind s) ^ n in
+  a ("#" ^ section_id (fst (Label.reference_of_label l))) "lex-section-link"
+    (String.concat ~sep:" " (List.map ~f:reading_of_section_kind_and_name rs) ^ rule_id)
+
+let reading_of_ref ref_id (l, r) =
+  span "lex-subformula-reading" ~id:(Some ref_id) (reading_of_reference (l, r))
+
+let reading_of_rule_except prefix_id refs =
+  let ref_id = Printf.sprintf "%s-%d" prefix_id in
+  let f i r =
+    li "lex-reading-then-formula" (reading_of_ref (ref_id i) r) in
+  match List.length refs with
+  | 1 ->
+     p "lex-reading-then" (
+         "Then "
+         ^ span "lex-reading-then-formula" (reading_of_ref (ref_id 0) (List.hd_exn refs))
+         ^ " " ^ strong "lex-reading-verb" "shall not apply"
+       )
+  | _ -> 
+     p "lex-reading-then" (
+         "Then the following "
+         ^ strong "lex-reading-verb" "shall not apply"
+         ^ ":"
+         ^ ul "lex-reading-then-formulae"
+             (String.concat ~sep:"" (List.mapi ~f refs))
+       )
 
 (* TODO: check if reading of scope rules is correct *)
-let reading_of_rule_scope refs =
+let reading_of_rule_scope prefix_id refs =
   let suffix = match List.length refs with
-  | 1 -> "does apply"
-  | _ -> "do apply"
-  in
+  | 1 -> "apply"
+  | _ -> "applies" in
+  let ref_id = Printf.sprintf "%s-%d" prefix_id in
+  let f i r =
+    li "lex-reading-then-formula" (reading_of_ref (ref_id i) r) in
   p "lex-reading-then" (
-      "Then "
-      ^ reading_of_refs refs
-      ^ " "
+      "Then the following "
       ^ strong "lex-reading-verb" suffix
+      ^ ":"
+      ^ ul "lex-reading-then-formulae"
+          (String.concat ~sep:"" (List.mapi ~f refs))
     )
 
 let reading_of_type_fixes eprog rule_id type_fixes =
@@ -251,9 +273,9 @@ let reading_of_type_fixes eprog rule_id type_fixes =
        )
 
 let verb_of_erule = function
-  | EObligation _ -> "must happen"
-  | EPermission _ -> "is permitted"
-  | EConstitutive _ -> "is constituted"
+  | EObligation _ -> "shall be obligatory"
+  | EPermission _ -> "shall be permitted"
+  | EConstitutive _ -> "shall be constituted"
   | _ -> assert false
 
 
@@ -266,18 +288,18 @@ let reading_of_erule rule_id eprog type_fixes erule =
   let reading_of_exc_rule f p refs =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f p
-    ^ reading_of_rule_except refs in
+    ^ reading_of_rule_except (prefix_id "then") refs in
   let reading_of_scope_rule f p refs  =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f p
-    ^ reading_of_rule_scope refs in
+    ^ reading_of_rule_scope (prefix_id "then") refs in
   match erule with
   | EObligation (f, p, g, q)
     | EPermission (f, p, g, q)
     -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q
   | EConstitutive (f, p, g)
     -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
-  | EException (f, p, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,_,x) -> x) refs)
-  | EScope (f, p, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,_,x) -> x) refs)
+  | EException (f, p, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
+  | EScope (f, p, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
 
 let reading_of_doc_string = Placeholders.mark_all

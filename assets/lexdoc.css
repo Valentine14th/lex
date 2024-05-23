@@ -17,7 +17,7 @@
 .lex-stmt {
     padding-top: 5px;
     padding-bottom: 5px;
-    border-bottom: 1px solid rgba(0,0,0,.125);
+    /*border-bottom: 1px solid rgba(0,0,0,.125);*/
 }
 
 .lex-keyword {
@@ -91,14 +91,14 @@
 }
 
 .lex-stmt-section {
-    font-weight: bold;
+    /*font-weight: bold;*/
     padding-top: 5px;
     padding-bottom: 5px;
 }
 
 .lex-stmt-section-law {
     font-size: 280%;
-    text-align: center;
+    /*text-align: center;*/
 }
 
 .lex-section-title {
@@ -109,22 +109,22 @@
 
 .lex-stmt-section-title {
     font-size: 250%;
-    text-align: center;
+    /*text-align: center;*/
 }
 
 .lex-stmt-section-chapter {
     font-size: 200%;
-    text-align: center;
+    /*text-align: center;*/
 }
 
 .lex-stmt-section-section {
     font-size: 175%;
-    text-align: center;
+    /*text-align: center;*/
 }
 
 .lex-stmt-section-article {
     font-size: 150%;
-    text-align: center;
+    /*text-align: center;*/
 }
 
 .lex-stmt-section-paragraph {
@@ -182,3 +182,27 @@
     border: 1px solid rgba(0,0,0,.125);
 }
 
+.lex-section-links {
+    margin-left: 5px;
+    font-size: 75%;
+    float: right;
+    font-weight: lighter;
+}
+
+.lex-section-links a {
+    color: black;
+    text-decoration: none;
+}
+
+.lex-section-links a:hover {
+    color: rgba(0,0,0,0.5);
+}
+
+.title-row {
+    background-color: rgba(0,0,0,.03);
+}
+
+.lex-section-link {
+    color: black;
+    text-decoration: none;
+}

@@ -85,6 +85,22 @@ let html_of_pattern formula_id = function
   | EPSince (i, f) -> kw "always" ^ kw "since"
                       ^ html_of_formula formula_id f
                       ^ html_of_interval false i
+
+let section_id rs =
+  "lex-section-" ^ String.concat ~sep:"-" (List.map ~f:(fun (s, n) -> Lex.string_of_section_kind s ^ "-" ^ n) rs)
+
+let html_of_reference (l, (rs, rule)) =
+  let rule_id = match rule with
+    | Some r -> kw "rule" ^ r
+    | None ->  ""
+  in
+  let html_of_section_kind_and_name (s, n) =
+    span "lex-section-kind" (Lex.string_of_section_kind s) ^ n in
+  a ("#" ^ section_id (fst (Label.reference_of_label l))) "lex-section-link"
+    ("{ " ^ String.concat ~sep:" " (List.map ~f:html_of_section_kind_and_name rs) ^ rule_id ^ " }")
+
+let html_of_ref ref_id r =
+  div "lex-formula" (span "lex-subformula" ~id:(Some ref_id) (html_of_reference r))
   
 let html_of_erule rule_id erule =
   let formula_id infix =
@@ -101,10 +117,6 @@ let html_of_erule rule_id erule =
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
-  (* TODO: indentation of references *)
-  let string_of_refs refs =
-    "<br>" ^ String.concat ~sep:"<br>" (List.map refs ~f:Lex.string_of_reference) (* TODO: pretty print reference, e.g. with syntax highlighting of keywords *)
-  in 
   let string_of_ref_rule verb f p refs =
     div "lex-rule-if" (
         kw "whenever"
@@ -113,7 +125,7 @@ let html_of_erule rule_id erule =
       )
     ^ div "lex-rule-then" (
           kw verb
-          ^ string_of_refs refs
+          ^ String.concat ~sep:"" (List.mapi ~f:(fun i r -> html_of_ref (formula_id "then" i) r) refs)
         )
   in
   match erule with
@@ -124,7 +136,7 @@ let html_of_erule rule_id erule =
     -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
   | EException (f, p, refs, _)
   | EScope (f, p, refs, _)
-    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,_,x) -> x) refs)
+    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs)
 
 let html_of_rule_type = function
   | Lex.Vanilla -> ""
@@ -203,6 +215,15 @@ let html_of_type_fixes rule_id = function
          kw "fix" ^ String.concat ~sep:"" (List.mapi ~f:(html_of_type_fix rule_id) type_fixes)
        )
 
+let html_of_label label =
+  let html_of_label_reference rs =
+    let html_of_section_kind_and_name rs' (s, n) =
+      let rs' = rs' @ [(s, n)] in
+      rs', a ("#" ^ section_id rs') "lex-section-link" (Lex.string_of_section_kind s ^ " " ^ n) in
+    String.concat ~sep:" / " (snd (List.fold_map ~init:[] ~f:html_of_section_kind_and_name rs)) in
+  let reference = Util.butlast (fst (Label.reference_of_label label)) in
+  if List.is_empty reference then "" else span "lex-section-links" (html_of_label_reference reference)
+
 let html_of_estmt eprog =
   function
   | ESImport (_, idents, import_format) ->
@@ -213,12 +234,14 @@ let html_of_estmt eprog =
              ^ String.concat ~sep:"." (List.map ~f:ident idents)
            )
        )
-  | ESSection (section_kind, _, label, title) ->
+  | ESSection (section_kind, label, name, title) ->
      let section_class = "lex-stmt-section-" ^ Lex.string_of_section_kind section_kind in
-     div section_class (
-         one_column (
+     let section_id = section_id (fst (Label.reference_of_label label)) in
+     div ~id:(Some section_id) section_class (
+         one_column ~title:true (
              span "lex-section-kind" (Lex.string_of_section_kind section_kind)
-             ^ span "lex-section-label" label
+             ^ span "lex-section-label" name
+             ^ html_of_label label
              ^ (
                match title with
                | Some title -> div "lex-section-title" (html_of_tannot title)

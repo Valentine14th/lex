@@ -22,6 +22,8 @@ let take l n =
   in
   aux (l, n)
 
+let butlast l = List.take l (List.length l - 1)
+
 let string_of_string_list l = Printf.sprintf "[%s]"
                               (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s\"%s\";" acc s))
 let string_of_int_list l = Printf.sprintf "[%s]"
