@@ -371,28 +371,37 @@ module RuleTree = struct
   | Intermediate map -> Map.fold map ~init:[] ~f:(fun ~key:_ ~data:(tree, rm) acc -> collect_rules_in_tree tree @  Map.data rm @ acc)
   | Leaf -> []
 
-  let rec find_article_subtree pos map name =
-    let key = ("article", 0, name) in
-    match Map.find map key with
-    | Some _ -> map
-    | None ->
-      let extract_maps = function
-      | Intermediate m -> Some m
-      | Leaf -> None
+  let rec infer_intermediate_levels pos map sk name intermediate_levels current_key =
+    let sk_name, sk_int = match sk with
+    | Law i when i > 0 -> "law", i
+    | Title i -> "title", i
+    | Chapter i -> "chapter", i
+    | Section i -> "section", i
+    | Article 0 -> "article", 0
+    | _ -> assert false
+    in
+    let key = (sk_name, sk_int, name) in
+    match Map.find map key, current_key with
+    | Some _, Some k -> [map, List.append intermediate_levels [k]]
+    | Some _, None -> [map, intermediate_levels]
+    | None, _ ->
+      let extract_maps (k, t) = match fst t with
+        | Intermediate m -> Some (k, m)
+        | Leaf -> None
       in
       let rec aux = function
       | [] -> assert false
-      | [m] -> find_article_subtree pos m name
-      | m::ms -> begin try find_article_subtree pos m name with _ -> aux ms
-      end in
-      let subtrees = Map.data map |> List.map ~f:fst |> List.filter_map ~f:extract_maps in
-      begin match List.is_empty subtrees with
-      | true -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos
-      | false ->  aux subtrees
-      end
+      | [(k, m)] -> infer_intermediate_levels pos m sk name intermediate_levels (Some k)
+      | (k, m)::ms -> List.append
+                      (infer_intermediate_levels pos m sk name intermediate_levels (Some k))
+                      (aux ms)
+       in
+      let subtrees = Map.to_alist map |> List.filter_map ~f:extract_maps in
+      match subtrees with
+      | [] -> []
+      | _ -> aux subtrees
   
   let rec find_rules_in_tree pos label = function
-  (* TODO: recursively search, if information above article is missing *)
   | Intermediate map ->
     let label' = remove_highest_level label in
     let highest = highest_level label in
@@ -402,10 +411,37 @@ module RuleTree = struct
       collect_rules_in_tree (Intermediate map)
     | LRule _ -> assert false
     | LSection (sk, n) ->
-      let map' = begin match sk with
-      | Article 0 -> find_article_subtree pos map n
-      | _ -> map
+      let sub_maps = begin match sk with
+      | Law i when i > 0 -> infer_intermediate_levels pos map sk n [] None
+      | Title _
+      | Chapter _
+      | Section _
+      | Article 0 -> infer_intermediate_levels pos map sk n [] None
+      | _ -> [(map, [])]
       end in
+      let map', inferred_levels = match sub_maps with
+      | [] ->
+        let err_msg = Printf.sprintf "Section { %s %s } was not found" (string_of_section_kind sk) n in
+        Util.reference_error err_msg pos
+      | [m, ils] -> m, ils
+      | _ ->
+        let err_msg = Printf.sprintf "Multiple possible intermediate levels (%s) found for section { %s \"%s\" }"
+                      (String.concat ~sep:", " (List.map sub_maps ~f:(fun (_, ils) -> "{ " ^ String.concat ~sep:" " (List.map ils ~f:(fun (sk, i, n) -> match i with
+                        | 0 -> Printf.sprintf "%s \"%s\"" sk n
+                        | _ -> Printf.sprintf "%s[%d] \"%s\"" sk i n)) ^ " }")) )
+                      (string_of_section_kind sk) n in
+        Util.reference_error err_msg pos
+      in
+      let _ = match List.is_empty inferred_levels with
+      | true -> ()
+      | false ->
+        let warn_msg = Printf.sprintf "Inferred intermediate levels: { %s } above { %s %s }"
+                       (String.concat ~sep:", " (List.map inferred_levels ~f:(fun (sk, i, n) -> Printf.sprintf "%s[%d] \"%s\"" sk i n)))
+                       (Lex.string_of_section_kind sk)
+                       (n)
+        in
+        Util.warning warn_msg (Some pos)
+      in
       begin match highest_level label' with
       | LRule r -> begin try [Map.find_exn map' key |> snd |> (fun x -> Map.find_exn x r)]
                    with _ -> Util.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos end
@@ -435,12 +471,12 @@ module RuleTree = struct
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx refs s =
     let rule_idxs = List.concat_map refs ~f:(fun (pos, l, _) -> find_rules_in_tree pos l s.tree) in
-    if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx);
+    if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
     { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
   let add_scope idx refs s =
     let rule_idxs = List.concat_map refs ~f:(fun (pos, l, _) -> find_rules_in_tree pos l s.tree) in
-    if List.is_empty rule_idxs then Util.warning ("No rules found for scope " ^ string_of_rule_idx s idx);
+    if List.is_empty rule_idxs then Util.warning ("No rules found for scope " ^ string_of_rule_idx s idx) None;
     { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
 

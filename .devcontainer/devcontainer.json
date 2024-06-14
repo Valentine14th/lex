@@ -1,0 +1,9 @@
+{
+    "name": "Lex Container",
+    "dockerFile": "Dockerfile",
+    "customizations": {
+        "vscode": {
+            "extensions": ["ocamllabs.ocaml-platform"]
+        }
+    },
+}
