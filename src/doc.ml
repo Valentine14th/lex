@@ -26,6 +26,10 @@ let rec html_of_formula_ formula_id l f =
     | EFF -> const "false"
     | EEqConst (x, c) -> Printf.sprintf "{%s = %s}" (html_of_trm x.trm) (const (Dom.to_string c))
     | EPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
+    | EAgg (s, op, x, y, f) ->
+       Printf.sprintf "{%s = %s(%s; %s; %s)}"
+         (ident s) (kw (Aggregation.op_to_string op)) (html_of_trm x.trm)
+         (String.concat ~sep:","  (List.map y ~f:ident)) (html_of_formula_ formula_id 5 f)
     | ENeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
     | EAnd (_, fs) -> Util.paren_string l 4 (
                           String.concat ~sep:(kw "AND") (List.map fs ~f:(html_of_formula_ formula_id 4)))
@@ -279,7 +283,9 @@ let html_of_estmt eprog =
         | Some s -> two_column html_of_event (html_of_doc_string s)
         | None   -> one_column html_of_event)
   | ESType (name, ty, doc_string) ->
-     let html_of_type = typ name ^ kw "is" ^ typ (Dom.string_of_tt ty) in
+     let html_of_type =
+       typ name ^
+         (match ty with Some tt -> kw "is" ^ typ (Dom.string_of_tt tt) | None -> "") in
      div "lex-stmt-type"
        (match doc_string with
         | Some s -> two_column html_of_type (html_of_doc_string s)

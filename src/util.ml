@@ -42,3 +42,9 @@ let spaces i = String.init i ~f:(fun _ -> ' ')
 let paren h k x = if h>k then "("^^x^^")" else x
 let paren_string h k x = if h>k then "("^x^")" else x
 let warning msg = eprintf "Warning: %s\n" msg
+
+let comb x y =
+  match x, y with
+  | Some z, _ -> Some z
+  | _, Some z -> Some z
+  | _, _ -> None

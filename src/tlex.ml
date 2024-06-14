@@ -30,7 +30,7 @@ type tstmt =
   | TSSection of section_kind * Label.t * string * string tannot option
   | TSRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * trule * rule_type * rule_constr list * string tannot option
   | TSEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
-  | TSType    of ident * Dom.tt * string option
+  | TSType    of ident * Dom.tt option * string option
   | TSFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | TSNote    of string
 
@@ -42,7 +42,7 @@ type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map
 type tprog =
   {
     tstmts: tstmt list;
-    taliases: (ident, Dom.tt * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    taliases: (ident, Dom.tt option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     tfunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
@@ -223,15 +223,17 @@ let string_of_tstmt ?(i=0) =
           name
           description
           (string_of_args typed_args i)
-  | TSType (name, tt, doc_string) ->
+  | TSType (name, typ, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
-          | None -> ""
-      in
-     Printf.sprintf "%stype %s is %s%s"
-       (Etc.tabs i) name (Dom.string_of_tt tt) description
-
+          | None -> "" in
+      let typ_string =
+       match typ with
+       | Some tt -> " is " ^ Dom.string_of_tt tt
+       | None -> "" in
+     Printf.sprintf "%stype %s%s%s"
+       (Etc.tabs i) name typ_string description
   | TSFunction (name, typed_args, return_typ, doc_string) ->
      let description =
           match doc_string with
@@ -260,3 +262,31 @@ let string_of_tprog tprog =
 
 let print_tprog tprog =
   Stdio.printf "%s\n" (string_of_tprog tprog)
+
+
+let unpack_functional tevents trm' trm =
+  match Tformula.Term.(trm.trm) with
+  | Tformula.Term.TApp (f, trms) ->
+     (match Map.find tevents f with
+      | Some (Event (_, Functional), _, _, _) ->
+         Some (f, trms @ [trm'])
+      | _ -> None)
+  | _ -> None
+
+let unpack_variable tevents trm' trm =
+  match Tformula.Term.(trm.trm) with
+  | Tformula.Term.TVar x ->
+     (match Map.find tevents x with
+      | Some (Event (_, Variable), _, _, _) ->
+         Some (x, [trm'])
+      | _ -> None)
+  | _ -> None
+
+let unpack_special_eq tevents trm trm' =
+  List.find_map
+    [unpack_functional tevents trm trm';
+     unpack_functional tevents trm' trm;
+     unpack_variable tevents trm trm';
+     unpack_variable tevents trm' trm]
+    ~f:(fun x -> x)
+

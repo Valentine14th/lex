@@ -123,6 +123,7 @@ type t =
   | TFF
   | TEqConst of Term.t * Term.t
   | TPredicate of string * Term.t list
+  | TAgg of string * Aggregation.op * Term.t * string list * t
   | TNeg of t
   | TAnd of Side.t * (t list)
   | TOr of Side.t * (t list)
@@ -172,6 +173,7 @@ let rec fv = function
   | TTT | TFF -> Set.empty (module String)
   | TEqConst (x, _) -> Set.of_list (module String) (Term.fv_list [x])
   | TPredicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
+  | TAgg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
   | TExists (x, f)
     | TForall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
   | TNeg f
@@ -204,7 +206,8 @@ let rec rank = function
     | TEventually (_, f)
     | THistorically (_, f)
     | TAlways (_, f)
-    | TType (f, _) -> rank f
+    | TType (f, _)
+    | TAgg (_, _, _, _, f) -> rank f
     | TImp (_, f, g)
     | TIff (_, _, f, g)
     | TSince (_, _, f, g)
@@ -226,7 +229,8 @@ let rec deg = function
     | TEventually (_, f)
     | THistorically (_, f)
     | TAlways (_, f)
-    | TType (f, _) -> deg f
+    | TType (f, _)
+    | TAgg (_, _, _, _, f) -> deg f
     | TImp (_, f, g)
     | TIff (_, _, f, g)
     | TSince (_, _, f, g)
@@ -246,6 +250,7 @@ let rec to_formula = function
   | TFF -> FF
   | TEqConst (trm, trm') -> EqConst (Term.to_formula_term trm, Term.to_formula_term trm')
   | TPredicate (e, trms) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
+  | TAgg (s, op, x, y, f) -> Agg (s, op, Term.to_formula_term x, y,  to_formula f)
   | TNeg f -> Neg (to_formula f)
   | TAnd (s, fs) -> And (fix_side s (List.hd_exn fs) (List.last_exn fs),
                          List.map fs ~f:to_formula)
@@ -270,6 +275,7 @@ let op_to_string = function
   | TFF -> Printf.sprintf "⊥"
   | TEqConst _ -> Printf.sprintf "="
   | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
+  | TAgg (_, op, x, y, _) -> Printf.sprintf "%s(%s; %s)" (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y)
   | TNeg _ -> Printf.sprintf "¬"
   | TAnd (_, _) -> Printf.sprintf "∧"
   | TOr (_, _) -> Printf.sprintf "∨"
@@ -292,6 +298,7 @@ let rec to_string_rec l = function
   | TTT -> Printf.sprintf "⊤"
   | TFF -> Printf.sprintf "⊥"
   | TEqConst (trm, trm') -> Printf.sprintf "%s = %s" (Term.to_string trm) (Term.to_string trm')
+  | TAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | TNeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | TAnd (s, fs) ->

@@ -63,12 +63,12 @@ let rec compile_term aliases term =
     | Term.TConst d -> Term.TConst (compile_dom d)
     | Term.TApp (f, terms) -> Term.TApp (f, List.map ~f:(compile_term aliases) terms)
     | Term.TUnop (op, term) ->
-       let f = compile_unop (compile_tt (Formula.TypeTerm.eval aliases term.tt)) op in
+       let f = compile_unop (compile_tt (Formula.TypeTerm.eval_default aliases TInt term.tt)) op in
        Term.TApp (f, [compile_term aliases term])
     | Term.TBinop (term, op, term') ->
        let f = compile_binop
-                 (compile_tt (Formula.TypeTerm.eval aliases term.tt))
-                 (compile_tt (Formula.TypeTerm.eval aliases term'.tt)) op in
+                 (compile_tt (Formula.TypeTerm.eval_default aliases TInt term.tt))
+                 (compile_tt (Formula.TypeTerm.eval_default aliases TInt term'.tt)) op in
        Term.TApp (f, [compile_term aliases term; compile_term aliases term'])
   in { term with trm }
 
@@ -129,7 +129,7 @@ let compile_events events aliases =
   let event_list = Map.to_alist events in
   let compile_event (name, (event_type, args, pol, _)) =
     let type_args (_, name, typ_alias) =
-      (name, Formula.TypeTerm.eval aliases typ_alias)
+      (name, Formula.TypeTerm.eval_default aliases TInt typ_alias)
     in
     let typed_args = List.map args ~f:type_args in
     CEvent (name, event_type, pol, typed_args)
@@ -140,10 +140,10 @@ let compile_functions functions aliases =
   let function_list = Map.to_alist functions in
   let compile_function (name, (typed_args, return_type, _)) =
     let type_args (name, typ_alias) =
-      (name, Formula.TypeTerm.eval aliases typ_alias)
+      (name, Formula.TypeTerm.eval_default aliases TInt typ_alias)
     in
     let typed_args = List.map typed_args ~f:type_args in
-    let return_type = Formula.TypeTerm.eval aliases return_type in
+    let return_type = Formula.TypeTerm.eval_default aliases TInt return_type in
     CFunction (name, typed_args, return_type)
   in
   List.map function_list ~f:compile_function
@@ -173,13 +173,13 @@ let compile_exception_or_scope_signature predicate_map aliases variables =
     let terms = snd pred_name_and_terms in
     let type_term f = match Eformula.Term.(f.trm) with
       | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> assert false in
-                       let t = Formula.TypeTerm.eval aliases a in
+                       let t = Formula.TypeTerm.eval_default aliases TInt a in
                        (v, t)
       | _ -> assert false
       (* TODO: constants are not actually possible to be part of an exception predicate *)
     in
     let typed_terms = List.map terms ~f:type_term in
-    CEvent (fst pred_name_and_terms, Event false, Lex.TInternal, typed_terms)
+    CEvent (fst pred_name_and_terms, Event (false, Standard), Lex.TInternal, typed_terms)
   in
   List.map indexed_predicates ~f:compile_predicate
 
@@ -200,8 +200,8 @@ let pol_to_symbol_string pol =
 
 let string_of_signatures signatures =
   let string_of_event_type = function
-    | Event true  -> "ext "
-    | Event false -> ""
+    | Event (true, _)  -> "ext "
+    | Event (false, _) -> ""
     | Predicate   -> "pred" in
   let string_of_event_signature (name, event_type, pol, args) =
     let arg_strs = List.map args ~f:(fun (name, tt) ->

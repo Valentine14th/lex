@@ -89,20 +89,40 @@ module TypeTerm = struct
     | TypeVar i    -> i
 
   let eval aliases = function
+    | TypeConst tt -> Some tt
+    | TypeVar v    ->
+       match fst (Map.find_exn aliases v) with
+       | Some tt -> Some tt
+       | None -> None
+
+  let eval_default aliases default = function
     | TypeConst tt -> tt
-    | TypeVar v    -> fst (Map.find_exn aliases v)
+    | TypeVar v    ->
+       match fst (Map.find_exn aliases v) with
+       | Some tt -> tt
+       | None -> default
 
   let lub t t' aliases =
     match t, t' with
     | TypeConst tt, TypeConst tt' when Dom.tt_equal tt tt' -> Some (TypeConst tt)
     | TypeVar v   , TypeVar v' when String.equal v v' -> Some (TypeVar v)
-    | TypeVar v   , TypeConst tt' when Dom.tt_equal (fst (Map.find_exn aliases v)) tt' -> Some (TypeVar v)
-    | TypeConst tt, TypeVar v' when Dom.tt_equal (fst (Map.find_exn aliases v')) tt -> Some (TypeVar v')
+    | TypeVar v   , TypeConst tt' ->
+       begin
+         match fst (Map.find_exn aliases v) with
+         | Some tt when Dom.tt_equal tt tt' -> Some (TypeVar v)
+         | _ -> None
+       end
+    | TypeConst tt, TypeVar v' ->
+       begin
+         match fst (Map.find_exn aliases v') with
+         | Some tt' when Dom.tt_equal tt' tt -> Some (TypeVar v')
+         | _ -> None
+       end
     | _, _ -> None
 
   let eval_with_doc_string aliases = function
-    | TypeConst tt -> (tt, None) 
-    | TypeVar v    -> Map.find_exn aliases v
+    | TypeConst tt -> (Dom.string_of_tt tt, None) 
+    | TypeVar v    -> (v, snd (Map.find_exn aliases v))
 
 end
 
@@ -228,6 +248,7 @@ type t =
   | FF
   | EqConst of Term.t * Term.t
   | Predicate of string * Term.t list
+  | Agg of string * Aggregation.op * Term.t * string list * t
   | Neg of t
   | And of Side.t * (t list)
   | Or of Side.t * (t list)
@@ -283,6 +304,7 @@ let rec fv = function
   | TT | FF -> Set.empty (module String)
   | EqConst (x, y) -> Set.of_list (module String) (Term.fv_list [x; y])
   | Predicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
+  | Agg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
   | Exists (x, f)
     | Forall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
   | Neg f
@@ -316,7 +338,8 @@ let rec deg = function
     | Eventually (_, f)
     | Historically (_, f)
     | Always (_, f)
-    | Type (f, _) -> deg f
+    | Type (f, _)
+    | Agg (_, _, _, _, f) -> deg f
     | Imp (_, f, g)
     | Iff (_, _, f, g)
     | Since (_, _, f, g)
@@ -337,7 +360,8 @@ let rec collect_predicates l = function
     | Once (_, f)
     | Eventually (_, f)
     | Historically (_, f)
-    | Always(_, f) -> collect_predicates l f
+    | Always(_, f)
+    | Agg (_, _, _, _, f) -> collect_predicates l f
     | Imp (_, f, g)
     | Iff (_, _, f, g)
     | Since (_, _, f, g)
@@ -348,6 +372,7 @@ let rec collect_predicates l = function
 
 let rec flatten_assoc f = match f with
   | TT | FF | EqConst _ | Predicate _ -> f
+  | Agg (s, op, x, y, f) -> Agg (s, op, x, y, flatten_assoc f)
   | Neg f -> Neg (flatten_assoc f)
   | Exists (x, f) -> Exists (x, flatten_assoc f)
   | Forall (x, f) -> Forall (x, flatten_assoc f)
@@ -374,6 +399,7 @@ let rec to_string_rec l = function
   | FF -> Printf.sprintf "⊥"
   | EqConst (x, y) -> Printf.sprintf "%s = %s" (Term.to_string x) (Term.to_string y)
   | Predicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
+  | Agg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | Neg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | And (s, fs) ->
      let sep = "∧" ^ Side.to_string s in

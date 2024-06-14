@@ -51,6 +51,8 @@ rule read =
   | "function"     { FUNCTION }
   | "event"        { EVENT }
   | "predicate"    { PREDICATE }
+  | "functional"   { FUNCTIONAL }
+  | "variable"     { VARIABLE }
   | "string"       { TSTRING }
   | "int"          { TINT }
   | "float"        { TFLOAT }

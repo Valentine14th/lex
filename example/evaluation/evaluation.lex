@@ -47,11 +47,11 @@ event AbleToDemonstrateConsent
 rule
   """Where processing is based on consent, the controller shall be able to demonstrate that the data subject has consented to processing of his or her personal data."""
   whenever
-    ONCE Nominates(c, p, t)
+    Nominates(c, p, t)
     Processes(pa, p, d, t)
     Relates(d, ds)
     LegalBasis(pa, co)
-    ONCE GivesConsent(ds, co)
+    GivesConsent(ds, co)
   oblige
     AbleToDemonstrateConsent(c, co)
 transparently enforceable

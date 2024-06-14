@@ -17,6 +17,7 @@ type core_t =
   | EFF
   | EEqConst of Term.t * Dom.t
   | EPredicate of string * Term.t list
+  | EAgg of string * Aggregation.op * Term.t * string list * t
   | ENeg of t
   | EAnd of Side.t * (t list)
   | EOr of Side.t * (t list)
@@ -67,17 +68,23 @@ let tbigcauconj = function
 let tbigcauforall vars f =
   List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non 0)
 
-let rec core_of_tformula ?id:(id=1) d = 
-  let lof_formula = of_tformula ~id:(d*id)
-  and rof_formula = of_tformula ~id:(d*id+1)
-  and iof_formula i = of_tformula ~id:(d*id+i) in
+let rec core_of_tformula tevents ?id:(id=1) d = 
+  let lof_formula = of_tformula tevents ~id:(d*id)
+  and rof_formula = of_tformula tevents ~id:(d*id+1)
+  and iof_formula i = of_tformula tevents ~id:(d*id+i) in
   function
   | Tformula.TTT -> ETT
   | TFF -> EFF
-  | TEqConst (x, y) -> EEqConst ({ trm = Term.TBinop (x, Formula.Term.BEq, y);
-                                   tt = TypeTerm.TypeConst (Dom.TBool) },
-                                 Dom.Bool true)
+  | TEqConst (x, y) ->
+     begin
+       match Tlex.unpack_special_eq tevents x y with
+       | Some (e, t) -> EPredicate (e, t)
+       | _ -> EEqConst ({ trm = Term.TBinop (x, Formula.Term.BEq, y);
+                          tt = TypeTerm.TypeConst (Dom.TBool) },
+                        Dom.Bool true)
+     end
   | TPredicate (e, t) -> EPredicate (e, t)
+  | TAgg (s, op, x, y, f) -> EAgg (s, op, x, y, rof_formula f)
   | TNeg f -> ENeg (lof_formula f)
   | TAnd (s, fs) -> EAnd (s, List.mapi ~f:iof_formula fs)
   | TOr (s, fs) -> EOr (s, List.mapi ~f:iof_formula fs)
@@ -95,16 +102,17 @@ let rec core_of_tformula ?id:(id=1) d =
   | TUntil (s, i, f, g) -> EUntil (s, i, true, lof_formula f, rof_formula g)
   | TType (f, ty) -> EType (lof_formula f, ty)
 
-and of_tformula ?id:(id=1) f =
+and of_tformula tevents ?id:(id=1) f =
   let d = Tformula.deg f in
-  { f = core_of_tformula ~id d f; enftype = EnfType.Obs; id }
+  { f = core_of_tformula tevents ~id d f; enftype = EnfType.Obs; id }
 
-let of_tformulas = List.map ~f:of_tformula
+let of_tformulas tevents = List.map ~f:(of_tformula tevents)
 
 let rec fv f = match f.f with
   | ETT | EFF -> Set.empty (module String)
   | EEqConst (x, _) -> Set.of_list (module String) (Term.fv_list [x])
   | EPredicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
+  | EAgg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
   | EExists (x, f)
     | EForall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
   | ENeg f
@@ -128,6 +136,7 @@ let rec rank = function
   | ETT | EFF -> 0
   | EEqConst _ -> 0
   | EPredicate (_, args) -> List.length args
+  | EAgg (_, _, _, _, f) -> rank f.f
   | ENeg f
     | EExists (_, f)
     | EForall (_, f)
@@ -156,6 +165,7 @@ let rec to_formula f = match f.f with
   | EFF -> FF
   | EEqConst (trm, c) -> EqConst (Term.to_formula_term trm, Formula.Term.Const c)
   | EPredicate (e, trms) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
+  | EAgg (s, op, x, y, f) -> Agg (s, op, Term.to_formula_term x, y, to_formula f)
   | ENeg f -> Neg (to_formula f)
   | EAnd (s, fs) -> And (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
                          List.map fs ~f:to_formula)
@@ -180,6 +190,7 @@ let rec op_to_string_core = function
   | EFF -> Printf.sprintf "⊥"
   | EEqConst _ -> Printf.sprintf "="
   | EPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
+  | EAgg (_, op, x, y, _) -> Printf.sprintf "%s(%s; %s)" (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y)
   | ENeg _ -> Printf.sprintf "¬"
   | EAnd (_, _) -> Printf.sprintf "∧"
   | EOr (_, _) -> Printf.sprintf "∨"
@@ -204,6 +215,7 @@ let rec to_string_core_rec l = function
   | EFF -> Printf.sprintf "⊥"
   | EEqConst (x, c) -> Printf.sprintf "%s = %s" (Term.to_string x) (Dom.to_string c)
   | EPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
+  | EAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | ENeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | EAnd (s, fs) ->
      let sep = "∧" ^ Side.to_string s in

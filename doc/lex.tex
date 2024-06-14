@@ -1,4 +1,4 @@
-\documentclass[runningheads]{llncs}
+>\documentclass[runningheads]{llncs}
 
 \usepackage[T1]{fontenc}
 
@@ -389,15 +389,26 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
 % todo:
-% MAYBE NOT: points inside rules + whenever ... or ... or ... [verb] ... → easy 
 % design survey
 % Erwägungsgründe → easy / Jonas
 % enforcement of constitutive rules → Jonas
 % add readings of complex terms → medium
-% more complex terms: algebraic data types... → medium
-% more complete type system → medium
-% links in HTML
-% make module system complete
+% more complex terms: algebraic data types... → medium / Jonas?
+% make module system complete → Jonas
+% other verbs
+% aggregations → hard, missing is_relative_past
+% state basic time unit → easy
+% modify... constitute and except... constitute → medium
+% split compilation phase and introduce clex
+% support for checks
+
+
+%%% concrete todos, in order
+%%% - implement aggregations in Lex
+%%% - modify... constitute and except... constitute
+%%% - stating of basic time unit, other verbs
+%%% - (not needed for Catala example) algebraic data types
+%%% + SURVEY
 
 % Enforcer wishlist
 
@@ -414,11 +425,11 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % WP5 (even lower priority)
 % - complex data types: algebraic / records
 
-% WP6
-% - let bindings
-
 % WP7 (done but not tested)
-% - time arithmetics
+% - time arithmetics → missing arbitrary functions
+
+% WP8 (done but insufficiently tested)
+% - aggregations
 
 {%\setlength\bibsep{2pt}
 \small

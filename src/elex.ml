@@ -23,7 +23,7 @@ type estmt =
   | ESSection of section_kind * Label.t * string * string tannot option
   | ESRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * erule * rule_type * rule_constr list * string tannot option
   | ESEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
-  | ESType    of ident * Dom.tt * string option
+  | ESType    of ident * Dom.tt option * string option
   | ESFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | ESNote    of string
 
@@ -32,7 +32,7 @@ type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map
 type eprog =
   {
     estmts: estmt list;
-    ealiases: (ident, Dom.tt * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    ealiases: (ident, Dom.tt option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
@@ -148,10 +148,13 @@ let string_of_estmt ?(i=0) =
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
-          | None -> ""
-      in
-     Printf.sprintf "type %s is %s%s"
-       name (Dom.string_of_tt typ) description
+          | None -> "" in
+      let typ_string =
+       match typ with
+       | Some tt -> " is " ^ Dom.string_of_tt tt
+       | None -> "" in
+     Printf.sprintf "%stype %s%s%s"
+       (Etc.tabs i) name typ_string description
   | ESFunction (name, typed_args, return_typ, doc_string) ->
      let description =
           match doc_string with

@@ -73,14 +73,19 @@ type import_format =
   | IFormex
   | IAkomaNtoso
 
-type event_type = Event of bool | Predicate
+type event_syntax =
+  | Standard
+  | Functional
+  | Variable
+
+type event_type = Event of bool * event_syntax | Predicate
 
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
   | SRule      of Lexing.position * string option * (ident * Formula.TypeTerm.t) list * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option (* location points to beginning of event identifier *)
-  | SType      of Lexing.position * ident * Dom.tt * string option (* location points to beginning of type identifier *)
+  | SType      of Lexing.position * ident * (Dom.tt option) * string option (* location points to beginning of type identifier *)
   | SFunction  of Lexing.position * ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | SNote      of Lexing.position * string
 
@@ -201,8 +206,13 @@ let string_of_import_format = function
   | IFormex -> " formex "
   | IAkomaNtoso -> " akomaNtoso "
 
+let string_of_event_syntax = function
+  | Functional -> " functional "
+  | Variable -> " variable "
+  | Standard -> ""
+
 let string_of_event_type = function
-  | Event b -> (if b then "external " else "") ^ "event"
+  | Event (b, sy) -> (if b then "external " else "") ^ string_of_event_syntax sy ^ "event"
   | Predicate -> "predicate"
 
 let string_of_type_fixes i = function
@@ -261,10 +271,13 @@ let string_of_stmt ?(i=0) =
      let description =
        match doc_string with
        | Some s -> "\n" ^ make_doc_string s i
-       | None -> ""
-     in
-     Printf.sprintf "%stype %s is %s%s"
-       (Etc.tabs i) name (Dom.string_of_tt typ) description
+       | None -> "" in
+     let typ_string =
+       match typ with
+       | Some tt -> " is " ^ Dom.string_of_tt tt
+       | None -> "" in
+     Printf.sprintf "%stype %s%s%s"
+       (Etc.tabs i) name typ_string description
   | SFunction (_, name, typed_args, return_typ, doc_string) ->
      let description =
           match doc_string with
@@ -295,3 +308,27 @@ let print_prog prog =
 
 let prog_to_file filename prog =
   Out_channel.write_all filename ~data:(string_of_prog prog)
+
+let unpack_functional tevents trm' = function
+  | Formula.Term.App (f, trms) ->
+     (match Map.find tevents f with
+      | Some (Event (_, Functional), _, _, _) ->
+         Some (f, trms @ [trm'])
+      | _ -> None)
+  | _ -> None
+
+let unpack_variable tevents trm' = function
+  | Formula.Term.Var x ->
+     (match Map.find tevents x with
+      | Some (Event (_, Variable), _, _, _) ->
+         Some (x, [trm'])
+      | _ -> None)
+  | _ -> None
+
+let unpack_special_eq tevents trm trm' =
+  List.find_map
+    [unpack_functional tevents trm trm';
+     unpack_functional tevents trm' trm;
+     unpack_variable tevents trm trm';
+     unpack_variable tevents trm' trm]
+    ~f:(fun x -> x)

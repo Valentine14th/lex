@@ -261,7 +261,7 @@ let reading_of_type_fixes eprog rule_id type_fixes =
     let fix_html =
       match Formula.TypeTerm.eval_with_doc_string Elex.(eprog.ealiases) ty with
      | (_, Some doc_string) -> ident ident_ ^ doc_string
-     | (ty, None) -> ident ident_ ^ " of type " ^ typ (Dom.string_of_tt ty)
+     | (ty_string, None) -> ident ident_ ^ " of type " ^ typ ty_string
     in li ~id "lex-type-fix-reading" fix_html in
   match type_fixes with
   | [] -> ""

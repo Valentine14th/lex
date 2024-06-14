@@ -19,7 +19,7 @@
 %token <Lexing.position> LSB RSB
 %token <Lexing.position> IMPORT
 %token INFINITY
-%token FUNCTION EXTERNAL EVENT PREDICATE TSTRING TINT TFLOAT TBOOL TTIME TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE TSTRING TINT TFLOAT TBOOL TTIME TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IWITHIN IBEFORE ISTRICTLY IAFTER IBETWEEN IEXCLUDED IEVENTUALLY IALWAYS IONCE ISINCE IDELAYING IIF IIN ITHE IFUTURE IPAST
 %token IS TTYPE
 %token <string> DOCSTRING
@@ -88,8 +88,10 @@ stmt:
   | IMPORT import_option import            { SImport ($1, $2, $3) }
   | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, snd $2, Some (snd $3)) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, snd $2, None) }
-  | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, $4, None) }
-  | TTYPE IDENT IS typ DOCSTRING           { SType (fst $2, snd $2, $4, Some $5) }
+  | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, Some $4, None) }
+  | TTYPE IDENT IS typ DOCSTRING           { SType (fst $2, snd $2, Some $4, Some $5) }
+  | TTYPE IDENT                            { SType (fst $2, snd $2, None, None) }
+  | TTYPE IDENT DOCSTRING                  { SType (fst $2, snd $2, None, Some $3) }
   | FUNCTION IDENT LPA fun_args RPA SUB GT type_term { SFunction (fst $2, snd $2, $4, $8, None) }
   | FUNCTION IDENT LPA fun_args RPA SUB GT type_term DOCSTRING { SFunction (fst $2, snd $2, $4, $8, Some $9) }
   | event_def                              { $1 }
@@ -209,9 +211,13 @@ event_def:
   | pol event_type IDENT DOCSTRING list(arg) { SEvent (fst $3, $2, snd $3, $5, $1, Some $4) }
 
 event_type:
-  | EXTERNAL EVENT { Lex.Event true }
-  | EVENT          { Lex.Event false }
-  | PREDICATE      { Lex.Predicate }
+  | EXTERNAL EVENT            { Lex.Event (true, Standard) }
+  | EVENT                     { Lex.Event (false, Standard) }
+  | FUNCTIONAL EXTERNAL EVENT { Lex.Event (true, Functional) }
+  | FUNCTIONAL EVENT          { Lex.Event (false, Functional) }
+  | VARIABLE EXTERNAL EVENT   { Lex.Event (true, Variable) }
+  | VARIABLE EVENT            { Lex.Event (false, Variable) }
+  | PREDICATE                 { Lex.Predicate }
 
 arg:
   | IDENT COL type_term { (fst $1, snd $1, $3) }

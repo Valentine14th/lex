@@ -303,18 +303,27 @@ let rec type_formula s pos t_vars = function
   | FF -> t_vars, TFF
   | EqConst (x, y) ->
      begin
-       let t_vars, x' = type_term s.tfunctions s.taliases t_vars pos x None in
-       let t_vars, y' = type_term s.tfunctions s.taliases t_vars pos y None in
-       if Formula.TypeTerm.equal x'.tt y'.tt then
-         (t_vars, TEqConst (x', y'))
-       else
-         let err_msg = Printf.sprintf "Ill-typed argument types in equality: '%s' vs '%s'"
-                         (Formula.TypeTerm.to_string x'.tt) (Formula.TypeTerm.to_string y'.tt) in
-         Util.type_error err_msg pos
+       match Lex.unpack_special_eq s.tevents x y with
+       | Some (event_name, trms) -> type_formula s pos t_vars (Predicate (event_name, trms))
+       | None ->       
+          begin
+            let t_vars, x' = type_term s.tfunctions s.taliases t_vars pos x None in
+            let t_vars, y' = type_term s.tfunctions s.taliases t_vars pos y None in
+            if Formula.TypeTerm.equal x'.tt y'.tt then
+              (t_vars, TEqConst (x', y'))
+            else
+              let err_msg = Printf.sprintf "Ill-typed argument types in equality: '%s' vs '%s'"
+                              (Formula.TypeTerm.to_string x'.tt) (Formula.TypeTerm.to_string y'.tt) in
+              Util.type_error err_msg pos
+          end
      end
   | Predicate (event_name, trms) ->
      let t_vars, trms = type_terms event_name trms t_vars pos s.tevents s.tfunctions s.taliases in
      (t_vars, TPredicate (event_name, trms))
+  | Agg (u, op, x, y, f) ->
+     let t_vars, x = type_term s.tfunctions s.taliases t_vars pos x None in
+     let t_vars, f = type_formula s pos t_vars f in
+     t_vars, TAgg (u, op, x, y, f)
   | Neg f ->
      let t_vars, f = type_formula s pos t_vars f in
      t_vars, TNeg f
