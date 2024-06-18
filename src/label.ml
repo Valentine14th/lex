@@ -270,7 +270,7 @@ module RuleTree = struct
 
   type s = 
     {
-      label_of_rule: (int, (t*Lexing.position), Int.comparator_witness) Map.t;
+      label_of_rule: (int, (t * Lexing.position), Int.comparator_witness) Map.t;
       tree: level_tree; (* entire tree, specifically containing every level between law[0] and article[0] *)
       exceptions: (int, int list, Int.comparator_witness) Map.t; (* map from rule index i to list of rule indeces of except-rules for rule i *)
       scopes: (int, int list, Int.comparator_witness) Map.t; (* map from rule index i to list of rule indeces of scope-rules for rule i *)

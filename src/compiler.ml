@@ -83,6 +83,47 @@ let compile_pattern (f: Eformula.t) = function
                       let since_f = { f = ESince (R, i, neg_f, g); enftype = Non; id = 0 } in
                       { f = ENeg since_f; enftype = Non; id = 0 }
 
+let complete_erule (eprog:Elex.eprog) =
+  let aux f' = function
+    | EObligation (f, p, g, q) -> EObligation (f@f', p, g, q)
+    | EPermission (f, p, g, q) -> EPermission (f@f', p, g, q)
+    | EConstitutive (f, p, g) -> EConstitutive (f@f', p, g)
+    | EException (f, p, ref, pred) -> EException (f@f', p, ref, pred)
+    | EScope (f, p, ref, pred) -> EScope (f@f', p, ref, pred)
+  in
+  function
+  | ESRule (_, idx, _, _, rule, _, _, _) ->
+    let exception_idxs' = Map.find_multi eprog.rule_tree.exceptions idx in
+    let scope_idxs' = Map.find_multi eprog.rule_tree.scopes idx in
+    let exception_idxs = List.filter exception_idxs' ~f:(fun x -> x=idx) in
+    let scope_idxs = List.filter scope_idxs' ~f:(fun x -> x=idx) in
+    let exception_predicates = List.map exception_idxs ~f:(try Map.find_exn eprog.exception_predicates with _ -> assert false) in
+    let exception_predicates_neg = List.map exception_predicates ~f:(fun x -> make (eneg x) Non 0) in
+    let exception_positions = List.map exception_idxs ~f:(fun x -> try snd (Map.find_exn eprog.rule_tree.label_of_rule x) with _ -> assert false) in
+    let exceptions = List.zip_exn exception_positions exception_predicates_neg in
+    let scope_predicates = List.map scope_idxs ~f:(try Map.find_exn eprog.scope_predicates with _ -> assert false) in
+    let scope_positions = List.map scope_idxs ~f:(fun x -> try snd (Map.find_exn eprog.rule_tree.label_of_rule x) with _ -> assert false) in
+    let scopes = List.zip_exn scope_positions scope_predicates in
+    let rule' = aux (exceptions@scopes) rule in
+    rule'
+  | _ -> assert false
+
+let compile_let_binding f p pred =
+  let lhs = pred in
+  let rhs = (compile_pattern (tbigcauconj f) p) in
+  (lhs, rhs)
+
+let compile_erule_let = function
+  | EObligation _ | EPermission _ -> None
+  | EConstitutive (f, p, pred) ->
+    let binding = begin match pred with
+      | [(_, { f = EPredicate _; _})] -> compile_let_binding (List.map ~f:snd f) p (List.hd_exn pred |> snd)
+      | _ -> assert false
+    end in
+    Some binding
+  | EException (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
+  | EScope (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
+
 let compile_imp f p g q =
   let vars =
     Set.elements
@@ -96,30 +137,10 @@ let compile_imp f p g q =
                           (tbigcauconj f) p, compile_pattern (tbigcauconj g) q)) Non 0))))
     Non 0
 
-let compile_erule eprog =
-  let aux f' = function
-    | EObligation (f, p, g, q) -> compile_imp (List.map ~f:snd f@f') p (List.map ~f:snd g) q
-    | EPermission (f, p, g, q) -> compile_imp (List.map ~f:snd f@f') p (List.map ~f:snd g) q
-    | EConstitutive (f, p, g) -> compile_imp (List.map ~f:snd f@f') p (List.map ~f:snd g) EPPresent
-    | EException (f, p, _, pred) -> compile_imp (List.map ~f:snd f@f') p [pred] EPPresent (* TODO: implement exception compilation to more closely represent let expressions, maybe with iff instead of just if *)
-    | EScope (f, p, _, pred) -> compile_imp (List.map ~f:snd f@f') p [pred] EPPresent (* TODO is a negation necessary here, or is this handled elsewhwere? *)
-  in
-  function
-(*
-  | ESRule (_, label, _, rule, _, _, _) ->
-    let label_name = Label.qualified_name label in
-    let exceptions = Map.find_multi eprog.exceptions label_name in
-    let f' = List.map exceptions ~f:(fun x -> make (eneg (snd x)) Non 0) in
-    aux f' rule
- *)
-  | ESRule (_, idx, _, _, rule, _, _, _) ->
-    let exception_idxs = Map.find_multi eprog.rule_tree.exceptions idx in
-    let scope_idxs = Map.find_multi eprog.rule_tree.scopes idx in
-    let exceptions = List.map exception_idxs ~f:(try Map.find_exn eprog.exception_predicates with _ -> assert false) in
-    let scopes = List.map scope_idxs ~f:(try Map.find_exn eprog.scope_predicates with _ -> assert false) in
-    let f' = List.map exceptions ~f:(fun x -> make (eneg x) Non 0) in
-    aux (f'@scopes) rule
-  | _ -> assert false
+let compile_erule_imp = function
+  | EObligation (f, p, g, q) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
+  | EPermission (f, p, g, q) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
+  | EConstitutive _ | EException _ | EScope _ -> None
 
 type signature_item =
   | CEvent of ident * event_type * pol * ((ident * Dom.tt) list)
@@ -223,12 +244,24 @@ let string_of_signatures signatures =
   let signature_strs = List.map signatures ~f:string_of_signature_item in
   String.concat ~sep:"\n" signature_strs
 
+(* TODO (JD): implement topological sorting for let bindings *)
+let topological_sort_erules rules = rules
+
+let string_of_let_binding (lhs, rhs) =
+  let lhs_str = Eformula.to_string lhs in
+  let rhs_str = Eformula.to_string rhs in
+  Printf.sprintf "let %s = %s" lhs_str rhs_str
+
 let compile (eprog:Elex.eprog) =
-  let rules = List.filter eprog.estmts ~f:is_erule in
-  let formulae = List.map rules ~f:(compile_erule eprog) in
+  let rules' = List.filter eprog.estmts ~f:is_erule in
+  let rules = List.map rules' ~f:(complete_erule eprog) in
+  let sorted_rules = topological_sort_erules rules in
+  let let_bindings = List.filter_map sorted_rules ~f:compile_erule_let in
+  let formulae = List.filter_map sorted_rules ~f:compile_erule_imp in
   let phi = tbigcauconj formulae in
   let signatures = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
                      eprog.variables eprog.exception_predicates eprog.scope_predicates in
-  Printf.printf "Signature:\n%s\n\nFormula:\n%s\n"
+  Printf.printf "Signature:\n%s\n\nFormula:\n%s\n%s\n"
     (string_of_signatures signatures)
+    ((List.map let_bindings ~f:string_of_let_binding) |> String.concat ~sep:"\n")
     (Eformula.to_string phi)
