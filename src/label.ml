@@ -480,19 +480,19 @@ module RuleTree = struct
     { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
 
-  let rules_with_shared_variables s =
-    let rec fixpoint m =
-      let f0 acc x = Map.find m x
+  let rules_with_shared_variable_scopes (s: s) =
+    let rec fixpoint (m: (int, (int, 'a) Set.t, 'a) Map.t) =
+      let collect_references acc x = Map.find m x
                     |> Option.value ~default:(Set.empty (module Int))
                     |> Set.union acc
       in
-      let f1 v = Set.fold v ~init:v ~f:f0 in
-      let m' = Map.map m ~f:f1 in
+      let collect_references' v = Set.fold v ~init:v ~f:collect_references in
+      let m' = Map.map m ~f:collect_references' in
       match Map.equal Set.equal m m' with
       | true -> m'
       | false -> fixpoint m'
     in
-    let aux exceptions scopes =
+    let combine_exceptions_and_scopes exceptions scopes =
       let f ~key:_ = function
         | `Left l | `Right l -> Some (Set.of_list (module Int) l)
         | `Both (l1, l2) -> Some (Set.of_list (module Int) (l1@l2))
@@ -500,28 +500,28 @@ module RuleTree = struct
       let scopes_and_exceptions = Map.merge scopes exceptions ~f:f in
       fixpoint scopes_and_exceptions
     in
-    let class_map = aux s.exceptions s.scopes in
+    let class_map = combine_exceptions_and_scopes s.exceptions s.scopes in
     let rules = Map.keys s.label_of_rule in
-    let f1 x = function
+    let update_function x = function
       | Some s -> Set.add s x
       | None -> Set.singleton (module Int) x
     in
-    let f2 acc x = Map.update acc x ~f:(f1 x) in
-    let full_map = List.fold rules ~init:class_map ~f:f2 in
+    let update_function' acc x = Map.update acc x ~f:(update_function x) in
+    let full_map = List.fold rules ~init:class_map ~f:update_function' in
     let full_list = Map.data full_map in
-    let f3 acc' y = Set.inter acc' y in
-    let f4 acc' y =
-      let acc'' = List.filter_map acc' ~f:(fun z -> if (Set.is_empty (Set.inter y z)) then None else Some (Set.union y z)) in
+    let aux1 acc' y =
+      (* let acc'' = List.filter_map acc' ~f:(fun z -> if (Set.is_empty (Set.inter y z)) then Some z else Some (Set.union y z)) in *)
+      let acc'' = List.map acc' ~f:(fun z -> if (Set.is_empty (Set.inter y z)) then z else Set.union y z) in
       List.fold acc'' ~f:Set.union ~init:y
       in
-    let f5 acc x =
-      match Set.length (List.fold acc ~init:x ~f:f3) with
-      | 0 -> x::acc
-      | _ -> [f4 acc x]
+    let aux2 acc x =
+      match Set.length (List.fold ~init:x ~f:Set.union (List.map acc ~f:(fun a -> Set.inter x a))) with
+      | 1 -> x::acc
+      | _ -> [aux1 acc x]
     in
     let full_list' = List.dedup_and_sort full_list ~compare:(fun a b -> if Set.equal a b then 0 else 1)  in
     let filtered_list = List.filter full_list' ~f:(fun x -> if List.exists full_list ~f:(fun y -> Set.is_subset x ~of_:y && not (Set.equal x y)) then false else true) in
-    let filtered_list' = List.fold filtered_list ~init:[] ~f:f5 in
+    let filtered_list' = List.fold filtered_list ~init:[] ~f:aux2 in
     assert (List.length full_list = List.length rules);
     assert (List.length (List.concat_map filtered_list' ~f:Set.to_list) = List.length rules);
     filtered_list'

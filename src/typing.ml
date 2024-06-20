@@ -544,7 +544,7 @@ let merge_type_maps pos m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
   | `Right t -> Some t)
 
 let check_var_types tprog =
-  let var_equivalence_classes = Label.RuleTree.rules_with_shared_variables tprog.rule_tree in
+  let var_equivalence_classes = Label.RuleTree.rules_with_shared_variable_scopes tprog.rule_tree in
   let f0 acc' key =
       let var_types = Map.find_exn tprog.variables key in
       let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree key in

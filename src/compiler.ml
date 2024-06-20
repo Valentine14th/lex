@@ -194,6 +194,8 @@ let compile_exception_or_scope_signature predicate_map aliases variables =
     let terms = snd pred_name_and_terms in
     let type_term f = match Eformula.Term.(f.trm) with
       | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> assert false in
+      (* TODO: check how this should behave *)
+      (* | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> Formula.TypeTerm.TypeConst TInt in *)
                        let t = Formula.TypeTerm.eval_default aliases TInt a in
                        (v, t)
       | _ -> assert false
