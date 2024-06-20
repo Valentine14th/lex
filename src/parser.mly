@@ -10,16 +10,17 @@
 %token <Lexing.position * float> FLOAT
 %token <Lexing.position * string> STRING
 %token <Lexing.position * Lextime.Time.t> TIME
-%token COM COL
+%token COM COL SEMICOLON
 %token <Lexing.position> SUB
 %token <Lexing.position> NOT
-%token LOR LAND ADD MUL DIV POW XOR NEQ LT LEQ GT GEQ
+%token LOR LAND ADD MUL DIV POW XOR NEQ LT GT
+%token SUM AVG MED CNT MIN MAX
 %token <Lexing.position> LPA RPA
 %token <Lexing.position> LBR RBR
 %token <Lexing.position> LSB RSB
 %token <Lexing.position> IMPORT
 %token INFINITY
-%token FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE TSTRING TINT TFLOAT TBOOL TTIME TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE TSTRING TINT TFLOAT TBOOL TTIME TSPAN TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
 %token IWITHIN IBEFORE ISTRICTLY IAFTER IBETWEEN IEXCLUDED IEVENTUALLY IALWAYS IONCE ISINCE IDELAYING IIF IIN ITHE IFUTURE IPAST
 %token IS TTYPE
 %token <string> DOCSTRING
@@ -67,7 +68,7 @@
 %left LOR
 %left LAND
 %left XOR
-%left EQ NEQ LT LEQ GT GEQ
+%left EQ NEQ LT GT
 %left ADD
 %left MUL DIV
 %left SUB
@@ -144,6 +145,7 @@ typ:
   | TINT         { Dom.TInt }
   | TFLOAT       { Dom.TFloat }
   | TBOOL        { Dom.TBool }
+  | TSPAN        { Dom.TSpan }
   | TTIME        { Dom.TTime }
   | TMONEY IDENT { Dom.TMoney (snd $2) }
 
@@ -209,15 +211,21 @@ srule:
 event_def:
   | pol event_type IDENT list(arg)           { SEvent (fst $3, $2, snd $3, $4, $1, None) }
   | pol event_type IDENT DOCSTRING list(arg) { SEvent (fst $3, $2, snd $3, $5, $1, Some $4) }
+  | pol FUNCTIONAL functional_event_type IDENT LPA separated_list(COM, arg) RPA SUB GT type_term
+    { SEvent (fst $4, $3, snd $4, $6@[Lexing.dummy_pos, "~return_value", $10], $1, None) }
+  | pol FUNCTIONAL functional_event_type IDENT LPA separated_list(COM, arg) RPA SUB GT type_term DOCSTRING
+    { SEvent (fst $4, $3, snd $4, $6@[Lexing.dummy_pos, "~return_value", $10], $1, Some $11) }
 
 event_type:
   | EXTERNAL EVENT            { Lex.Event (true, Standard) }
   | EVENT                     { Lex.Event (false, Standard) }
-  | FUNCTIONAL EXTERNAL EVENT { Lex.Event (true, Functional) }
-  | FUNCTIONAL EVENT          { Lex.Event (false, Functional) }
   | VARIABLE EXTERNAL EVENT   { Lex.Event (true, Variable) }
   | VARIABLE EVENT            { Lex.Event (false, Variable) }
   | PREDICATE                 { Lex.Predicate }
+
+functional_event_type:
+  | EXTERNAL EVENT { Lex.Event (true, Functional) }
+  | EVENT          { Lex.Event (false, Functional) }
 
 arg:
   | IDENT COL type_term { (fst $1, snd $1, $3) }
@@ -229,7 +237,11 @@ ee:
 | LPA e RPA                            { $1, snd $2 }
 | TRUE                                 { $1, tt }
 | FALSE                                { $1, ff }
-| LBR term EQ term RBR                 { fst $2, eqconst (snd $2) (snd $4) }
+| LBR term RBR                         { fst $2, term (snd $2) }
+| LBR IDENT EQ aggregation LPA term SEMICOLON vars SEMICOLON e RPA RBR
+                                       { fst $2, agg (snd $2) $4 (snd $6) $8 (snd $10) }
+| LBR IDENT EQ aggregation LPA term SEMICOLON e RPA RBR
+                                       { fst $2, agg (snd $2) $4 (snd $6) [] (snd $8) }
 | NEG e                                { $1, neg (snd $2) }
 | PREV interval e                      { $1, prev (snd $2) (snd $3) }
 | PREV e                               { $1, prev Interval.full (snd $2) }
@@ -308,12 +320,12 @@ terms:
 | LAND  { Term.BAnd }
 | LOR   { Term.BOr }
 | XOR   { Term.BXor }
-| EQ EQ { Term.BEq }
+| EQ    { Term.BEq }
 | NEQ   { Term.BNeq }
 | LT    { Term.BLt }
-| LEQ   { Term.BLeq }
+| LT EQ { Term.BLeq }
 | GT    { Term.BGt }
-| GEQ   { Term.BGeq }
+| GT EQ { Term.BGeq }
 
 %inline unop:
 | SUB { $1, Term.USub }
@@ -321,6 +333,7 @@ terms:
 
 money:
 | IDENT FLOAT { fst $1, Money.( (snd $2) $ (snd $1) ) }
+| IDENT INT   { fst $1, Money.( (float_of_int (snd $2)) $ (snd $1) ) }
 
 vars:
 | vrs=separated_nonempty_list (COM, ident) { vrs }
@@ -366,3 +379,12 @@ interval:
 
 ib:
 | SPAN { snd $1 }
+| INT  { Lextime.Span.seconds (snd $1) }
+
+aggregation:
+| SUM { Aggregation.ASum }
+| AVG { Aggregation.AAvg }
+| MED { Aggregation.AMed }
+| CNT { Aggregation.ACnt }
+| MIN { Aggregation.AMin }
+| MAX { Aggregation.AMax }

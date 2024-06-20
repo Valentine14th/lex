@@ -248,7 +248,7 @@ let fix_side s f g =
 let rec to_formula = function
   | TTT -> TT
   | TFF -> FF
-  | TEqConst (trm, trm') -> EqConst (Term.to_formula_term trm, Term.to_formula_term trm')
+  | TEqConst (trm, trm') -> Term (Binop (Term.to_formula_term trm, Formula.Term.BEq, Term.to_formula_term trm'))
   | TPredicate (e, trms) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
   | TAgg (s, op, x, y, f) -> Agg (s, op, Term.to_formula_term x, y,  to_formula f)
   | TNeg f -> Neg (to_formula f)

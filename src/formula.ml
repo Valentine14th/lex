@@ -246,7 +246,7 @@ let ty_to_string = function
 type t =
   | TT
   | FF
-  | EqConst of Term.t * Term.t
+  | Term of Term.t
   | Predicate of string * Term.t list
   | Agg of string * Aggregation.op * Term.t * string list * t
   | Neg of t
@@ -268,7 +268,8 @@ type t =
 
 let tt = TT
 let ff = FF
-let eqconst x d = EqConst (x, d)
+let term trm = Term trm
+let agg s op x y f = Agg (s, op, x, y, f)
 let predicate p_name trms = Predicate (p_name, trms)
 let neg f = Neg f
 let conj s f g = And (s, [f; g])
@@ -302,7 +303,7 @@ let bigforall vars f =
 
 let rec fv = function
   | TT | FF -> Set.empty (module String)
-  | EqConst (x, y) -> Set.of_list (module String) (Term.fv_list [x; y])
+  | Term trm -> Set.of_list (module String) (Term.fv_list [trm])
   | Predicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
   | Agg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
   | Exists (x, f)
@@ -327,7 +328,7 @@ let rec fv = function
 let rec deg = function
   | TT
     | FF
-    | EqConst _ 
+    | Term _ 
     | Predicate _ -> 2
   | Neg f 
     | Exists (_, f)
@@ -350,7 +351,7 @@ let rec deg = function
 let rec collect_predicates l = function
   | TT
     | FF
-    | EqConst _ -> l
+    | Term _ -> l
   | Predicate (r, trms) -> (r, trms) :: l
   | Neg f 
     | Exists (_, f)
@@ -371,7 +372,7 @@ let rec collect_predicates l = function
     | Or (_, fs) -> List.fold_left fs ~init:l ~f:collect_predicates
 
 let rec flatten_assoc f = match f with
-  | TT | FF | EqConst _ | Predicate _ -> f
+  | TT | FF | Term _ | Predicate _ -> f
   | Agg (s, op, x, y, f) -> Agg (s, op, x, y, flatten_assoc f)
   | Neg f -> Neg (flatten_assoc f)
   | Exists (x, f) -> Exists (x, flatten_assoc f)
@@ -397,7 +398,7 @@ let rec flatten_assoc f = match f with
 let rec to_string_rec l = function
   | TT -> Printf.sprintf "⊤"
   | FF -> Printf.sprintf "⊥"
-  | EqConst (x, y) -> Printf.sprintf "%s = %s" (Term.to_string x) (Term.to_string y)
+  | Term trm -> Printf.sprintf "{%s}" (Term.to_string trm) 
   | Predicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | Agg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | Neg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f

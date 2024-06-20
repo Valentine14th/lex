@@ -163,7 +163,7 @@ let fix_side s f g =
 let rec to_formula f = match f.f with
   | ETT -> TT
   | EFF -> FF
-  | EEqConst (trm, c) -> EqConst (Term.to_formula_term trm, Formula.Term.Const c)
+  | EEqConst (trm, c) -> Term (Formula.Term.Binop (Term.to_formula_term trm, Formula.Term.BEq, Formula.Term.Const c))
   | EPredicate (e, trms) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
   | EAgg (s, op, x, y, f) -> Agg (s, op, Term.to_formula_term x, y, to_formula f)
   | ENeg f -> Neg (to_formula f)

@@ -25,6 +25,7 @@ let rec is_past_guarded s x p f =
        | None -> p && Term.equal_core (Term.TVar x) x'.trm && Term.is_const y.trm
      end
   | TPredicate (_, ts) -> List.exists ~f:(fun t -> Term.equal_core (Term.TVar x) t.trm) ts
+  | TAgg (_, _, _, y, f) -> List.mem y x ~equal:String.equal && is_past_guarded s x p f
   | TNeg f -> is_past_guarded s x (not p) f
   | TAnd (_, fs) when p -> List.exists fs ~f:(is_past_guarded s x p)
   | TAnd (_, fs) -> List.for_all fs ~f:(is_past_guarded s x p)

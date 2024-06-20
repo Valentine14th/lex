@@ -4,6 +4,65 @@
 
   exception SyntaxError of string
 
+  let keyword_table = Hashtbl.create 53
+
+  let _ =
+    List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
+      [
+       "formex"       , FORMEX ;
+       "akomaNtoso"   , AKOMANTOSO ;
+       "function"     , FUNCTION ;
+       "event"        , EVENT ;
+       "predicate"    , PREDICATE ;
+       "functional"   , FUNCTIONAL ;
+       "variable"     , VARIABLE ;
+       "string"       , TSTRING ;
+       "int"          , TINT ;
+       "float"        , TFLOAT ;
+       "bool"         , TBOOL ;
+       "time"         , TTIME ;
+       "span"         , TSPAN ;
+       "money"        , TMONEY ;
+       "type"         , TTYPE ;
+       "is"           , IS ;
+       "causable"     , TCAUSABLE ;
+       "suppressable" , TSUPPRESSABLE ;
+       "observable"   , TOBSERVABLE ;
+       "transparently", TTRANSPARENTLY ;
+       "enforceable"  , TENFORCEABLE ;
+       "internal"     , TINTERNAL ;
+       "fix"          , FIX ;
+       "whenever"     , WHENEVER ;
+       "oblige"       , OBLIGE ;
+       "permit"       , PERMIT ;
+       "constitute"   , CONSTITUTE ;
+       "except"       , EXCEPT ;
+       "scope"        , SCOPE ;
+       "suppressing"  , SUPPRESSING ;
+       "causing"      , CAUSING ;
+       "within"       , IWITHIN ;
+       "before"       , IBEFORE ;
+       "strictly"     , ISTRICTLY ;
+       "after"        , IAFTER ;
+       "between"      , IBETWEEN ;
+       "excluded"     , IEXCLUDED ;
+       "eventually"   , IEVENTUALLY ;
+       "always"       , IALWAYS ;
+       "once"         , IONCE ;
+       "delaying"     , IDELAYING ;
+       "if"           , IIF ;
+       "in"           , IIN ;
+       "the"          , ITHE ;
+       "future"       , IFUTURE ;
+       "past"         , IPAST ;
+       "SUM"          , SUM ;
+       "AVG"          , AVG ;
+       "MED"          , MED ;
+       "CNT"          , CNT ;
+       "MIN"          , MIN ;
+       "MAX"          , MAX ;
+      ]
+
 }
 
 let white = [' ' '\t']+
@@ -16,6 +75,7 @@ let int = ['0'-'9']*
 let float1 = ['0'-'9']+ '.' ['0'-'9']*
 let float2 = '.' ['0'-'9']+
 
+
 rule read =
   parse
   | white          { read lexbuf }
@@ -26,6 +86,7 @@ rule read =
   | '{'            { LBR lexbuf.lex_start_p }
   | '}'            { RBR lexbuf.lex_start_p }
   | ','            { COM }
+  | ';'            { SEMICOLON }
   | ':'            { COL }
   | '.'            { DOT }
   | '+'            { ADD }
@@ -33,37 +94,16 @@ rule read =
   | '*'            { MUL }
   | '/'            { DIV }
   | '^'            { POW }
-  | "and"          { AND lexbuf.lex_start_p }
-  | "or"           { OR lexbuf.lex_start_p }
   | "&&"           { LAND }
   | "||"           { LOR }
-  | "xor"          { XOR }
   | "<>"           { NEQ }
   | '<'            { LT }
   | '>'            { GT }
+  | "and"          { AND lexbuf.lex_start_p }
+  | "or"           { OR lexbuf.lex_start_p }
+  | "xor"          { XOR }
   | "not"          { NOT lexbuf.lex_start_p }
-  | '`'            { read_time (Buffer.create 17) lexbuf }
-  | '"'            { read_string (Buffer.create 17) lexbuf }
-  | "\"\"\""       { read_docstring (Buffer.create 17) lexbuf }
   | "import"       { IMPORT lexbuf.lex_start_p }
-  | "formex"       { FORMEX }
-  | "akomaNtoso"   { AKOMANTOSO }
-  | "function"     { FUNCTION }
-  | "event"        { EVENT }
-  | "predicate"    { PREDICATE }
-  | "functional"   { FUNCTIONAL }
-  | "variable"     { VARIABLE }
-  | "string"       { TSTRING }
-  | "int"          { TINT }
-  | "float"        { TFLOAT }
-  | "type"         { TTYPE }
-  | "is"           { IS }
-  | "causable"     { TCAUSABLE }
-  | "suppressable" { TSUPPRESSABLE }
-  | "observable"   { TOBSERVABLE }
-  | "transparently"{ TTRANSPARENTLY }
-  | "enforceable"  { TENFORCEABLE }
-  | "internal"     { TINTERNAL }
   | "law"          { LAW lexbuf.lex_start_p }
   | "title"        { TITLE lexbuf.lex_start_p }
   | "chapter"      { CHAPTER lexbuf.lex_start_p }
@@ -74,33 +114,12 @@ rule read =
   | "subpoint"     { SUBPOINT lexbuf.lex_start_p }
   | "rule"         { RULE lexbuf.lex_start_p }
   | "note"         { NOTE lexbuf.lex_start_p }
-  | "[" (int as i) "]" { LABEL_LEVEL (int_of_string i) }
-  | "fix"          { FIX }
-  | "whenever"     { WHENEVER }
-  | "oblige"       { OBLIGE }
-  | "permit"       { PERMIT }
-  | "constitute"   { CONSTITUTE }
-  | "except"       { EXCEPT }
-  | "scope"        { SCOPE }
-  | "suppressing"  { SUPPRESSING }
-  | "causing"      { CAUSING }
-  | "within"       { IWITHIN }
-  | "before"       { IBEFORE }
-  | "strictly"     { ISTRICTLY }
-  | "after"        { IAFTER }
-  | "between"      { IBETWEEN }
-  | "excluded"     { IEXCLUDED }
-  | "eventually"   { IEVENTUALLY }
-  | "always"       { IALWAYS }
-  | "once"         { IONCE }
-  | "delaying"     { IDELAYING }
-  | "if"           { IIF }
-  | "in"           { IIN }
-  | "the"          { ITHE }
-  | "future"       { IFUTURE }
-  | "past"         { IPAST }
   | "false"        { CFALSE lexbuf.lex_start_p }
   | "true"         { CTRUE lexbuf.lex_start_p }
+  | '`'            { read_time (Buffer.create 17) lexbuf }
+  | '"'            { read_string (Buffer.create 17) lexbuf }
+  | "\"\"\""       { read_docstring (Buffer.create 17) lexbuf }
+  | "[" (int as i) "]" { LABEL_LEVEL (int_of_string i) }
   | "FALSE" | "⊥"  { FALSE lexbuf.lex_start_p }
   | "TRUE" | "⊤"   { TRUE lexbuf.lex_start_p }
   | "="            { EQ lexbuf.lex_start_p }
@@ -124,7 +143,10 @@ rule read =
   | '['              { LSB lexbuf.lex_start_p }
   | ']'              { RSB lexbuf.lex_start_p }
   | "INFINITY" | "∞" { INFINITY }
-  | ident          { IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf) }
+  | ident as id {
+        try Hashtbl.find keyword_table id
+        with Not_found -> IDENT (lexbuf.lex_start_p, Lexing.lexeme lexbuf)
+      }
   | float1 | float2 { FLOAT (lexbuf.lex_start_p, float_of_string (Lexing.lexeme lexbuf)) }
   | int            { INT (lexbuf.lex_start_p, int_of_string (Lexing.lexeme lexbuf)) }
   | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s) { SPAN (lexbuf.lex_start_p, Lextime.Span.of_value_with_unit (int_of_string i) lexbuf.lex_start_p s) }

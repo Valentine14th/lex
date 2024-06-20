@@ -64,8 +64,8 @@ let kw html =
 let const html =
   span "lex-const" html
 
-let ident html =
-  span "lex-ident" html
+let ident ?id:(id=None) html =
+  span "lex-ident" html ~id
 
 let typ html =
   span "lex-typ" html

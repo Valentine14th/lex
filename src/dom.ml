@@ -28,7 +28,11 @@ let equal d d' = match d, d' with
 let tt_equal tt tt' = match tt, tt' with
   | TInt, TInt
     | TStr, TStr
-    | TFloat, TFloat -> true
+    | TFloat, TFloat
+    | TBool, TBool
+    | TTime, TTime
+    | TSpan, TSpan -> true
+  | TMoney c, TMoney c' -> String.equal c c'
   | _ -> false
 
 let tt_of_string = function

@@ -190,7 +190,7 @@ let type_blt = function
     -> Some (TypeConst Dom.TBool)
   | _ -> None
 
-let rec type_term tfunctions taliases typed_vars pos v t_alias =
+let rec type_term tevents tfunctions taliases typed_vars pos v t_alias =
   (*let t = match Map.find taliases t_alias with
     | Some (typ, _) -> typ
     | None -> let err_msg =
@@ -209,7 +209,7 @@ let rec type_term tfunctions taliases typed_vars pos v t_alias =
   | App (f_name, trms) ->
      begin
        let f (typed_vars, trms) trm (arg_name, arg_type) =
-         let typed_vars, trm = type_term tfunctions taliases typed_vars pos trm (Some arg_type) in
+         let typed_vars, trm = type_term tevents tfunctions taliases typed_vars pos trm (Some arg_type) in
          if Formula.TypeTerm.equal trm.tt arg_type then
            (typed_vars, trm :: trms)
          else
@@ -230,13 +230,28 @@ let rec type_term tfunctions taliases typed_vars pos v t_alias =
                              f_name (List.length arg_types) (List.length trms) in
              Util.type_error err_msg pos
           end
-       | None -> let err_msg =
-                   Printf.sprintf "Function '%s' is undefined" f_name in
-                 Util.type_error err_msg pos
+       | None ->
+          match Map.find tevents f_name with
+          | Some (Event (_, Functional), all_types, _, _) ->
+             let all_types = List.map all_types ~f:(fun (_, b, c) -> (b, c)) in
+             let arg_types = List.drop_last_exn all_types
+             and return_type = snd (List.last_exn all_types) in
+             begin match List.fold2 trms arg_types ~init:(typed_vars, []) ~f with
+             | Ok (typed_vars, trms) ->
+                (typed_vars, Tformula.term (TApp (f_name, List.rev trms)) return_type)
+             | Unequal_lengths ->
+                let err_msg = Printf.sprintf "Function %s expects %d arguments, found %d"
+                                f_name (List.length arg_types) (List.length trms) in
+                Util.type_error err_msg pos
+             end
+          | _ ->              
+             let err_msg =
+               Printf.sprintf "Function '%s' is undefined" f_name in
+             Util.type_error err_msg pos
      end
   | Unop (op, trm) ->
      begin
-       let typed_vars, trm = type_term tfunctions taliases typed_vars pos trm None in
+       let typed_vars, trm = type_term tevents tfunctions taliases typed_vars pos trm None in
        let f_op = match op with
          | UNot -> type_unot
          | USub -> type_usub in
@@ -249,8 +264,8 @@ let rec type_term tfunctions taliases typed_vars pos v t_alias =
      end
   | Binop (trm, op, trm') ->
      begin
-       let typed_vars, trm  = type_term tfunctions taliases typed_vars pos trm None in
-       let typed_vars, trm' = type_term tfunctions taliases typed_vars pos trm' None in
+       let typed_vars, trm  = type_term tevents tfunctions taliases typed_vars pos trm None in
+       let typed_vars, trm' = type_term tevents tfunctions taliases typed_vars pos trm' None in
        let f_op = match op with
          | BAdd -> type_badd
          | BSub -> type_bsub
@@ -279,7 +294,7 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
               in Util.type_error err_msg pos
   in
   let acc_function (t_vars, trms) (_, arg_name, type_alias) trm =
-    let t_vars, trm = type_term tfunctions taliases t_vars pos trm (Some type_alias) in
+    let t_vars, trm = type_term tevents tfunctions taliases t_vars pos trm (Some type_alias) in
     let ty = Tformula.Term.(trm.tt) in
     match Formula.TypeTerm.lub ty type_alias taliases with
     | Some tt -> let trm = { trm with tt } in (t_vars, trm :: trms)
@@ -301,14 +316,14 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
 let rec type_formula s pos t_vars = function
   | Formula.TT -> t_vars, Tformula.TTT
   | FF -> t_vars, TFF
-  | EqConst (x, y) ->
+  | Term (Binop (x, BEq, y)) ->
      begin
        match Lex.unpack_special_eq s.tevents x y with
        | Some (event_name, trms) -> type_formula s pos t_vars (Predicate (event_name, trms))
        | None ->       
           begin
-            let t_vars, x' = type_term s.tfunctions s.taliases t_vars pos x None in
-            let t_vars, y' = type_term s.tfunctions s.taliases t_vars pos y None in
+            let t_vars, x' = type_term s.tevents s.tfunctions s.taliases t_vars pos x None in
+            let t_vars, y' = type_term s.tevents s.tfunctions s.taliases t_vars pos y None in
             if Formula.TypeTerm.equal x'.tt y'.tt then
               (t_vars, TEqConst (x', y'))
             else
@@ -317,11 +332,22 @@ let rec type_formula s pos t_vars = function
               Util.type_error err_msg pos
           end
      end
+  | Term trm ->
+     let t_vars, trm' = type_term s.tevents s.tfunctions s.taliases t_vars pos trm None in
+     begin
+       match trm'.tt with
+       | Formula.TypeTerm.TypeConst Dom.TBool ->
+          let true' = Tformula.Term.{ trm = Tformula.Term.TConst (Dom.Bool true);
+                                      tt  = Formula.TypeTerm.TypeConst Dom.TBool } in
+          (t_vars, TEqConst (trm', true'))
+       | _ -> let err_msg = Printf.sprintf "Ill-typed term type: '%s'" (Formula.TypeTerm.to_string trm'.tt) in
+              Util.type_error err_msg pos
+     end
   | Predicate (event_name, trms) ->
      let t_vars, trms = type_terms event_name trms t_vars pos s.tevents s.tfunctions s.taliases in
      (t_vars, TPredicate (event_name, trms))
   | Agg (u, op, x, y, f) ->
-     let t_vars, x = type_term s.tfunctions s.taliases t_vars pos x None in
+     let t_vars, x = type_term s.tevents s.tfunctions s.taliases t_vars pos x None in
      let t_vars, f = type_formula s pos t_vars f in
      t_vars, TAgg (u, op, x, y, f)
   | Neg f ->

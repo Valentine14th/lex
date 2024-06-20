@@ -25,7 +25,9 @@ let rec html_of_formula_ formula_id l f =
     | ETT -> const "true"
     | EFF -> const "false"
     | EEqConst (x, c) -> Printf.sprintf "{%s = %s}" (html_of_trm x.trm) (const (Dom.to_string c))
-    | EPredicate (r, trms) -> Printf.sprintf "%s(%s)" (ident r) (html_of_trms trms)
+    | EPredicate (r, trms) ->
+       let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
+       Printf.sprintf "%s(%s)" event_name (html_of_trms trms)
     | EAgg (s, op, x, y, f) ->
        Printf.sprintf "{%s = %s(%s; %s; %s)}"
          (ident s) (kw (Aggregation.op_to_string op)) (html_of_trm x.trm)
@@ -272,13 +274,14 @@ let html_of_estmt eprog =
              eprog type_fixes erule doc_string)
       )
   | ESEvent (event_type, name, typed_args, pol, doc_string) ->
+     let event_id = "lex-event-" ^ name in
      let html_of_event =
          kw (Lex.string_of_pol pol)
          ^ kw (Lex.string_of_event_type event_type)
          ^ ident name
          ^ html_of_args typed_args
      in
-     div "lex-stmt-event"
+     div "lex-stmt-event" ~id:(Some event_id)
        (match doc_string with
         | Some s -> two_column html_of_event (html_of_doc_string s)
         | None   -> one_column html_of_event)
