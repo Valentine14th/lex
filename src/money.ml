@@ -22,5 +22,21 @@ let (-) (M (a, m)) (M (a', m')) =
 let ( * ) s (M (a, m)) =
   M (s * a, m)
 
+let equal (M (a, c)) (M (a', c')) =
+  Int.equal a a' && String.equal c c'
+
 let to_string m =
   Printf.sprintf "%s %d.%02d" (currency m) (units m) (cents m)
+
+let currency_reading = function
+  | "USD" -> "$"
+  | "EUR" -> "€"
+  | "CHF" -> "Fr. "
+  | "GBP" -> "£"
+  | s -> s ^ " " 
+  
+let to_string_reading m =
+  if cents m > 0 then
+    Printf.sprintf "%s%d.%02d" (currency_reading (currency m)) (units m) (cents m)
+  else
+    Printf.sprintf "%s%d" (currency_reading (currency m)) (units m)

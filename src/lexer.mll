@@ -6,6 +6,30 @@
 
   let keyword_table = Hashtbl.create 53
 
+  let indents = ref []
+
+  let rec update_indent i =
+    match !indents with
+    | []                 -> indents := [i]; 1
+    | j :: t when i < j  -> indents := t; (update_indent i) - 1
+    | j :: _ when i == j -> 0
+    | j :: t             -> indents := i :: j :: t; 1
+
+
+  let rec repeat f x = function
+    | i when i <= 0 -> ()
+    | i             -> f x; repeat f x (i-1)
+
+  let rec count_newlines ?(i=0) s =
+    if String.length s >= i+2 && String.get s i == '\r' && String.get s (i+1) == '\n' then
+      1 + count_newlines ~i:(i+2) s
+    else if String.length s >= i+1 && (String.get s i == '\r' || String.get s i == '\n') then
+      1 + count_newlines ~i:(i+1) s
+    else if String.length s >= i+2 then
+      count_newlines ~i:(i+1) s
+    else
+      0
+
   let _ =
     List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
       [
@@ -38,6 +62,7 @@
        "constitute"   , CONSTITUTE ;
        "except"       , EXCEPT ;
        "scope"        , SCOPE ;
+       "replace"      , REPLACE ;
        "suppressing"  , SUPPRESSING ;
        "causing"      , CAUSING ;
        "within"       , IWITHIN ;
@@ -79,12 +104,23 @@ let float2 = '.' ['0'-'9']+
 rule read =
   parse
   | white          { read lexbuf }
-  | newline        { new_line lexbuf; read lexbuf }
-  | comment?       { read lexbuf }
+  | '\\' white* newline
+                   { new_line lexbuf; read lexbuf }
+  | ((comment? newline white*)* as n) newline (white+ as w)
+                   { repeat new_line lexbuf (1 + count_newlines n) ;
+                     let i = update_indent (String.length w) in
+                     if i > 0 then
+                       NEWUP
+                     else if i < 0 then
+                       NEWDOWN
+                     else
+                       NEWHITE }
+  | ((comment? newline white*)* as n) newline
+                   { repeat new_line lexbuf (1 + count_newlines n);
+                     indents := [];
+                     NEWLINE }
   | '('            { LPA lexbuf.lex_start_p }
   | ')'            { RPA lexbuf.lex_start_p }
-  | '{'            { LBR lexbuf.lex_start_p }
-  | '}'            { RBR lexbuf.lex_start_p }
   | ','            { COM }
   | ';'            { SEMICOLON }
   | ':'            { COL }
@@ -96,6 +132,7 @@ rule read =
   | '^'            { POW }
   | "&&"           { LAND }
   | "||"           { LOR }
+  | "<-"           { LAR }
   | "<>"           { NEQ }
   | '<'            { LT }
   | '>'            { GT }
@@ -151,7 +188,7 @@ rule read =
   | int            { INT (lexbuf.lex_start_p, int_of_string (Lexing.lexeme lexbuf)) }
   | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s) { SPAN (lexbuf.lex_start_p, Lextime.Span.of_value_with_unit (int_of_string i) lexbuf.lex_start_p s) }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
-  | comment? eof   { EOF }
+  | comment? (newline|white)* eof   { EOF }
 
 and read_string buf =
   parse

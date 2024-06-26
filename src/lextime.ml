@@ -11,6 +11,8 @@ module Time = struct
 
   let to_float = Calendar.to_unixfloat
   let of_float = Calendar.from_unixfloat
+
+  let equal = Calendar.equal
   
 end
 
@@ -27,11 +29,24 @@ module Span = struct
   let equal = Calendar.Period.equal
   
   let to_string t =
-    let value_with_unit x u = if x > 0 then string_of_int x ^ " " ^ u else "" in
+    let value_with_unit x u = if x > 0 then string_of_int x ^ u else "" in
     let y, m, d, s = ymds t in
     let h, min, sec = s / 3600, (s % 3600) / 60, s % 60 in
     value_with_unit y "y" ^ value_with_unit m "M" ^ value_with_unit d "d"
     ^ value_with_unit h "h" ^ value_with_unit min "m" ^ value_with_unit sec "s"
+
+  let to_string_reading t =
+    let value_with_unit x u =
+      if x > 1 then
+        string_of_int x ^ " " ^ u ^ "s"
+      else if x > 0 then
+        string_of_int x ^ " " ^ u
+      else
+        "" in
+    let y, m, d, s = ymds t in
+    let h, min, sec = s / 3600, (s % 3600) / 60, s % 60 in
+    value_with_unit y "year" ^ value_with_unit m "month" ^ value_with_unit d "day"
+    ^ value_with_unit h "hour" ^ value_with_unit min "minute" ^ value_with_unit sec "second"
 
   let to_int t =
     let y, m, d, s = ymds t in

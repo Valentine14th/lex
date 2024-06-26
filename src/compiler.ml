@@ -4,6 +4,19 @@ open Formula.Term
 open Eformula
 open Lex
 open Elex
+open Clex
+
+let rec merge tts tts' =
+  match tts, tts' with
+  | [], _ -> tts'
+  | tt :: tts, tt' :: tts' when Dom.tt_equal tt tt' -> tt :: (merge tts tts')
+  | tt :: tts, tts' -> tt :: (merge tts tts')
+
+let merge_all =
+  List.fold_left ~init:[] ~f:merge
+
+let normalize kvss =
+  List.sort kvss ~compare:(fun (k, _) (k', _) -> String.compare k k')
 
 let compile_tt = function
   | Dom.TInt -> Dom.TInt
@@ -48,7 +61,8 @@ let compile_binop = function
   | BLeq -> "leq"
   | BGt  -> "gt"
   | BGeq -> "geq"
-    
+
+(*
 let rec compile_term aliases term =
   let compile_unop tt f =
     prefix_tt tt ^ compile_unop f in
@@ -71,6 +85,7 @@ let rec compile_term aliases term =
                  (compile_tt (Formula.TypeTerm.eval_default aliases TInt term'.tt)) op in
        Term.TApp (f, [compile_term aliases term; compile_term aliases term'])
   in { term with trm }
+ *)
 
 let compile_pattern (f: Eformula.t) = function
   | EPPresent -> f
@@ -89,6 +104,7 @@ let complete_erule (eprog:Elex.eprog) =
     | EPermission (f, p, g, q) -> EPermission (f@f', p, g, q)
     | EConstitutive (f, p, g) -> EConstitutive (f@f', p, g)
     | EException (f, p, ref, pred) -> EException (f@f', p, ref, pred)
+    | EExceptionC (f, p, ref, pred, g) -> EExceptionC (f@f', p, ref, pred, g)
     | EScope (f, p, ref, pred) -> EScope (f@f', p, ref, pred)
   in
   function
@@ -123,6 +139,7 @@ let compile_erule_let = function
     Some binding
   | EException (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
   | EScope (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
+  | EExceptionC _ -> assert false
 
 let compile_imp f p g q =
   let vars =
@@ -140,19 +157,27 @@ let compile_imp f p g q =
 let compile_erule_imp = function
   | EObligation (f, p, g, q) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
   | EPermission (f, p, g, q) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
-  | EConstitutive _ | EException _ | EScope _ -> None
+  | EConstitutive _ | EException _ | EExceptionC _ | EScope _ -> None
 
-type signature_item =
-  | CEvent of ident * event_type * pol * ((ident * Dom.tt) list)
-  | CFunction of ident * ((ident * Dom.tt) list) * Dom.tt
+let rec compile_typeterm = function
+  | Formula.TypeTerm.TypeConst d -> ["", d]
+  | TypeVar v -> raise (Invalid_argument ("Cannot compile abstract TypeVar " ^ v))
+  | TypeSum kvs -> let f (k, v) =
+                     List.map (compile_typeterm v) ~f:(Etc.concat k) in
+                   List.concat (List.map kvs ~f)
+
+let compile_eval_default aliases typeterm =
+  compile_typeterm (
+      Formula.TypeTerm.eval_default aliases (Formula.TypeTerm.TypeConst TInt) typeterm)
 
 let compile_events events aliases =
   let event_list = Map.to_alist events in
   let compile_event (name, (event_type, args, pol, _)) =
     let type_args (_, name, typ_alias) =
-      (name, Formula.TypeTerm.eval_default aliases TInt typ_alias)
+      let terms = compile_eval_default aliases typ_alias in
+      List.map terms ~f:(Etc.concat name)
     in
-    let typed_args = List.map args ~f:type_args in
+    let typed_args = List.concat (List.map args ~f:type_args) in
     CEvent (name, event_type, pol, typed_args)
   in
   List.map event_list ~f:compile_event
@@ -161,11 +186,14 @@ let compile_functions functions aliases =
   let function_list = Map.to_alist functions in
   let compile_function (name, (typed_args, return_type, _)) =
     let type_args (name, typ_alias) =
-      (name, Formula.TypeTerm.eval_default aliases TInt typ_alias)
+      let terms = compile_eval_default aliases typ_alias in
+      List.map terms ~f:(Etc.concat name)
     in
-    let typed_args = List.map typed_args ~f:type_args in
-    let return_type = Formula.TypeTerm.eval_default aliases TInt return_type in
-    CFunction (name, typed_args, return_type)
+    let typed_args = List.concat (List.map typed_args ~f:type_args) in
+    let return_type = compile_eval_default aliases return_type in
+    match return_type with
+    | [_, d] -> CFunction (name, typed_args, d)
+    | _ -> raise (Invalid_argument ("Cannot compile function " ^ name ^ ": complex return type"))
   in
   List.map function_list ~f:compile_function
 
@@ -188,20 +216,21 @@ let compile_exception_or_scope_signature predicate_map aliases variables =
   let compile_predicate (idx, pred) =
     let var_types = try Map.find_exn variables idx with _ -> assert false in
     let pred_name_and_terms = match pred.f with
-      | Eformula.EPredicate (n, ts) -> (n, ts)
+      | Eformula.EPredicate (n, ts, _) -> (n, ts)
       | _ -> assert false
     in
     let terms = snd pred_name_and_terms in
     let type_term f = match Eformula.Term.(f.trm) with
-      | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> assert false in
+      | Term.TVar v ->
+         let a = try Map.find_exn var_types v with _ -> assert false in
       (* TODO: check how this should behave *)
       (* | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> Formula.TypeTerm.TypeConst TInt in *)
-                       let t = Formula.TypeTerm.eval_default aliases TInt a in
-                       (v, t)
+         let terms = compile_eval_default aliases a in
+         List.map terms ~f:(Etc.concat v)
       | _ -> assert false
       (* TODO: constants are not actually possible to be part of an exception predicate *)
     in
-    let typed_terms = List.map terms ~f:type_term in
+    let typed_terms = List.concat (List.map terms ~f:type_term) in
     CEvent (fst pred_name_and_terms, Event (false, Standard), Lex.TInternal, typed_terms)
   in
   List.map indexed_predicates ~f:compile_predicate
@@ -213,57 +242,24 @@ let compile_signature events functions aliases variables exceptions scopes =
   let scope_signatures = compile_exception_or_scope_signature scopes aliases variables in
   List.concat [event_signatures; function_signatures; exception_signatures; scope_signatures]
 
-let pol_to_symbol_string pol =
-  match pol with
-  | TCau -> "+"
-  | TSup -> "-"
-  | TCauSup -> "+-"
-  | TInternal -> "+-" (* TODO: are internal events acutally both causable and suppressable? and are exception predicates of internal type? *)
-  | TObs -> ""
-
-let string_of_signatures signatures =
-  let string_of_event_type = function
-    | Event (true, _)  -> "ext "
-    | Event (false, _) -> ""
-    | Predicate   -> "pred" in
-  let string_of_event_signature (name, event_type, pol, args) =
-    let arg_strs = List.map args ~f:(fun (name, tt) ->
-      Printf.sprintf "%s: %s" name (Dom.string_of_tt tt)) in
-    let args_str = String.concat ~sep:", " arg_strs in
-    Printf.sprintf "%s%s(%s)%s" name (string_of_event_type event_type) args_str (pol_to_symbol_string pol)
-  in
-  let string_of_function_signature (name, args, ret_tt) =
-    let arg_strs = List.map args ~f:(fun (name, tt) ->
-      Printf.sprintf "%s: %s" name (Dom.string_of_tt tt)) in
-    let args_str = String.concat ~sep:", " arg_strs in
-    Printf.sprintf "fun %s(%s) -> %s" name args_str (Dom.string_of_tt ret_tt)
-  in
-  let string_of_signature_item = function
-    | CEvent (name, event_type, pol, args) ->
-       string_of_event_signature (name, event_type, pol, args)
-    | CFunction (name, args, ret_tt) ->
-       string_of_function_signature (name, args, ret_tt) in
-  let signature_strs = List.map signatures ~f:string_of_signature_item in
-  String.concat ~sep:"\n" signature_strs
 
 (* TODO (JD): implement topological sorting for let bindings *)
 let topological_sort_erules rules = rules
 
-let string_of_let_binding (lhs, rhs) =
-  let lhs_str = Eformula.to_string lhs in
-  let rhs_str = Eformula.to_string rhs in
-  Printf.sprintf "let %s = %s" lhs_str rhs_str
+
+let rec remove_special = function
+  | [] -> []
+  | EExceptionC (f, p, refs, pred, g) :: t ->
+     EException (f, p, refs, pred) :: EConstitutive (f, p, g) :: (remove_special t)
+  | h :: t -> h :: (remove_special t)
 
 let compile (eprog:Elex.eprog) =
   let rules' = List.filter eprog.estmts ~f:is_erule in
-  let rules = List.map rules' ~f:(complete_erule eprog) in
+  let rules = remove_special (List.map rules' ~f:(complete_erule eprog)) in
   let sorted_rules = topological_sort_erules rules in
   let let_bindings = List.filter_map sorted_rules ~f:compile_erule_let in
   let formulae = List.filter_map sorted_rules ~f:compile_erule_imp in
   let phi = tbigcauconj formulae in
-  let signatures = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
-                     eprog.variables eprog.exception_predicates eprog.scope_predicates in
-  Printf.printf "Signature:\n%s\n\nFormula:\n%s\n%s\n"
-    (string_of_signatures signatures)
-    ((List.map let_bindings ~f:string_of_let_binding) |> String.concat ~sep:"\n")
-    (Eformula.to_string phi)
+  let signature = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
+                    eprog.variables eprog.exception_predicates eprog.scope_predicates in
+  { signature; let_bindings; phi }

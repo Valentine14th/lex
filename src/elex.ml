@@ -16,6 +16,7 @@ type erule =
   | EPermission   of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list * epattern
   | EConstitutive of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Eformula.t) list
   | EException    of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t * Lex.reference) list * Eformula.t
+  | EExceptionC   of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t * Lex.reference) list * Eformula.t * (Lexing.position * Eformula.t) list
   | EScope        of (Lexing.position * Eformula.t) list * epattern * (Lexing.position * Label.t * Lex.reference) list * Eformula.t
 
 type estmt =
@@ -23,7 +24,7 @@ type estmt =
   | ESSection of section_kind * Label.t * string * string tannot option
   | ESRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * erule * rule_type * rule_constr list * string tannot option
   | ESEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
-  | ESType    of ident * Dom.tt option * string option
+  | ESType    of ident * Formula.TypeTerm.t option * string option
   | ESFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | ESNote    of string
 
@@ -32,7 +33,7 @@ type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map
 type eprog =
   {
     estmts: estmt list;
-    ealiases: (ident, Dom.tt option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    ealiases: (ident, Formula.TypeTerm.t option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
@@ -53,6 +54,19 @@ let tempty =
     scope_predicates = Map.empty (module Int)
   }
 
+
+let import eprog eprog' =
+  let f ~key:_ = function `Both (x, _) | `Left x | `Right x -> Some x in
+  { eprog with ealiases   = Map.merge eprog.ealiases eprog'.ealiases ~f;
+               eevents    = Map.merge eprog.eevents eprog'.eevents ~f;
+               efunctions = Map.merge eprog.efunctions eprog'.efunctions ~f }
+
+let tprog_import tprog eprog' =
+  let f ~key:_ = function `Both (x, _) | `Left x | `Right x -> Some x in
+  { tprog with taliases   = Map.merge tprog.taliases eprog'.ealiases ~f;
+               tevents    = Map.merge tprog.tevents eprog'.eevents ~f;
+               tfunctions = Map.merge tprog.tfunctions eprog'.efunctions ~f }
+
 let is_erule = function
   | ESRule _ -> true
   | _ -> false
@@ -61,7 +75,8 @@ let verb_of_erule = function
   | EObligation _ -> "oblige"
   | EPermission _ -> "permit"
   | EConstitutive _ -> "constitute"
-  | EException _ -> "except"
+  | EException _ 
+    | EExceptionC _ -> "except"
   | EScope _ -> "scope"
 
 let string_of_epattern = function
@@ -92,6 +107,14 @@ let string_of_erule i erule =
     ^ Etc.tabs i   ^ verb                             ^ "\n"
     ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
   in
+  let string_of_refc_rule verb f p refs g =
+    Etc.tabs i     ^ "whenever"  ^ string_of_epattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
+    ^ Etc.tabs i   ^ verb
+    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
+    ^ Etc.tabs i   ^ "constitute"
+    ^ string_of_formula_list g
+  in
   match erule with
   | EObligation (f, p, g, q)
     | EPermission (f, p, g, q)
@@ -101,6 +124,8 @@ let string_of_erule i erule =
   | EException (f, p, erefs, _)
   | EScope (f, p, erefs, _)
     -> string_of_ref_rule (verb_of_erule erule) f p (List.map ~f:(fun (_,_,x) -> x) erefs)
+  | EExceptionC (f, p, erefs, _, g)
+    -> string_of_refc_rule (verb_of_erule erule) f p (List.map ~f:(fun (_,_,x) -> x) erefs) g
 
 let string_of_estmt ?(i=0) =
   function
@@ -151,7 +176,7 @@ let string_of_estmt ?(i=0) =
           | None -> "" in
       let typ_string =
        match typ with
-       | Some tt -> " is " ^ Dom.string_of_tt tt
+       | Some tt -> " is " ^ Formula.TypeTerm.to_string tt
        | None -> "" in
      Printf.sprintf "%stype %s%s%s"
        (Etc.tabs i) name typ_string description

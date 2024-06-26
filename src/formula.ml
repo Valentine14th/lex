@@ -73,6 +73,7 @@ module TypeTerm = struct
   type t =
     | TypeConst of Dom.tt
     | TypeVar   of string
+    | TypeSum   of (string * t) list
 
   let equal t t' =
     match t, t' with
@@ -80,49 +81,68 @@ module TypeTerm = struct
     | TypeVar v, TypeVar v' -> String.equal v v'
     | _, _ -> false
       
-  let to_string = function
+  let rec to_string = function
     | TypeConst tt -> "TypeConst " ^ Dom.string_of_tt tt
     | TypeVar i    -> "TypeVar " ^ i
+    | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ to_string v in
+                      "TypeSum {" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}"
 
   let value_to_string = function
     | TypeConst tt -> Dom.string_of_tt tt
     | TypeVar i    -> i
+    | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ to_string v in
+                      "{" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}"
 
-  let eval aliases = function
-    | TypeConst tt -> Some tt
-    | TypeVar v    ->
-       match fst (Map.find_exn aliases v) with
-       | Some tt -> Some tt
-       | None -> None
+  let rec eval aliases = function
+    | TypeConst tt -> Some (TypeConst tt)
+    | TypeVar v    -> fst (Map.find_exn aliases v)
+    | TypeSum kvs  -> let f (k, v) = (k, Option.value_exn (eval aliases v)) in
+                      Some (TypeSum (List.map kvs ~f))
 
   let eval_default aliases default = function
-    | TypeConst tt -> tt
+    | TypeConst tt -> TypeConst tt
     | TypeVar v    ->
-       match fst (Map.find_exn aliases v) with
-       | Some tt -> tt
-       | None -> default
+       (match fst (Map.find_exn aliases v) with
+        | Some tt -> tt
+        | None -> default)
+    | TypeSum kvs  -> let f (k, v) = (k, Option.value_exn (eval aliases v)) in
+                      TypeSum (List.map kvs ~f)
 
-  let lub t t' aliases =
+  let rec lub t t' aliases =
     match t, t' with
     | TypeConst tt, TypeConst tt' when Dom.tt_equal tt tt' -> Some (TypeConst tt)
-    | TypeVar v   , TypeVar v' when String.equal v v' -> Some (TypeVar v)
-    | TypeVar v   , TypeConst tt' ->
+    | TypeVar v , TypeVar v' when String.equal v v' -> Some (TypeVar v)
+    | TypeSum kvs, TypeSum kvs' ->
+       begin
+         if (List.length kvs = List.length kvs')
+            && (List.for_all2_exn kvs kvs' ~f:(fun kv kv' -> String.equal (fst kv) (fst kv')))
+         then
+           let f (k, v) (_, v') = Option.map (lub v v' aliases) ~f:(fun v -> (k, v)) in
+           (match Option.all (List.map2_exn kvs kvs' ~f) with
+            | Some kvs -> Some (TypeSum kvs)
+            | None -> None)
+         else
+           None
+       end
+    | TypeVar v, tt' ->
        begin
          match fst (Map.find_exn aliases v) with
-         | Some tt when Dom.tt_equal tt tt' -> Some (TypeVar v)
+         | Some tt when equal tt tt' -> Some (TypeVar v)
          | _ -> None
        end
-    | TypeConst tt, TypeVar v' ->
+    | tt, TypeVar v' ->
        begin
          match fst (Map.find_exn aliases v') with
-         | Some tt' when Dom.tt_equal tt' tt -> Some (TypeVar v')
+         | Some tt' when equal tt' tt -> Some (TypeVar v')
          | _ -> None
        end
     | _, _ -> None
 
-  let eval_with_doc_string aliases = function
+  let rec eval_with_doc_string aliases = function
     | TypeConst tt -> (Dom.string_of_tt tt, None) 
     | TypeVar v    -> (v, snd (Map.find_exn aliases v))
+    | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ fst (eval_with_doc_string aliases v) in
+                      ("{" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}", None)
 
 end
 
@@ -171,6 +191,8 @@ module Term = struct
     | App of string * (t list)
     | Unop of unop * t
     | Binop of t * binop * t
+    | Proj of t * string
+    | Record of (string * t) list
 
   let unvar = function
     | Var x -> x
@@ -178,6 +200,8 @@ module Term = struct
     | App _ -> raise (Invalid_argument "unvar is undefined for Apps")
     | Unop _ -> raise (Invalid_argument "unvar is undefined for Unops")
     | Binop _ -> raise (Invalid_argument "unvar is undefined for Binops")
+    | Proj _ -> raise (Invalid_argument "unvar is undefined for Projs")
+    | Record _ -> raise (Invalid_argument "unvar is undefined for Records")
 
   let is_const = function
     | Const _ -> true
@@ -189,6 +213,8 @@ module Term = struct
     | App _ -> raise (Invalid_argument "unconst is undefined for Apps")
     | Unop _ -> raise (Invalid_argument "unconst is undefined for Unops")
     | Binop _ -> raise (Invalid_argument "unconst is undefined for Binops")
+    | Proj _ -> raise (Invalid_argument "unconst is undefined for Projs")
+    | Record _ -> raise (Invalid_argument "unconst is undefined for Records")
 
   let rec fv_list = function
     | [] -> []
@@ -205,6 +231,11 @@ module Term = struct
     | Unop (o, t), Unop (o', t') -> equal_unop o o' && equal t t'
     | Binop (t1, o, t2), Binop (t1', o', t2') ->
        equal t1 t1' && equal_binop o o' && equal t2 t2'
+    | Proj (t, p), Proj (t', p') ->
+       equal t t' && String.equal p p'
+    | Record kvs, Record kvs' ->
+       let f (k, v) (k', v') = String.equal k k' && equal v v' in
+       List.length kvs = List.length kvs' && List.for_all2_exn kvs kvs' ~f
     | _ -> false
 
   let rec to_string = function
@@ -215,6 +246,10 @@ module Term = struct
     | Unop (o, t) -> Printf.sprintf "Unop %s (%s)" (string_of_unop o) (to_string t)
     | Binop (t, o, t') -> Printf.sprintf "Binop (%s) %s (%s)"
                             (to_string t) (string_of_binop o) (to_string t')
+    | Proj (t, p) -> Printf.sprintf "Proj (%s).%s" (to_string t) p
+    | Record kvs ->
+       Printf.sprintf "Record { %s }"
+         (String.concat ~sep:", " (List.map kvs ~f:(fun (k, v) -> k ^ " : " ^ to_string v)))
 
   let rec value_to_string ?(l=0) = function
     | Var x -> Printf.sprintf "%s" x
@@ -229,6 +264,10 @@ module Term = struct
                             (value_to_string ~l:l' t)
                             (string_of_binop o)
                             (value_to_string ~l:l' t')
+    | Proj (t, p) -> Printf.sprintf "%s.%s" (value_to_string ~l:10 t) p
+    | Record kvs ->
+       let f (k, v) = k ^ " : " ^ value_to_string v in
+       Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
   let list_to_string trms = String.concat ~sep:", " (List.map trms ~f:value_to_string)
 

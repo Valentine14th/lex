@@ -60,6 +60,7 @@ type rule =
   | Permission   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern
   | Constitutive of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list
   | Exception    of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
+  | ExceptionC   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list * (Lexing.position * Formula.t) list
   | Scope        of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
 
 type rule_type = Vanilla | Enforceable | Transparent
@@ -85,7 +86,7 @@ type stmt =
   | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
   | SRule      of Lexing.position * string option * (ident * Formula.TypeTerm.t) list * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option (* location points to beginning of event identifier *)
-  | SType      of Lexing.position * ident * (Dom.tt option) * string option (* location points to beginning of type identifier *)
+  | SType      of Lexing.position * ident * (Formula.TypeTerm.t option) * string option (* location points to beginning of type identifier *)
   | SFunction  of Lexing.position * ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | SNote      of Lexing.position * string
 
@@ -144,7 +145,8 @@ let verb_of_rule = function
   | Obligation _ -> "oblige"
   | Permission _ -> "permit"
   | Constitutive _ -> "constitute"
-  | Exception _ -> "except"
+  | Exception _ 
+    | ExceptionC _ -> "except"
   | Scope _ -> "scope"
 
 let string_of_reference (rs, rule) =
@@ -173,14 +175,22 @@ let string_of_rule i rule =
   let string_of_imp_rule verb f p g q =
     Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
     ^ string_of_formula_list f ^ "\n"
-    ^ Etc.tabs i     ^ verb       ^ string_of_pattern q ^ "\n"
+    ^ Etc.tabs i   ^ verb       ^ string_of_pattern q ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_exc_rule verb f p rs =
     Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
     ^ string_of_formula_list f ^ "\n"
-    ^ Etc.tabs i     ^ verb
+    ^ Etc.tabs i   ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,r') -> string_of_reference r') rs)
+  in
+  let string_of_excc_rule verb f p rs g =
+    Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
+    ^ Etc.tabs i   ^ verb
+    ^ String.concat ~sep:"\n" (List.map ~f:(fun (_,r') -> string_of_reference r') rs)
+    ^ Etc.tabs i   ^ "constitute"
+    ^ string_of_formula_list g
   in
   match rule with
   | Obligation (f, p, g, q) | Permission (f, p, g, q)
@@ -189,6 +199,8 @@ let string_of_rule i rule =
     -> string_of_imp_rule (verb_of_rule rule) f p g PPresent
   | Exception (f, p, references) | Scope (f, p, references)
     -> string_of_exc_rule (verb_of_rule rule) f p references
+  | ExceptionC (f, p, references, g)
+    -> string_of_excc_rule (verb_of_rule rule) f p references g
 
 let string_of_args args i = 
     let string_of_arg (_, name, typ_alias) = 
@@ -274,7 +286,7 @@ let string_of_stmt ?(i=0) =
        | None -> "" in
      let typ_string =
        match typ with
-       | Some tt -> " is " ^ Dom.string_of_tt tt
+       | Some tt -> " is " ^ Formula.TypeTerm.to_string tt
        | None -> "" in
      Printf.sprintf "%stype %s%s%s"
        (Etc.tabs i) name typ_string description
@@ -312,16 +324,16 @@ let prog_to_file filename prog =
 let unpack_functional tevents trm' = function
   | Formula.Term.App (f, trms) ->
      (match Map.find tevents f with
-      | Some (Event (_, Functional), _, _, _) ->
-         Some (f, trms @ [trm'])
+      | Some (Event (_, Functional) as et, _, _, _) ->
+         Some (f, trms @ [trm'], et)
       | _ -> None)
   | _ -> None
 
 let unpack_variable tevents trm' = function
   | Formula.Term.Var x ->
      (match Map.find tevents x with
-      | Some (Event (_, Variable), _, _, _) ->
-         Some (x, [trm'])
+      | Some (Event (_, Variable) as et, _, _, _) ->
+         Some (x, [trm'], et)
       | _ -> None)
   | _ -> None
 

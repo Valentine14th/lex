@@ -8,7 +8,14 @@
 (*  Leonardo Lima (UCPH)                                           *)
 (*******************************************************************)
 
-type tt = TInt | TStr | TFloat | TBool | TTime | TSpan | TMoney of string
+type tt =
+  | TInt
+  | TStr
+  | TFloat
+  | TBool
+  | TTime
+  | TSpan
+  | TMoney of string
 
 type t =
   | Int of Int.t
@@ -23,6 +30,10 @@ let equal d d' = match d, d' with
   | Int v, Int v' -> Int.equal v v'
   | Str v, Str v' -> String.equal v v'
   | Float v, Float v' -> Float.equal v v'
+  | Bool v, Bool v' -> Bool.equal v v'
+  | Time v, Time v' -> Lextime.Time.equal v v'
+  | Span v, Span v' -> Lextime.Span.equal v v'
+  | Money v, Money v' -> Money.equal v v'
   | _ -> false
 
 let tt_equal tt tt' = match tt, tt' with
@@ -35,7 +46,7 @@ let tt_equal tt tt' = match tt, tt' with
   | TMoney c, TMoney c' -> String.equal c c'
   | _ -> false
 
-let tt_of_string = function
+(*let tt_of_string = function
   | "int" -> TInt
   | "string" -> TStr
   | "float" -> TFloat
@@ -45,7 +56,7 @@ let tt_of_string = function
      if String.starts_with ~prefix:"money " t then
        TMoney (String.sub t 6 (String.length t))
      else
-       raise (Invalid_argument (Printf.sprintf "type %s is not supported" t))
+       raise (Invalid_argument (Printf.sprintf "type %s is not supported" t))*)
 
 let tt_of_domain = function
   | Int _ -> TInt
@@ -63,7 +74,7 @@ let string_of_tt = function
   | TBool -> "bool"
   | TTime -> "time"
   | TSpan -> "span"
-  | TMoney c -> "money(" ^ c  ^ ")"
+  | TMoney c -> "money " ^ c
 
 let tt_default = function
   | TInt -> Int 0
@@ -82,3 +93,5 @@ let to_string = function
   | Time v -> Lextime.Time.to_string v
   | Span v -> Lextime.Span.to_string v
   | Money v -> Money.to_string v
+     
+

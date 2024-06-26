@@ -18,6 +18,8 @@ module Term = struct
     | TApp of string * (t list)
     | TUnop of Formula.Term.unop * t
     | TBinop of t * Formula.Term.binop * t
+    | TProj of t * string
+    | TRecord of (string * t) list
 
   and t = { trm: core_t; tt: TypeTerm.t }
 
@@ -27,6 +29,8 @@ module Term = struct
     | TApp (f, trms) -> App (f, List.map trms ~f:to_formula_term)
     | TUnop (o, trm) -> Unop (o, to_formula_term trm)
     | TBinop (trm, o, trm') -> Binop (to_formula_term trm, o, to_formula_term trm')
+    | TProj (trm, p) -> Proj (to_formula_term trm, p)
+    | TRecord kvs -> Record (List.map ~f:(fun (k, v) -> (k, to_formula_term v)) kvs)
 
   and to_formula_term t = to_formula_term_core t.trm
 
@@ -36,6 +40,8 @@ module Term = struct
     | TApp _ -> raise (Invalid_argument "unvar is undefined for Apps")
     | TUnop _ -> raise (Invalid_argument "unvar is undefined for Unops")
     | TBinop _ -> raise (Invalid_argument "unvar is undefined for Binops")
+    | TProj _ -> raise (Invalid_argument "unvar is undefined for Projs")
+    | TRecord _ -> raise (Invalid_argument "unvar is undefined for Records")
 
   let is_const = function
     | TConst _ -> true
@@ -47,6 +53,8 @@ module Term = struct
     | TApp _ -> raise (Invalid_argument "unconst is undefined for Apps")
     | TUnop _ -> raise (Invalid_argument "unconst is undefined for Unops")
     | TBinop _ -> raise (Invalid_argument "unconst is undefined for Binops")
+    | TProj _ -> raise (Invalid_argument "unconst is undefined for Projs")
+    | TRecord _ -> raise (Invalid_argument "unconst is undefined for Records")
 
   let rec fv_list_core = function
     | [] -> []
@@ -76,6 +84,11 @@ module Term = struct
     | TUnop (o, t) -> Printf.sprintf "TUnop %s (%s)" (Formula.Term.string_of_unop o) (to_string t)
     | TBinop (t, o, t') -> Printf.sprintf "TBinop (%s) %s (%s)"
                              (to_string t) (Formula.Term.string_of_binop o) (to_string t')
+    | TProj (t, p) -> Printf.sprintf "Proj (%s).%s" (to_string t) p
+    | TRecord kvs ->
+       Printf.sprintf "Record { %s }"
+         (String.concat ~sep:", " (List.map kvs ~f:(fun (k, v) -> k ^ " : " ^ to_string v)))
+
 
   and to_string t = Printf.sprintf "%s : %s" (to_string_core t.trm) (TypeTerm.to_string t.tt)
 
@@ -91,6 +104,11 @@ module Term = struct
                             (value_to_string ~l:l' t)
                             (Formula.Term.string_of_binop o)
                             (value_to_string ~l:l' t')
+    | TProj (t, p) -> Printf.sprintf "%s.%s" (value_to_string ~l:10 t) p
+    | TRecord kvs ->
+       let f (k, v) = k ^ " : " ^ value_to_string v in
+       Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
+
   and list_to_string trms = String.concat ~sep:", " (List.map trms ~f:value_to_string)
   
   and value_to_string ?(l=0) t = 
@@ -109,6 +127,11 @@ module Term = struct
                              (untyped_value_to_string ~l:l' t)
                              (Formula.Term.string_of_binop o)
                              (untyped_value_to_string ~l:l' t')
+    | TProj (t, p) -> Printf.sprintf "%s.%s" (untyped_value_to_string ~l:10 t) p
+    | TRecord kvs ->
+       let f (k, v) = k ^ " : " ^ untyped_value_to_string v in
+       Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
+
   and untyped_list_to_string trms = String.concat ~sep:", " (List.map trms ~f:untyped_value_to_string)
   
   and untyped_value_to_string ?(l=0) t = 
@@ -122,7 +145,7 @@ type t =
   | TTT
   | TFF
   | TEqConst of Term.t * Term.t
-  | TPredicate of string * Term.t list
+  | TPredicate of string * Term.t list * Lex.event_type
   | TAgg of string * Aggregation.op * Term.t * string list * t
   | TNeg of t
   | TAnd of Side.t * (t list)
@@ -144,7 +167,7 @@ type t =
 let ttt = TTT
 let fff = TFF
 let teqconst x d = TEqConst (x, d)
-let tpredicate p_name trms = TPredicate (p_name, trms)
+let tpredicate p_name trms event_type = TPredicate (p_name, trms, event_type)
 let tneg f = TNeg f
 let tconj s f g = TAnd (s, [f; g])
 let tdisj s f g = TOr (s, [f; g])
@@ -172,7 +195,7 @@ let tbigcauforall vars f =
 let rec fv = function
   | TTT | TFF -> Set.empty (module String)
   | TEqConst (x, _) -> Set.of_list (module String) (Term.fv_list [x])
-  | TPredicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
+  | TPredicate (_, trms, _) -> Set.of_list (module String) (Term.fv_list trms)
   | TAgg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
   | TExists (x, f)
     | TForall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
@@ -196,7 +219,7 @@ let rec fv = function
 let rec rank = function
   | TTT | TFF -> 0
   | TEqConst _ -> 0
-  | TPredicate (_, args) -> List.length args
+  | TPredicate (_, args, _) -> List.length args
   | TNeg f
     | TExists (_, f)
     | TForall (_, f)
@@ -249,7 +272,7 @@ let rec to_formula = function
   | TTT -> TT
   | TFF -> FF
   | TEqConst (trm, trm') -> Term (Binop (Term.to_formula_term trm, Formula.Term.BEq, Term.to_formula_term trm'))
-  | TPredicate (e, trms) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
+  | TPredicate (e, trms, _) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
   | TAgg (s, op, x, y, f) -> Agg (s, op, Term.to_formula_term x, y,  to_formula f)
   | TNeg f -> Neg (to_formula f)
   | TAnd (s, fs) -> And (fix_side s (List.hd_exn fs) (List.last_exn fs),
@@ -274,7 +297,7 @@ let op_to_string = function
   | TTT -> Printf.sprintf "⊤"
   | TFF -> Printf.sprintf "⊥"
   | TEqConst _ -> Printf.sprintf "="
-  | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
+  | TPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | TAgg (_, op, x, y, _) -> Printf.sprintf "%s(%s; %s)" (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y)
   | TNeg _ -> Printf.sprintf "¬"
   | TAnd (_, _) -> Printf.sprintf "∧"
@@ -299,7 +322,7 @@ let rec to_string_rec l = function
   | TFF -> Printf.sprintf "⊥"
   | TEqConst (trm, trm') -> Printf.sprintf "%s = %s" (Term.to_string trm) (Term.to_string trm')
   | TAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
-  | TPredicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
+  | TPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | TNeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | TAnd (s, fs) ->
      let sep = "∧" ^ Side.to_string s in

@@ -18,13 +18,8 @@ let rec is_past_guarded s x p f =
   let r =
   match f with
   | TTT | TFF -> false
-  | TEqConst (x', y) ->
-     begin
-       match Tlex.unpack_special_eq s.tevents x' y with
-       | Some (event_name, trms) -> is_past_guarded s x p (TPredicate (event_name, trms))
-       | None -> p && Term.equal_core (Term.TVar x) x'.trm && Term.is_const y.trm
-     end
-  | TPredicate (_, ts) -> List.exists ~f:(fun t -> Term.equal_core (Term.TVar x) t.trm) ts
+  | TEqConst (x', y) -> p && Term.equal_core (Term.TVar x) x'.trm && Term.is_const y.trm
+  | TPredicate (_, ts, _) -> List.exists ~f:(fun t -> Term.equal_core (Term.TVar x) t.trm) ts
   | TAgg (_, _, _, y, f) -> List.mem y x ~equal:String.equal && is_past_guarded s x p f
   | TNeg f -> is_past_guarded s x (not p) f
   | TAnd (_, fs) when p -> List.exists fs ~f:(is_past_guarded s x p)
@@ -165,13 +160,7 @@ let rec types s pols t f =
   | Cau -> begin
       match f with
       | TTT -> Possible CTT
-      | TEqConst (x', y) ->
-         begin
-           match Tlex.unpack_special_eq s.tevents x' y with
-           | Some (e, trms) -> types s pols Cau (TPredicate (e, trms))
-           | None -> Impossible (EFormula (None, f, t))
-         end
-      | TPredicate (e, _) -> types_predicate pols Cau e
+      | TPredicate (e, _, _) -> types_predicate pols Cau e
       | TNeg f -> types s pols Sup f
       | TAnd (_, fs) ->
          List.fold_left (List.map fs ~f:(types s pols Cau)) ~init:(Possible CTT) ~f:conj
@@ -205,13 +194,7 @@ let rec types s pols t f =
   | Sup -> begin
       match f with
       | TFF -> Possible CTT
-      | TEqConst (x', y) ->
-         begin
-           match Tlex.unpack_special_eq s.tevents x' y with
-           | Some (e, trms) -> types s pols Sup (TPredicate (e, trms))
-           | None -> Impossible (EFormula (None, f, t))
-         end
-      | TPredicate (e, _) -> types_predicate pols Sup e
+      | TPredicate (e, _, _) -> types_predicate pols Sup e
       | TNeg f -> types s pols Cau f
       | TAnd (L, fs) -> types s pols Sup (List.hd_exn fs)
       | TAnd (R, fs) -> types s pols Sup (List.last_exn fs)
@@ -255,13 +238,7 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t op
       Cau -> begin
         match form with
         | Tformula.TTT -> Some (Eformula.ETT)
-        | TEqConst (x', y) ->
-         begin
-           match Tlex.unpack_special_eq s.tevents x' y with
-           | Some (e, t) when EnfType.equal (Map.find_exn pols e) Cau -> Some (Eformula.EPredicate (e, t))
-           | _ -> None
-         end
-        | TPredicate (e, t) when EnfType.equal (Map.find_exn pols e) Cau -> Some (Eformula.EPredicate (e, t))
+        | TPredicate (e, t, et) when EnfType.equal (Map.find_exn pols e) Cau -> Some (Eformula.EPredicate (e, t, et))
         | TNeg f -> (convert Sup f) >>| (fun f' -> Eformula.ENeg f')
         | TAnd (s, fs) ->
            Option.all (List.map fs ~f:(convert Cau))
@@ -330,13 +307,7 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t op
     | Sup -> begin
         match form with
         | TFF -> Some (Eformula.EFF)
-        | TEqConst (x', y) ->
-         begin
-           match Tlex.unpack_special_eq s.tevents x' y with
-           | Some (e, t) when EnfType.equal (Map.find_exn pols e) Sup -> Some (Eformula.EPredicate (e, t))
-           | _ -> None
-         end
-        | TPredicate (e, t) when EnfType.equal (Map.find_exn pols e) Sup -> Some (Eformula.EPredicate (e, t))
+        | TPredicate (e, t, et) when EnfType.equal (Map.find_exn pols e) Sup -> Some (Eformula.EPredicate (e, t, et))
         | TNeg f -> (convert Cau f) >>| (fun f' -> Eformula.ENeg f')
         | TAnd (L, f :: fs) -> (convert Sup f) >>| (fun f' -> Eformula.EAnd (L, f' :: (Eformula.of_tformulas s.tevents fs)))
         | TAnd (R, fs) ->
@@ -425,7 +396,7 @@ let convert_enforceable s pols f b pos =
 
 let rec relative_interval (f: Eformula.t) =
   match f.f with
-  | ETT | EFF | EEqConst (_, _) | EPredicate (_, _) -> Zinterval.singleton 0
+  | ETT | EFF | EEqConst _ | EPredicate _ -> Zinterval.singleton 0
   | EAgg (_, _, _, _, f) -> Zinterval.to_zero (relative_interval f)
   | ENeg f | EExists (_, f) | EForall (_, f) -> relative_interval f
   | EAnd (_, fs) | EOr (_, fs)
@@ -482,7 +453,7 @@ let is_transparent (f: Eformula.t) =
     match f.enftype with
     | Cau -> begin
         match f.f with
-        | ETT | EPredicate (_, _) -> true
+        | ETT | EPredicate _ -> true
         | ENeg f | EExists (_, f) | EForall (_, f)
           | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
            | EAlways (_, _, f) -> aux f
@@ -504,7 +475,7 @@ let is_transparent (f: Eformula.t) =
       end
     | Sup -> begin
         match f.f with
-        | EFF | EPredicate (_, _) -> true
+        | EFF | EPredicate _ -> true
         | ENeg f | EExists (_, f) | EForall (_, f)
           | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
           | EEventually (_, _, f) -> aux f
@@ -555,6 +526,8 @@ let type_trule s _ =
         match rule with
         | TException (f1, p, refs, f2) -> 
            EException (of_tformulas f1, epattern_of_tpattern s p, refs, Eformula.of_tformula s.tevents f2)
+        | TExceptionC (f1, p, refs, f2, f3) -> 
+           EExceptionC (of_tformulas f1, epattern_of_tpattern s p, refs, Eformula.of_tformula s.tevents f2, of_tformulas f3)
         | TScope (f1, p, refs, f2) -> 
            EScope (of_tformulas f1, epattern_of_tpattern s p, refs, Eformula.of_tformula s.tevents f2)
         | TObligation (f1, p, f2, q) ->

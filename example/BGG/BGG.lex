@@ -82,9 +82,10 @@ predicate bewilligung
   g: gegenstand
 
 section "3"
+
 article "82"
 
-rule
+rule "principle"
   whenever
     beurteilt(g, b)
   oblige
@@ -129,14 +130,16 @@ rule
   whenever
     gebiet(a, "auswärtige Angelegenheiten")
     NOT beurteilungsAnspruch("Völkerrecht", a)
-  except { article "82" }
+  except
+    article "82" paragraph "1"
   
 point "b"
 
 rule
   whenever
     betrifft(a, "ordentliche Einbürgerung")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 point "c"
 subpoint "1"
@@ -145,7 +148,8 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Einreise")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 subpoint "2"
 
@@ -156,7 +160,8 @@ rule
     bewilligung(bew)
     NOT raeumtAnspruchEin("Bundesrecht", bew)
     NOT raeumtAnspruchEin("Völkerrecht", bew)
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 subpoint "3"
 
@@ -164,7 +169,8 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "vorläufige Aufnahme")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 subpoint "4"
 
@@ -172,7 +178,8 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Ausweisung (nach Art. 121 Abs. 2 BV)") OR betrifft(a, "Wegweisung")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 subpoint "5"
 
@@ -180,7 +187,8 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Abweichungen von den Zulassungsvoraussetzungen")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 subpoint "6"
 
@@ -188,7 +196,8 @@ rule
   whenever
     gebiet(a, "Ausländerrecht")
     betrifft(a, "Verlängerung der Grenzgängerbewilligung") OR betrifft(a, "Kantonswechsel") OR betrifft(a, "Stellenwechsel von Personen mit Grenzgängerbewilligung") OR betrifft(a, "Erteilung von Reisepapieren an schriftenlose AusländerInnen")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 point "d"
   
@@ -199,7 +208,8 @@ rule
     gebiet(a, "Asyl")
     ONCE trifft("Bundesverwaltungsgericht", a)
     NOT (EXISTS p. EXISTS s. betrifftPerson(a, p) AND (suchtSchutz(p, s) AND ONCE (stelltAuslieferungsersuchen(s, p))))
-  except { article "82" }
+  except
+    article "82" paragraph "1"
   
 subpoint "2"
 
@@ -211,14 +221,16 @@ rule
     bewilligung(bew)
     NOT (raeumtAnspruchEin("Bundesrecht", bew))
     NOT (raeumtAnspruchEin("Völkerrecht", bew))
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 point "e"
 
 rule
   whenever
     betrifft(a, "Verweigerung der Ermächtigung zur Strafverfolgung von Behördenmitgliedern oder von Bundespersonal")
-  except { article "82" }
+  except
+    article "82" paragraph "1"
 
 point "f"
   

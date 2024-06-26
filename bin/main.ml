@@ -12,7 +12,9 @@ let loop filename mode f o () =
       print_endline "Parsed and typed:\n";
       Elex.print_eprog eprog;
       print_endline "Compiled:\n";
-      Compiler.compile eprog (* compile correctly typed program *)
+      let cprog = Compiler.compile eprog in
+      print_endline (Clex.to_string cprog)
+      (* compile correctly typed program *)
     end
   | Some "doc" -> begin
       let eprog = Modules.do_type [lexpath] filepath basename in

@@ -116,6 +116,13 @@ let link_formex_stmt modules = function
 let link_formex modules tprog =
   Tlex.{ tprog with tstmts = List.map tprog.tstmts ~f:(link_formex_stmt modules) }
 
+let init_tprog_from_modules modules =
+  let f ~key:_ ~data tprog =
+    match data with
+    | MLex eprog' -> Elex.tprog_import tprog eprog'
+    | MLegalXml _ -> tprog in
+  Map.fold modules ~init:Tlex.tempty ~f
+
 let rec do_type lexpath ?seq:(seq=[]) filepath filename =
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
@@ -138,8 +145,9 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                       )
                     ) in
   let modules = Map.of_alist_exn (module String) modules in
-  let tprog = Typing.do_type modules prog in
+  let init  = init_tprog_from_modules modules in
+  let tprog = Typing.do_type init prog in
   let tprog = link_formex modules tprog in
-  let eprog = Enforceability.do_type modules tprog in 
+  let eprog = Enforceability.do_type modules tprog in
   eprog
 

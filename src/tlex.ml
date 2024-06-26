@@ -15,6 +15,7 @@ type trule =
   | TPermission   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
   | TConstitutive of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list
   | TException    of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+  | TExceptionC   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t * (Lexing.position * Tformula.t) list
   | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
 
 type 'a tannot =
@@ -30,7 +31,7 @@ type tstmt =
   | TSSection of section_kind * Label.t * string * string tannot option
   | TSRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * trule * rule_type * rule_constr list * string tannot option
   | TSEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
-  | TSType    of ident * Dom.tt option * string option
+  | TSType    of ident * Formula.TypeTerm.t option * string option
   | TSFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
   | TSNote    of string
 
@@ -42,10 +43,14 @@ type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map
 type tprog =
   {
     tstmts: tstmt list;
-    taliases: (ident, Dom.tt option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
-    tevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
+    taliases: (ident, Formula.TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
+    (* maps type aliases to their underlying type *)
+    tevents: (ident, tevent, Base.String.comparator_witness) Map.t;
+    (* maps event names to their definitions *)
     tfunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
-    variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
+    (* maps function names to their definitions *)
+    variables: (int, var_types, Int.comparator_witness) Map.t;
+    (* maps rule labels to variables used in section *)
     rule_tree: Label.RuleTree.s;
     exception_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
     scope_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
@@ -56,7 +61,7 @@ let tempty =
   {
     tstmts = [];
     taliases = Map.empty (module String);
-    tevents = Map.empty (module String);
+    tevents = Builtin.events_map;
     tfunctions = Builtin.functions_map;
     variables = Map.empty (module Int); 
     rule_tree = Label.RuleTree.empty;
@@ -138,7 +143,8 @@ let verb_of_trule = function
   | TObligation _ -> "oblige"
   | TPermission _ -> "permit"
   | TConstitutive _ -> "constitute"
-  | TException _ -> "except"
+  | TException _
+    | TExceptionC _ -> "except"
   | TScope _ -> "scope"
 
 
@@ -171,6 +177,14 @@ let string_of_trule i trule =
     ^ Etc.tabs i   ^ verb                             ^ "\n"
     ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
   in
+  let string_of_refc_rule verb f p refs g =
+    Etc.tabs i     ^ "whenever"  ^ string_of_tpattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
+    ^ Etc.tabs i   ^ verb
+    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
+    ^ Etc.tabs i   ^ "constitute"
+    ^ string_of_formula_list g
+  in
   match trule with
   | TObligation (f, p, g, q)
   | TPermission (f, p, g, q)
@@ -180,6 +194,8 @@ let string_of_trule i trule =
   | TException (f, p, trefs, _)
   | TScope (f, p, trefs, _)
     -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:(fun (_,_,x) -> x) trefs)
+  | TExceptionC (f, p, trefs, _, g)
+    -> string_of_refc_rule (verb_of_trule trule) f p (List.map ~f:(fun (_,_,x) -> x) trefs) g
 
 let string_of_tstmt ?(i=0) =
   function
@@ -230,7 +246,7 @@ let string_of_tstmt ?(i=0) =
           | None -> "" in
       let typ_string =
        match typ with
-       | Some tt -> " is " ^ Dom.string_of_tt tt
+       | Some tt -> " is " ^ Formula.TypeTerm.value_to_string tt
        | None -> "" in
      Printf.sprintf "%stype %s%s%s"
        (Etc.tabs i) name typ_string description

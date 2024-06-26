@@ -155,7 +155,7 @@ let reference_of_label label =
   let paragraph = aux (Paragraph 0) label.paragraph in
   let point = aux (Point 0) label.point in
   let subpoint = aux (Subpoint 0) label.subpoint in
-  let levels = List.rev (List.concat [subpoint; point; paragraph; article; section; chapter; title; law]) in
+  let levels = List.rev (List.concat (List.map ~f:List.rev [subpoint; point; paragraph; article; section; chapter; title; law])) in
   levels, label.rule_id
 
 let string_of_label l = string_of_reference (reference_of_label l)
@@ -192,6 +192,10 @@ let string_of_rule_id2 = function
   | None -> ""
   | Some s -> s
 
+let string_of_rule_id3 = function
+  | None -> ""
+  | Some s -> "-" ^ s
+
 let qualified_name l = match
   Printf.sprintf "%s %s%s%s%s%s"
   (qualified_name_of_law l.law)
@@ -206,12 +210,26 @@ let qualified_name l = match
 
 let qualified_id l =
   Printf.sprintf "%s-%s-%s-%s-%s-%s"
-  (qualified_name_of_law l.law)
-  (qualified_name_of_article l.article)
-  (qualified_name_of_level_simple l.paragraph)
-  (qualified_name_of_level_simple l.point)
-  (qualified_name_of_level_simple l.subpoint)
-  (string_of_rule_id2 l.rule_id)
+    (Etc.sanitize_string (qualified_name_of_law l.law))
+    (Etc.sanitize_string (qualified_name_of_article l.article))
+    (Etc.sanitize_string (qualified_name_of_level_simple l.paragraph))
+    (Etc.sanitize_string (qualified_name_of_level_simple l.point))
+    (Etc.sanitize_string (qualified_name_of_level_simple l.subpoint))
+    (Etc.sanitize_string (string_of_rule_id2 l.rule_id))
+
+let id_of_reference reference =
+  let f (s, n) = Etc.sanitize_string (Lex.string_of_section_kind s ^ "-" ^ n) in
+  String.concat ~sep:"-" (List.map reference ~f)
+  
+let reference_id l =
+  let reference, rule_id_opt = reference_of_label l in
+  let suffix = string_of_rule_id3 rule_id_opt in
+  id_of_reference reference ^ suffix
+
+let doc_id l =
+  match l.rule_id with
+  | None -> reference_id l
+  | _    -> qualified_id l
 
 let qualified_filters l =
   (qualified_filters_of_law l.law)

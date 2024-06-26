@@ -3,7 +3,8 @@
     open Formula
 %}
 
-%token EOF
+%token EOF NEWLINE
+%token NEWUP NEWDOWN NEWHITE
 %token <Lexing.position * string> IDENT
 %token <Lexing.position * int> INT
 %token <Lexing.position * Lextime.Span.t> SPAN
@@ -14,6 +15,7 @@
 %token <Lexing.position> SUB
 %token <Lexing.position> NOT
 %token LOR LAND ADD MUL DIV POW XOR NEQ LT GT
+%token LAR
 %token SUM AVG MED CNT MIN MAX
 %token <Lexing.position> LPA RPA
 %token <Lexing.position> LBR RBR
@@ -28,7 +30,7 @@
 %token <int> LABEL_LEVEL
 %token <Lexing.position> RULE
 %token <Lexing.position> NOTE
-%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT SCOPE
+%token FIX WHENEVER OBLIGE PERMIT CONSTITUTE EXCEPT SCOPE REPLACE
 %token CAUSING SUPPRESSING
 
 %token DOT
@@ -77,24 +79,26 @@
 %nonassoc NEG
 
 
+
+
 %start <Lex.prog> prog
 %%
                     
 prog: stmts {$1}
 
-stmts: list(stmt) EOF { { stmts = $1 } }
+stmts: separated_list(NEWLINE, stmt) EOF   { { stmts = $1 } }
 
 stmt:
   | IMPORT import                          { SImport ($1, ILex, $2) }
   | IMPORT import_option import            { SImport ($1, $2, $3) }
   | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, snd $2, Some (snd $3)) }
   | section_kind_and_pos STRING            { SSection (snd $1, fst $1, snd $2, None) }
-  | TTYPE IDENT IS typ                     { SType (fst $2, snd $2, Some $4, None) }
-  | TTYPE IDENT IS typ DOCSTRING           { SType (fst $2, snd $2, Some $4, Some $5) }
+  | TTYPE IDENT IS type_term               { SType (fst $2, snd $2, Some $4, None) }
+  | TTYPE IDENT IS type_term NEWUP DOCSTRING{ SType (fst $2, snd $2, Some $4, Some $6) }
   | TTYPE IDENT                            { SType (fst $2, snd $2, None, None) }
-  | TTYPE IDENT DOCSTRING                  { SType (fst $2, snd $2, None, Some $3) }
-  | FUNCTION IDENT LPA fun_args RPA SUB GT type_term { SFunction (fst $2, snd $2, $4, $8, None) }
-  | FUNCTION IDENT LPA fun_args RPA SUB GT type_term DOCSTRING { SFunction (fst $2, snd $2, $4, $8, Some $9) }
+  | TTYPE IDENT NEWUP DOCSTRING            { SType (fst $2, snd $2, None, Some $4) }
+  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term { SFunction (fst $2, snd $2, $5, $10, None) }
+  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term NEWUP DOCSTRING { SFunction (fst $2, snd $2, $5, $10, Some $12) }
   | event_def                              { $1 }
   | NOTE STRING                            { SNote ($1, snd $2) }
   | NOTE DOCSTRING                         { SNote ($1, $2) }
@@ -127,9 +131,9 @@ section_kind_and_pos:
   | SUBPOINT              { Subpoint 0, $1 }
 
 rule_type:
-  | TENFORCEABLE { Enforceable }
-  | TTRANSPARENTLY TENFORCEABLE { Transparent }
-  |              { Vanilla }
+  | NEWDOWN TENFORCEABLE rule_constrs                { Enforceable, $3 }
+  | NEWDOWN TTRANSPARENTLY TENFORCEABLE rule_constrs { Transparent, $4 }
+  |                                                  { Vanilla, [] }
 
 pol:
   | TCAUSABLE               { TCau }
@@ -150,37 +154,42 @@ typ:
   | TMONEY IDENT { Dom.TMoney (snd $2) }
 
 type_term:
-  | typ          { TypeTerm.TypeConst $1 }
-  | IDENT        { TypeTerm.TypeVar (snd $1) }
+  | typ                                            { TypeTerm.TypeConst $1 }
+  | IDENT                                          { TypeTerm.TypeVar (snd $1) }
+  | LBR separated_nonempty_list(COM, type_fix) RBR { TypeTerm.TypeSum $2 }
 
 section_kind_with_name:
-  | LAW LABEL_LEVEL STRING       { Law $2, snd $3 }
-  | TITLE LABEL_LEVEL STRING     { Title $2, snd $3 }
-  | CHAPTER LABEL_LEVEL STRING   { Chapter $2, snd $3 }
-  | SECTION LABEL_LEVEL STRING   { Section $2, snd $3 }
-  | ARTICLE LABEL_LEVEL STRING   { Article $2, snd $3 }
-  | PARAGRAPH LABEL_LEVEL STRING { Paragraph $2, snd $3 }
-  | POINT LABEL_LEVEL STRING     { Point $2, snd $3 }
-  | SUBPOINT LABEL_LEVEL STRING  { Subpoint $2, snd $3 }
-  | LAW STRING                   { Law 0, snd $2 }
-  | TITLE STRING                 { Title 0, snd $2 }
-  | CHAPTER STRING               { Chapter 0, snd $2 }
-  | SECTION STRING               { Section 0, snd $2 }
-  | ARTICLE STRING               { Article 0, snd $2 }
-  | PARAGRAPH STRING             { Paragraph 0, snd $2 }
-  | POINT STRING                 { Point 0, snd $2 }
-  | SUBPOINT STRING              { Subpoint 0, snd $2 }
+  | LAW LABEL_LEVEL STRING       { fst $3, (Law $2, snd $3) }
+  | TITLE LABEL_LEVEL STRING     { fst $3, (Title $2, snd $3) }
+  | CHAPTER LABEL_LEVEL STRING   { fst $3, (Chapter $2, snd $3) }
+  | SECTION LABEL_LEVEL STRING   { fst $3, (Section $2, snd $3) }
+  | ARTICLE LABEL_LEVEL STRING   { fst $3, (Article $2, snd $3) }
+  | PARAGRAPH LABEL_LEVEL STRING { fst $3, (Paragraph $2, snd $3) }
+  | POINT LABEL_LEVEL STRING     { fst $3, (Point $2, snd $3) }
+  | SUBPOINT LABEL_LEVEL STRING  { fst $3, (Subpoint $2, snd $3) }
+  | LAW STRING                   { fst $2, (Law 0, snd $2) }
+  | TITLE STRING                 { fst $2, (Title 0, snd $2) }
+  | CHAPTER STRING               { fst $2, (Chapter 0, snd $2) }
+  | SECTION STRING               { fst $2, (Section 0, snd $2) }
+  | ARTICLE STRING               { fst $2, (Article 0, snd $2) }
+  | PARAGRAPH STRING             { fst $2, (Paragraph 0, snd $2) }
+  | POINT STRING                 { fst $2, (Point 0, snd $2) }
+  | SUBPOINT STRING              { fst $2, (Subpoint 0, snd $2) }
 
 reference:
-  | LBR nonempty_list(section_kind_with_name) RULE STRING RBR { ($1, ($2, Some (snd $4))) }
-  | LBR nonempty_list(section_kind_with_name) RBR { ($1, ($2, None)) }
+  | nonempty_list(section_kind_with_name) RULE STRING
+                                 { (fst (List.hd $1)), (List.map snd $1, Some (snd $3)) }
+  | nonempty_list(section_kind_with_name)
+                                 { (fst (List.hd $1)), (List.map snd $1, None) }
 
 rule:
-  | WHENEVER pattern nonempty_list(e) OBLIGE pattern nonempty_list(e) { Obligation ($3, $2, $6, $5) }
-  | WHENEVER pattern nonempty_list(e) PERMIT pattern nonempty_list(e) { Permission ($3, $2, $6, $5) }
-  | WHENEVER pattern nonempty_list(e) CONSTITUTE nonempty_list(e)     { Constitutive ($3, $2, $5) }
-  | WHENEVER pattern nonempty_list(e) EXCEPT nonempty_list(reference) { Exception ($3, $2, $5) }
-  | WHENEVER pattern nonempty_list(e) SCOPE nonempty_list(reference)  { Scope ($3, $2, $5) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWHITE, e) { Obligation ($4, $2, $9, $7) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWHITE, e) { Permission ($4, $2, $9, $7) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)     { Constitutive ($4, $2, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWHITE, reference) { Exception ($4, $2, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN REPLACE NEWUP separated_nonempty_list(NEWHITE, reference) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)
+                                                                                                                            { ExceptionC ($4, $2, $8, $12) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWHITE, reference)  { Scope ($4, $2, $8) }
 
 ident:
   | IDENT { snd $1 }
@@ -197,35 +206,37 @@ type_fix:
 
 type_fixes:
   | { [] }
-  | FIX list(type_fix) { $2 }
+  | FIX NEWUP separated_nonempty_list(NEWHITE, type_fix) NEWDOWN { $3 }
 
 fun_args:
   | list(type_fix) { $1 }
 
 srule:
-  | RULE DOCSTRING type_fixes rule rule_type rule_constrs        { SRule ($1, None, $3, $4, $5, $6, Some $2) }
-  | RULE STRING DOCSTRING type_fixes rule rule_type rule_constrs { SRule ($1, Some (snd $2), $4, $5, $6, $7, Some $3) }
-  | RULE type_fixes rule rule_type rule_constrs                  { SRule ($1, None, $2, $3, $4, $5, None) }
-  | RULE STRING type_fixes rule rule_type rule_constrs           { SRule ($1, Some (snd $2), $3, $4, $5, $6, None) }
+  | RULE NEWUP DOCSTRING NEWHITE type_fixes rule rule_type        { SRule ($1, None, $5, $6, fst $7, snd $7, Some $3) }
+  | RULE STRING NEWUP DOCSTRING NEWHITE type_fixes rule rule_type { SRule ($1, Some (snd $2), $6, $7, fst $8, snd $8, Some $4) }
+  | RULE NEWUP type_fixes rule rule_type                          { SRule ($1, None, $3, $4, fst $5, snd $5, None) }
+  | RULE STRING NEWUP type_fixes rule rule_type                   { SRule ($1, Some (snd $2), $4, $5, fst $6, snd $6, None) }
 
 event_def:
-  | pol event_type IDENT list(arg)           { SEvent (fst $3, $2, snd $3, $4, $1, None) }
-  | pol event_type IDENT DOCSTRING list(arg) { SEvent (fst $3, $2, snd $3, $5, $1, Some $4) }
-  | pol FUNCTIONAL functional_event_type IDENT LPA separated_list(COM, arg) RPA SUB GT type_term
-    { SEvent (fst $4, $3, snd $4, $6@[Lexing.dummy_pos, "~return_value", $10], $1, None) }
-  | pol FUNCTIONAL functional_event_type IDENT LPA separated_list(COM, arg) RPA SUB GT type_term DOCSTRING
-    { SEvent (fst $4, $3, snd $4, $6@[Lexing.dummy_pos, "~return_value", $10], $1, Some $11) }
+  | pol event_type IDENT NEWUP separated_list(NEWHITE, arg)                   { SEvent (fst $3, $2, snd $3, $5, $1, None) }
+  | pol event_type IDENT NEWUP DOCSTRING NEWHITE separated_list(NEWHITE, arg) { SEvent (fst $3, $2, snd $3, $7, $1, Some $5) }
+  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? separated_list(COM, arg) NEWDOWN? RPA SUB GT type_term
+    { SEvent (fst $4, Lex.Event ($3, Functional), snd $4, $7@[Lexing.dummy_pos, "~return_value", $12], $1, None) }
+  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? separated_list(COM, arg) NEWDOWN? RPA SUB GT type_term NEWUP DOCSTRING
+    { SEvent (fst $4, Lex.Event ($3, Functional), snd $4, $7@[Lexing.dummy_pos, "~return_value", $12], $1, Some $14) }
+  | pol VARIABLE functional_event_type IDENT COL type_term
+    { SEvent (fst $4, Lex.Event ($3, Variable), snd $4, [Lexing.dummy_pos, "~return_value", $6], $1, None) }
+  | pol VARIABLE functional_event_type IDENT COL type_term NEWUP DOCSTRING
+    { SEvent (fst $4, Lex.Event ($3, Variable), snd $4, [Lexing.dummy_pos, "~return_value", $6], $1, Some $8) }
 
 event_type:
   | EXTERNAL EVENT            { Lex.Event (true, Standard) }
   | EVENT                     { Lex.Event (false, Standard) }
-  | VARIABLE EXTERNAL EVENT   { Lex.Event (true, Variable) }
-  | VARIABLE EVENT            { Lex.Event (false, Variable) }
   | PREDICATE                 { Lex.Predicate }
 
 functional_event_type:
-  | EXTERNAL EVENT { Lex.Event (true, Functional) }
-  | EVENT          { Lex.Event (false, Functional) }
+  | EXTERNAL EVENT { true }
+  | EVENT          { false }
 
 arg:
   | IDENT COL type_term { (fst $1, snd $1, $3) }
@@ -237,11 +248,11 @@ ee:
 | LPA e RPA                            { $1, snd $2 }
 | TRUE                                 { $1, tt }
 | FALSE                                { $1, ff }
-| LBR term RBR                         { fst $2, term (snd $2) }
-| LBR IDENT EQ aggregation LPA term SEMICOLON vars SEMICOLON e RPA RBR
-                                       { fst $2, agg (snd $2) $4 (snd $6) $8 (snd $10) }
-| LBR IDENT EQ aggregation LPA term SEMICOLON e RPA RBR
-                                       { fst $2, agg (snd $2) $4 (snd $6) [] (snd $8) }
+| term2                                { fst $1, term (snd $1) }
+| IDENT LAR aggregation LPA term SEMICOLON vars SEMICOLON e RPA
+                                       { fst $1, agg (snd $1) $3 (snd $5) $7 (snd $9) }
+| IDENT LAR aggregation LPA term SEMICOLON e RPA
+                                       { fst $1, agg (snd $1) $3 (snd $5) [] (snd $7) }
 | NEG e                                { $1, neg (snd $2) }
 | PREV interval e                      { $1, prev (snd $2) (snd $3) }
 | PREV e                               { $1, prev Interval.full (snd $2) }
@@ -290,6 +301,10 @@ side:
 sides:
 | COL IDENT COM IDENT                  { (Side.of_string (snd $2), Side.of_string (snd $4)) }
 
+term2:
+| unop2 term                           { fst $1, Term.Unop (snd $1, snd $2) }
+| term binop2 term                     { fst $1, Term.Binop (snd $1, $2, snd $3) }
+
 term:
 | LPA term RPA                         { $1, snd $2 }
 | const                                { $1 }
@@ -297,6 +312,11 @@ term:
 | IDENT LPA terms RPA                  { fst $1, Term.App (snd $1, List.map snd $3) }
 | unop term                            { fst $1, Term.Unop (snd $1, snd $2) }
 | term binop term                      { fst $1, Term.Binop (snd $1, $2, snd $3) }
+| LBR separated_nonempty_list(COM, field) RBR { $1, Term.Record $2 }
+| term DOT IDENT                       { fst $1, Term.Proj (snd $1, snd $3) }
+
+field:
+| IDENT COL term                       { snd $1, snd $3 }
 
 const:
 | INT                                  { fst $1, Term.Const (Int (snd $1)) }
@@ -312,11 +332,14 @@ terms:
 | trms=separated_list(COM, term)      { trms }
 
 %inline binop:
-| ADD   { Term.BAdd }
-| SUB   { Term.BSub }
-| MUL   { Term.BMul }
-| DIV   { Term.BDiv }
-| POW   { Term.BPow }
+| ADD    { Term.BAdd }
+| SUB    { Term.BSub }
+| MUL    { Term.BMul }
+| DIV    { Term.BDiv }
+| POW    { Term.BPow }
+| binop2 { $1 }
+
+%inline binop2:
 | LAND  { Term.BAnd }
 | LOR   { Term.BOr }
 | XOR   { Term.BXor }
@@ -328,8 +351,12 @@ terms:
 | GT EQ { Term.BGeq }
 
 %inline unop:
-| SUB { $1, Term.USub }
+| SUB   { $1, Term.UNot }
+| unop2 { $1 }
+
+%inline unop2:
 | NOT { $1, Term.UNot }
+
 
 money:
 | IDENT FLOAT { fst $1, Money.( (snd $2) $ (snd $1) ) }

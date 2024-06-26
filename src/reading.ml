@@ -31,12 +31,71 @@ let rec html_of_trm ?(l=0) = function
                           (html_of_trm ~l:l' t.trm)
                           (Formula.Term.string_of_binop o)
                           (html_of_trm ~l:l' t'.trm)
+  | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
+  | TRecord kvs ->
+     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.Term.(v.trm) in
+     Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
+
 and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
 
-let reading_of_term term =
-  span "lex-formula-term" (html_of_trm Tformula.Term.(term.trm))
+let reading_of_unop = function
+  | Formula.Term.UNot -> "not"
+  | USub -> "minus"
 
-let reading_of_span span = Lextime.Span.to_string span
+let reading_of_binop = function
+  | Formula.Term.BAdd -> "plus"
+  | BSub -> "minus"
+  | BMul -> "multiplied by"
+  | BDiv -> "divided by"
+  | BPow -> "to the power of"
+  | BAnd -> "and"
+  | BOr  -> "or"
+  | BXor -> "exclusive-or"
+  | BEq  -> "is equal to"
+  | BNeq -> "is not equal to"
+  | BLt  -> "is less than"
+  | BLeq -> "is less or equal to"
+  | BGt  -> "is greater than"
+  | BGeq -> "is greater or equal to"
+
+let reading_of_dom = function
+  | Dom.Int v -> Int.to_string v
+  | Str v -> String.to_string v
+  | Float v -> Float.to_string v
+  | Bool v -> Bool.to_string v
+  | Time v -> Lextime.Time.to_string v
+  | Span v -> Lextime.Span.to_string_reading v
+  | Money v -> Money.to_string_reading v
+
+let rec reading_of_trm ?(l=0) eprog = function
+  | Tformula.Term.TVar x -> ident x
+  | TConst d -> const (reading_of_dom d)
+  | TApp (f, trms) ->
+     (match Map.find Elex.(eprog.efunctions) f with
+      | Some (args, _, Some s) ->
+         let names = List.map ~f:(fun (name, _) -> name) args in
+         Placeholders.replace_all names (List.map ~f:(reading_of_term eprog) trms) s
+      | _ -> Printf.sprintf "%s(%s)" f (html_of_trms trms))
+  | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                     (reading_of_unop o)
+                     (reading_of_trm ~l:10 eprog t.trm)
+  | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+                        Printf.sprintf (Util.paren l l' "%s %s %s")
+                          (reading_of_trm ~l:l' eprog t.trm)
+                          (reading_of_binop o)
+                          (reading_of_trm ~l:l' eprog t'.trm)
+  | TProj (t, p) -> Printf.sprintf "the field %s of %s" p (html_of_trm ~l:10 t.trm) 
+  | TRecord kvs ->
+     let f (k, v) =
+       li "lex-reading-record-field"
+         (ident k ^ " is equal to " ^ reading_of_trm eprog Tformula.Term.(v.trm)) in
+     "a record where" ^ ul "lex-reading-record" (String.concat (List.map kvs ~f))
+
+
+and reading_of_term eprog term =
+  span "" (reading_of_trm eprog Tformula.Term.(term.trm))
+
+let reading_of_span span = const (Lextime.Span.to_string_reading span)
 
 let reading_of_past_interval default = function
   | Interval.U (C s) when Lextime.Span.is_zero s -> default  ^ " in the past"
@@ -59,22 +118,55 @@ let reading_of_future_interval default = function
   | B (C ls, O rs) -> Printf.sprintf "%s in between %s (included) and %s (excluded) ago" default (reading_of_span ls) (reading_of_span rs)
   | B (O ls, C rs) -> Printf.sprintf "%s in between %s (excluded) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
   | B (O ls, O rs) -> Printf.sprintf "%s in between %s (excluded) and %s (excluded) ago" default (reading_of_span ls) (reading_of_span rs)
-    
+
+let reading_of_op = function
+  | Aggregation.ASum -> "sum"
+  | AAvg -> "average"
+  | AMed -> "median"
+  | ACnt -> "count"
+  | AMin -> "minimum"
+  | AMax -> "maximum"
+
 let rec reading_of_formula formula_id eprog f =
   let inner_html = 
     match Eformula.(f.f) with
     | Eformula.ETT -> const "true"
     | EFF -> const "false"
-    | EEqConst (x, d) -> Printf.sprintf "%s is equal to %s"
-                           (Tformula.Term.value_to_string x) (const (Dom.to_string d))
-    | EPredicate (name, trms) as f ->
+    | EEqConst (x, Dom.Bool true) -> reading_of_term eprog x
+    | EEqConst (x, d) ->
+       Printf.sprintf "%s is equal to %s" (reading_of_term eprog x) (const (reading_of_dom d))
+    | EPredicate (name, trms, event_type) as f ->
        (match Map.find Elex.(eprog.eevents) name with
         | Some (_, args, _, doc_string) -> 
            let names = List.map ~f:(fun (_, name, _) -> name) args in
-           (match doc_string with
-            | None   -> Eformula.to_string_core f
-            | Some s -> Placeholders.replace_all names (List.map ~f:reading_of_term trms) s)
+           (match doc_string, event_type with
+            | None, _ -> Formula.to_string (Eformula.to_formula_core f)
+            | Some s, Event (_, Functional) ->
+               Printf.sprintf "%s is equal to %s"
+                 (Placeholders.replace_all (List.drop_last_exn names)
+                    (List.map ~f:(reading_of_term eprog) (List.drop_last_exn trms)) s)
+                 (reading_of_term eprog (List.last_exn trms))
+            | Some s, Event (_, Variable) ->
+               Printf.sprintf "%s is equal to %s"
+                 s
+                 (reading_of_term eprog (List.last_exn trms))
+            | Some s, _ -> Placeholders.replace_all names (List.map ~f:(reading_of_term eprog) trms) s)
         | None -> Eformula.to_string_core f)
+    | EAgg (s, op, x, y, f) ->
+       let reading_of_groupby =
+         if List.is_empty y then
+            ""
+          else
+            ", grouping on " ^ String.concat ~sep:", " (List.map y ~f:ident) ^ ", " in
+       ident s
+       ^ " is the "
+       ^ reading_of_op op
+       ^ " of all "
+       ^ reading_of_term eprog x
+       ^ reading_of_groupby
+       ^ " such that the following is the case:"
+       ^ (ul "lex-reading-neg"
+            (li "lex-reading-neg-li" (reading_of_formula formula_id eprog f)))
     | ENeg f ->
        "the following is not the case: "
        ^ (ul "lex-reading-neg"
@@ -161,7 +253,7 @@ let rec reading_of_formula formula_id eprog f =
        ^ ", the following happened: "
        ^ (ul "lex-reading-until-right"
             (li "lex-reading-until-right-li" (reading_of_formula formula_id eprog g)))
-    | f -> Eformula.to_string_core f in
+    | f -> Formula.to_string (Eformula.to_formula_core f) in
   let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
   div ~id "lex-subformula-reading" inner_html
 
@@ -204,16 +296,25 @@ let reading_of_rule_then prefix_id eprog verb g pat =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let section_id rs =
-  "lex-section-" ^ String.concat ~sep:"-" (List.map ~f:(fun (s, n) -> Lex.string_of_section_kind s ^ "-" ^ n) rs)
+let reading_of_rule_then2 prefix_id eprog g =
+  let formula_id = Printf.sprintf "%s-%d" prefix_id in
+  let f i g =
+    li "lex-reading-then-formula" (reading_of_formula (formula_id i) eprog g) in
+  p "lex-reading-then" (
+      "Instead, the following "
+      ^ strong "lex-reading-verb" "shall be constituted"
+      ^ ":"
+      ^ ul "lex-reading-then-formulae"
+          (String.concat ~sep:"" (List.mapi ~f g))
+    )
 
 let reading_of_reference (l, (rs, rule)) =
   let rule_id = match rule with
-    | Some r -> kw "rule" ^ r
+    | Some r -> " " ^ span "lex-section-kind" "rule" ^ r
     | None ->  "" in
   let reading_of_section_kind_and_name (s, n) =
     span "lex-section-kind" (Lex.string_of_section_kind s) ^ n in
-  a ("#" ^ section_id (fst (Label.reference_of_label l))) "lex-section-link"
+  a ("#lex-section-" ^ Label.doc_id l) "lex-section-link"
     (String.concat ~sep:" " (List.map ~f:reading_of_section_kind_and_name rs) ^ rule_id)
 
 let reading_of_ref ref_id (l, r) =
@@ -228,7 +329,7 @@ let reading_of_rule_except prefix_id refs =
      p "lex-reading-then" (
          "Then "
          ^ span "lex-reading-then-formula" (reading_of_ref (ref_id 0) (List.hd_exn refs))
-         ^ " " ^ strong "lex-reading-verb" "shall not apply"
+         ^ " " ^ strong "lex-reading-verb" "shall not apply" ^ "."
        )
   | _ -> 
      p "lex-reading-then" (
@@ -289,7 +390,12 @@ let reading_of_erule rule_id eprog type_fixes erule =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f p
     ^ reading_of_rule_except (prefix_id "then") refs in
-  let reading_of_scope_rule f p refs  =
+  let reading_of_excc_rule f p refs g =
+    reading_of_type_fixes eprog rule_id type_fixes
+    ^ reading_of_rule_if (prefix_id "if") eprog f p
+    ^ reading_of_rule_except (prefix_id "then") refs
+    ^ reading_of_rule_then2 (prefix_id "then2") eprog g in
+  let reading_of_scope_rule f p refs =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f p
     ^ reading_of_rule_scope (prefix_id "then") refs in
@@ -300,6 +406,7 @@ let reading_of_erule rule_id eprog type_fixes erule =
   | EConstitutive (f, p, g)
     -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
   | EException (f, p, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
+  | EExceptionC (f, p, refs, _, g) -> reading_of_excc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs) (List.map ~f:snd g)
   | EScope (f, p, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
 
 let reading_of_doc_string = Placeholders.mark_all
