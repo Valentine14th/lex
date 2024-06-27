@@ -1,4 +1,4 @@
->\documentclass[runningheads]{llncs}
+\documentclass[runningheads]{llncs}
 
 \usepackage[T1]{fontenc}
 
@@ -70,6 +70,22 @@
 %
 \section{Introduction}
 
+\section{Enforcement under refinement}
+
+\newcommand{\Events}[1]{\mathbb{E}(#1)}
+\newcommand{\Pow}[1]{\mathcal{P}(#1)}
+
+\begin{definition}
+  Let $\Phi=(\Sigma, \kappa, \phi)$ and $\Phi'=(\Sigma',\kappa',\phi')$ be two specifications. We say that $\Phi$ refines $\Phi'$ under assumption $\psi$ iff $\exists \pi: \Events{\Sigma} \to \mathrm{MFOTL}(\Sigma')$ such that
+  \begin{enumerate}[(i)]
+  \item  $v, i\vDash_{\pi(\sigma)} \phi' \land \psi \Longrightarrow v, i\vDash_{\sigma} \phi$
+  \item $\kappa' \vdash \pi(e) : \kappa(e)$
+  \end{enumerate}
+\end{definition}
+
+\begin{theorem}
+If $\Phi$ 
+\end{theorem}
 
 \section{Logical foundations}
 
@@ -389,18 +405,18 @@ well as the conversion of $time\_interval$ expressions into intervals:
 % Temporal patterns: https://dl.acm.org/doi/pdf/10.1145/1062455.1062526
 
 % todo:
-% design survey
+
 % finish module system in enforceability step → Jonas
 % refinement → Jonas
 % VS Code → Jonas
 % modify... constitute  → Jonas
 % except/modify ... other verb? → Jonas
 
-% algebraic data types... → medium
+% design survey
 % other verbs, including permit
 % isobliged etc. → medium
 
-% fix reduce/reduce conflicts
+% fix shift/reduce and reduce/reduce conflicts
 
 %%% concrete todos, in order
 %%% + SURVEY
