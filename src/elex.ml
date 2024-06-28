@@ -91,28 +91,31 @@ let string_of_epattern = function
 
 let string_of_erule i erule =
   let to_string f = Etc.tabs (i+1) ^ Eformula.to_string f in
+  let reference_to_string ref_ = Etc.tabs (i+1) ^ Lex.string_of_reference ref_ in
   let string_of_formula_list f =
     String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
+  let string_of_reference_list refs =
+    String.concat ~sep:"\n" (List.map ~f:reference_to_string refs) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb f p g q =
     Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
-    ^ Etc.tabs i     ^ verb       ^ string_of_epattern q ^ "\n"
+    ^ string_of_formula_list f                         
+    ^ Etc.tabs i   ^ verb       ^ string_of_epattern q ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_ref_rule verb f p refs =
     Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
-    ^ Etc.tabs i   ^ verb                             ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
+    ^ string_of_formula_list f                         ^ "\n"
+    ^ Etc.tabs i   ^ verb                              ^ "\n"
+    ^ string_of_reference_list refs
   in
   let string_of_refc_rule verb f p refs g =
     Etc.tabs i     ^ "whenever"  ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
-    ^ Etc.tabs i   ^ verb
-    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
-    ^ Etc.tabs i   ^ "constitute"
+    ^ string_of_formula_list f                          
+    ^ Etc.tabs i   ^ verb                               ^ "\n"
+    ^ string_of_reference_list refs                     
+    ^ Etc.tabs i   ^ "constitute"                       ^ "\n"
     ^ string_of_formula_list g
   in
   match erule with
@@ -144,7 +147,7 @@ let string_of_estmt ?(i=0) =
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-      Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
+      Printf.sprintf "%srule %s\n%s%s\n%s%s%s%s"
         (Etc.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)

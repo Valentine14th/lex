@@ -214,7 +214,7 @@ let compile_exception_signature exceptions aliases variables =
 let compile_exception_or_scope_signature predicate_map aliases variables =
   let indexed_predicates = (Map.to_alist predicate_map) in
   let compile_predicate (idx, pred) =
-    let var_types = try Map.find_exn variables idx with _ -> assert false in
+    let var_types = Map.find_exn variables idx in
     let pred_name_and_terms = match pred.f with
       | Eformula.EPredicate (n, ts, _) -> (n, ts)
       | _ -> assert false
@@ -222,9 +222,7 @@ let compile_exception_or_scope_signature predicate_map aliases variables =
     let terms = snd pred_name_and_terms in
     let type_term f = match Eformula.Term.(f.trm) with
       | Term.TVar v ->
-         let a = try Map.find_exn var_types v with _ -> assert false in
-      (* TODO: check how this should behave *)
-      (* | Term.TVar v -> let a = try Map.find_exn var_types v with _ -> Formula.TypeTerm.TypeConst TInt in *)
+         let a = Map.find_exn var_types v in
          let terms = compile_eval_default aliases a in
          List.map terms ~f:(Etc.concat v)
       | _ -> assert false

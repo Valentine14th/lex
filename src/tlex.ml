@@ -276,6 +276,10 @@ let string_of_signature signature =
 let string_of_tprog tprog =
   String.concat ~sep:"\n" (List.map tprog.tstmts ~f:string_of_tstmt)
 
+let string_of_var_types var_types =
+  let f (k, v) = k ^ " : " ^ Formula.TypeTerm.to_string v in
+  "[" ^ String.concat ~sep:", " (List.map (Map.to_alist var_types) ~f) ^ "]"
+
 let print_tprog tprog =
   Stdio.printf "%s\n" (string_of_tprog tprog)
 

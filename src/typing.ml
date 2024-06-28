@@ -492,13 +492,13 @@ let type_rule s pos = function
         | [], _ -> Util.reference_error "references must contain at least on reference" pos'
         | (r::rs), _ -> List.fold ~init:r ~f:section_kinds_are_in_order rs
       in
-      let s, rule = 
+      let s, t_vars, rule = 
         let merge_reference_with_label pos l rs rule_id =
           begin match Label.highest_level l with
           | (Label.LSection (Article 0, _)) -> (pos, Label.set_rule_id rule_id (List.fold ~init:(Label.qualified_label l) ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs), (rs, rule_id))
           | _ -> (pos, Label.set_rule_id rule_id (List.fold ~init:l ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs), (rs, rule_id))
           end in
-        let rec process_rule s = function
+        let rec process_rule s t_vars = function
           | Exception (f, p, refs) ->
              let _ = List.map ~f:(decreasing_section_kinds) refs in
              (* let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> (pos', Label.set_rule_id rule_id (List.fold ~init:s.label ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs))) refs in *)
@@ -513,7 +513,7 @@ let type_rule s pos = function
              let pred = Tformula.tpredicate p_name terms (Event (false, Standard)) in
              let s' = add_exception_first_pass rule_num pred reference_labels s in
              let _, p = type_pattern s.tprog pos t_vars p in
-             s', TException (f, p, reference_labels, pred)
+             s', t_vars, TException (f, p, reference_labels, pred)
           | Scope (f, p, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
              (* let reference_labels = List.map ~f:(fun (pos',(rs, rule_id)) -> (pos', Label.set_rule_id rule_id (List.fold ~init:s.label ~f:(fun acc (level, name) -> Label.set pos level (name, None) acc) rs))) refs in *)
@@ -528,33 +528,36 @@ let type_rule s pos = function
              let pred = Tformula.tpredicate p_name terms (Event (false, Standard)) in
              let s' = add_scope_first_pass rule_num pred reference_labels s in
              let _, p = type_pattern s.tprog pos t_vars p in
-             s', TScope (f, p, reference_labels, pred)
+             s', t_vars, TScope (f, p, reference_labels, pred)
           | Obligation (f1, p, f2, q) ->
              let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, p = type_pattern s.tprog pos t_vars p in
              let _, q = type_pattern s.tprog pos t_vars q in
-             s, TObligation (f1, p, f2, q)
+             s, t_vars, TObligation (f1, p, f2, q)
           | Permission (f1, p, f2, q) ->
              let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, p = type_pattern s.tprog pos t_vars p in
              let _, q = type_pattern s.tprog pos t_vars q in
-             s, TPermission (f1, p, f2, q)
+             s, t_vars, TPermission (f1, p, f2, q)
           | Constitutive (f1, p, f2) ->
              let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula_pos s pos) in
              let _, p = type_pattern s.tprog pos t_vars p in
-             s, TConstitutive (f1, p, f2)
+             s, t_vars, TConstitutive (f1, p, f2)
           | ExceptionC (f1, p, refs, f2) ->
-             let s, tf = process_rule s (Exception (f1, p, refs)) in
-             let s, tg = process_rule s (Constitutive (f1, p, f2)) in
+             let s, t_vars, tf = process_rule s t_vars (Exception (f1, p, refs)) in
+             let s, t_vars, tg = process_rule s t_vars (Constitutive (f1, p, f2)) in
              match tf, tg with
              | TException (f1, p, reference_labels, pref), TConstitutive (_, _, f2)
-               -> s, TExceptionC (f1, p, reference_labels, pref, f2)
+               -> s, t_vars, TExceptionC (f1, p, reference_labels, pref, f2)
              | _, _ -> assert false
-        in process_rule s rule
+        in process_rule s t_vars rule
       in
+      print_endline "type_rule";
+      print_endline (Label.string_of_label label');
+      print_endline (Tlex.string_of_var_types t_vars);
       let s' = add_vars rule_num t_vars s in
       let s'' = add_rule pos rule_num label' s' in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
@@ -609,10 +612,10 @@ let merge_type_maps pos m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
 let check_var_types tprog =
   let var_equivalence_classes = Label.RuleTree.rules_with_shared_variable_scopes tprog.rule_tree in
   let f0 acc' key =
-      let var_types = Map.find_exn tprog.variables key in
-      let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree key in
-      let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree key in
-      merge_type_maps pos var_types acc' label
+    let var_types = Map.find_exn tprog.variables key in
+    let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree key in
+    let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree key in
+    merge_type_maps pos var_types acc' label
   in
   let f1 keys = (keys, Set.fold keys ~init:(Map.empty (module String)) ~f:f0) in
   let updated_vars = List.map var_equivalence_classes ~f:f1 in

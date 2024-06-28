@@ -14,6 +14,8 @@ let label_error msg pos = eprintf "Label error at %s: %s\n" (string_of_pos pos) 
 
 let reference_error msg pos = eprintf "Reference error at %s: %s\n" (string_of_pos pos) msg; exit(-1)
 
+let compiler_error msg = eprintf "Compiler error: %s\n" msg; exit(-1)
+
 let take l n =
   let rec aux = function
     | _, 0 -> []

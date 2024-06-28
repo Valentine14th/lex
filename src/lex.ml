@@ -151,11 +151,11 @@ let verb_of_rule = function
 
 let string_of_reference (rs, rule) =
   let rule_id = match rule with
-    | Some r -> "rule \"" ^ r ^ "\""
+    | Some r -> " rule \"" ^ r ^ "\""
     | None ->  ""
   in
   let string_of_section_kind_and_name (s, n) = string_of_section_kind s ^ " \"" ^ n ^ "\"" in
-  "{ " ^ String.concat ~sep:" " (List.map ~f:string_of_section_kind_and_name rs) ^ rule_id ^ " }"
+   String.concat ~sep:" " (List.map ~f:string_of_section_kind_and_name rs) ^ rule_id 
 
 let string_of_pattern = function
   | PPresent -> ""
