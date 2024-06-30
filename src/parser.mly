@@ -177,6 +177,7 @@ section_kind_with_name:
   | SUBPOINT STRING              { fst $2, (Subpoint 0, snd $2) }
 
 reference:
+  | RULE STRING                  { (fst $2), ([], Some (snd $2)) }
   | nonempty_list(section_kind_with_name) RULE STRING
                                  { (fst (List.hd $1)), (List.map snd $1, Some (snd $3)) }
   | nonempty_list(section_kind_with_name)

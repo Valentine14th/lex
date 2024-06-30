@@ -500,46 +500,66 @@ module RuleTree = struct
 
   let rules_with_shared_variable_scopes (s: s) =
     let rec fixpoint (m: (int, (int, 'a) Set.t, 'a) Map.t) =
-      let collect_references acc x = Map.find m x
-                    |> Option.value ~default:(Set.empty (module Int))
-                    |> Set.union acc
-      in
-      let collect_references' v = Set.fold v ~init:v ~f:collect_references in
-      let m' = Map.map m ~f:collect_references' in
+      let collect_references v =
+        let aux acc x = Map.find m x
+            |> Option.value ~default:(Set.empty (module Int))
+            |> Set.union acc in
+        Set.fold v ~init:v ~f:aux in
+      let m' = Map.map m ~f:collect_references in
       match Map.equal Set.equal m m' with
       | true -> m'
       | false -> fixpoint m'
     in
     let combine_exceptions_and_scopes exceptions scopes =
-      let f ~key:_ = function
+      let aux ~key:_ = function
         | `Left l | `Right l -> Some (Set.of_list (module Int) l)
         | `Both (l1, l2) -> Some (Set.of_list (module Int) (l1@l2))
       in
-      let scopes_and_exceptions = Map.merge scopes exceptions ~f:f in
+      let scopes_and_exceptions = Map.merge scopes exceptions ~f:aux in
       fixpoint scopes_and_exceptions
     in
     let class_map = combine_exceptions_and_scopes s.exceptions s.scopes in
+    (* print_endline (Util.string_of_int_to_int_multi_map (Map.map class_map ~f:Set.to_list)); *)
     let rules = Map.keys s.label_of_rule in
-    let update_function x = function
-      | Some s -> Set.add s x
-      | None -> Set.singleton (module Int) x
+    (* print_endline (Util.string_of_int_list rules); *)
+    let update_function' acc x =
+      let aux x = function
+        | Some s -> Set.add s x
+        | None -> Set.singleton (module Int) x
+      in
+      Map.update acc x ~f:(aux x)
     in
-    let update_function' acc x = Map.update acc x ~f:(update_function x) in
     let full_map = List.fold rules ~init:class_map ~f:update_function' in
     let full_list = Map.data full_map in
-    let aux1 acc' y =
-      (* let acc'' = List.filter_map acc' ~f:(fun z -> if (Set.is_empty (Set.inter y z)) then Some z else Some (Set.union y z)) in *)
-      let acc'' = List.map acc' ~f:(fun z -> if (Set.is_empty (Set.inter y z)) then z else Set.union y z) in
-      List.fold acc'' ~f:Set.union ~init:y
-      in
+    (* print_endline (Util.string_of_int_set_list full_list); *)
     let aux2 acc x =
-      match Set.length (List.fold ~init:x ~f:Set.union (List.map acc ~f:(fun a -> Set.inter x a))) with
-      | 1 -> x::acc
-      | _ -> [aux1 acc x]
+      let aux1 acc' y =
+        let aux0 z =
+          let inter = Set.inter y z in
+          (* print_endline ("y & z: " ^ Util.string_of_int_set inter); *)
+          (* print_endline ("y: " ^ Util.string_of_int_set y); *)
+          (* print_endline ("z: " ^ Util.string_of_int_set z); *)
+          if (Set.is_empty inter) then z
+          else Set.union y z
+        in
+        let acc'' = List.map acc' ~f:aux0 in
+        (* print_endline ("acc'': " ^ Util.string_of_int_set_list acc''); *)
+        List.fold acc'' ~f:Set.union ~init:y
+      in
+      (* print_endline ("Acc: " ^ Util.string_of_int_set_list acc); *)
+      (* print_endline ("x: " ^ Util.string_of_int_set x); *)
+      let intersections = List.map acc ~f:(fun a -> Set.inter x a) in
+      let union_of_intersections = List.fold ~init:x ~f:Set.union intersections in
+      (* print_endline ("Intersections: " ^ Util.string_of_int_set_list intersections); *)
+      (* print_endline ("Union: " ^ Util.string_of_int_set union_of_intersections); *)
+      match Set.equal x union_of_intersections with
+      | true -> x::acc
+      | false -> [aux1 acc x]
     in
     let full_list' = List.dedup_and_sort full_list ~compare:(fun a b -> if Set.equal a b then 0 else 1)  in
     let filtered_list = List.filter full_list' ~f:(fun x -> if List.exists full_list ~f:(fun y -> Set.is_subset x ~of_:y && not (Set.equal x y)) then false else true) in
     let filtered_list' = List.fold filtered_list ~init:[] ~f:aux2 in
+    (* print_endline (Util.string_of_int_set_list filtered_list'); *)
     assert (List.length full_list = List.length rules);
     assert (List.length (List.concat_map filtered_list' ~f:Set.to_list) = List.length rules);
     filtered_list'

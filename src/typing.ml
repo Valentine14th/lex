@@ -489,8 +489,9 @@ let type_rule s pos = function
         | _ -> (k2, s2)
       in
       let decreasing_section_kinds (pos', r) = match r with
-        | [], _ -> Util.reference_error "references must contain at least on reference" pos'
-        | (r::rs), _ -> List.fold ~init:r ~f:section_kinds_are_in_order rs
+        | [], None -> Util.reference_error "references must contain at least one reference" pos'
+        | (r::rs), _ -> List.fold ~init:r ~f:section_kinds_are_in_order rs |> ignore
+        | [], Some _ -> ()
       in
       let s, t_vars, rule = 
         let merge_reference_with_label pos l rs rule_id =
