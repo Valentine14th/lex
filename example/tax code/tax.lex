@@ -15,6 +15,7 @@ article "121"
 type individual
 type property
 
+# test
 internal functional event amount_excluded_from_gross_income_by_property (p : property, i: individual) -> money USD
   """ the amount excluded from gross income of individual {i} due to sale or exchange of property {p} """
 

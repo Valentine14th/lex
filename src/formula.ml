@@ -437,7 +437,7 @@ let rec flatten_assoc f = match f with
 let rec to_string_rec l = function
   | TT -> Printf.sprintf "⊤"
   | FF -> Printf.sprintf "⊥"
-  | Term trm -> Printf.sprintf "{%s}" (Term.to_string trm) 
+  | Term trm -> Printf.sprintf "(%s)" (Term.value_to_string trm) 
   | Predicate (r, trms) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
   | Agg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | Neg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f

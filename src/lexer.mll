@@ -106,7 +106,7 @@ rule read =
   | white          { read lexbuf }
   | '\\' white* newline
                    { new_line lexbuf; read lexbuf }
-  | ((comment? newline white*)* as n) newline (white+ as w)
+  | ((comment? newline white*)* as n) comment? newline (white+ as w)
                    { repeat new_line lexbuf (1 + count_newlines n) ;
                      let i = update_indent (String.length w) in
                      if i > 0 then
@@ -115,7 +115,7 @@ rule read =
                        NEWDOWN
                      else
                        NEWHITE }
-  | ((comment? newline white*)* as n) newline
+  | ((comment? newline white*)* as n) comment? newline
                    { repeat new_line lexbuf (1 + count_newlines n);
                      indents := [];
                      NEWLINE }

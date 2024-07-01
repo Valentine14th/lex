@@ -261,3 +261,4 @@ let compile (eprog:Elex.eprog) =
   let signature = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
                     eprog.variables eprog.exception_predicates eprog.scope_predicates in
   { signature; let_bindings; phi }
+
