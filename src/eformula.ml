@@ -37,6 +37,35 @@ type core_t =
 
 and t = { f: core_t; enftype: EnfType.t; id: int }
 
+let rec max_id_core = function
+  | ETT
+    | EFF
+    | EEqConst _
+    | EPredicate _ -> 0
+  | EAgg (_, _, _, _, f)
+    | ENeg f
+    | EExists (_, f)
+    | EForall (_, f)
+    | EPrev (_, f)
+    | ENext (_, f)
+    | EOnce (_, f)
+    | EEventually (_, _, f)
+    | EHistorically (_, f)
+    | EAlways (_, _, f)
+    | EType (f, _)
+    -> max_id f
+  | EAnd (_, fs)
+    | EOr (_, fs)
+    -> Option.value ~default:0 (
+           List.max_elt (List.map fs ~f:max_id) ~compare:Int.compare)
+  | EImp (_, f1, f2)
+    | EIff (_, _, f1, f2)
+    | ESince (_, _, f1, f2)
+    | EUntil (_, _, _, f1, f2) 
+    -> Int.max (max_id f1) (max_id f2)
+
+and max_id f = Int.max f.id (max_id_core f.f)
+
 let make f enftype id = { f; enftype; id }
 
 let ett = ETT

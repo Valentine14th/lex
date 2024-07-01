@@ -6,6 +6,15 @@ open Lex
 open Elex
 open Clex
 
+(* TODO: constants inside of predicates do not
+   actually introduce an unnamed variable for the
+   "exception" predicate...
+   i.e. being able to create a fresh name for variables
+   is not needed*)
+let c = ref 0
+let fresh_var () = incr c; "_v" ^ string_of_int !c
+
+
 let rec merge tts tts' =
   match tts, tts' with
   | [], _ -> tts'
@@ -125,18 +134,25 @@ let complete_erule (eprog:Elex.eprog) =
   | _ -> assert false
 
 let compile_let_binding f p pred =
-  let lhs = pred in
-  let rhs = (compile_pattern (tbigcauconj f) p) in
-  (lhs, rhs)
+  match pred with
+  | { f = EPredicate (p_name, trms, event_type); _} ->
+     let process_term f (trm: Tformula.Term.t) =
+       match trm.trm with
+       | Term.TVar _ -> f, trm
+       | _ -> let v = Term.{ trm = Term.TVar (fresh_var ()); tt = trm.tt } in
+              let eq = Term.{ trm = Term.TBinop (v, Formula.Term.BEq, trm);
+                              tt = Formula.TypeTerm.TypeConst Dom.TBool } in
+              { f = EEqConst (eq, Dom.Bool true); enftype = Formula.EnfType.Obs; id = 0} :: f, v in
+     let f', trms = List.fold_map trms ~init:[] ~f:process_term in
+     let f = f @ List.rev f' in
+     let lhs = { pred with f = EPredicate (p_name, trms, event_type) } in
+     let rhs = (compile_pattern (tbigcauconj f) p) in
+     (lhs, rhs)
+  | _ -> assert false
 
 let compile_erule_let = function
   | EObligation _ | EPermission _ -> None
-  | EConstitutive (f, p, pred) ->
-    let binding = begin match pred with
-      | [(_, { f = EPredicate _; _})] -> compile_let_binding (List.map ~f:snd f) p (List.hd_exn pred |> snd)
-      | _ -> assert false
-    end in
-    Some binding
+  | EConstitutive (f, p, pred) -> Some (compile_let_binding (List.map ~f:snd f) p (List.hd_exn pred |> snd))
   | EException (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
   | EScope (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
   | EExceptionC _ -> assert false
@@ -197,13 +213,6 @@ let compile_functions functions aliases =
   in
   List.map function_list ~f:compile_function
 
-(* TODO: constants inside of predicates do not
-   actually introduce an unnamed variable for the
-   "exception" predicate...
-   i.e. being able to create a fresh name for variables
-   is not needed*)
-let c = ref 0
-let fresh_var () = incr c; "_v" ^ string_of_int !c
 
 (*
 let compile_exception_signature exceptions aliases variables =
