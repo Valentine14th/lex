@@ -37,6 +37,8 @@ type eprog =
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
+    rule_order: int list;
+    (* topological ordering of rule indices based on use/def of internal events *)
     rule_tree: Label.RuleTree.s;
     exception_predicates: (int, Eformula.t, Int.comparator_witness) Map.t;
     scope_predicates: (int, Eformula.t, Int.comparator_witness) Map.t;
@@ -49,6 +51,7 @@ let tempty =
     eevents = Map.empty (module String);
     efunctions = Map.empty (module String);
     variables = Map.empty (module Int); 
+    rule_order = [];
     rule_tree = Label.RuleTree.empty;
     exception_predicates = Map.empty (module Int);
     scope_predicates = Map.empty (module Int)

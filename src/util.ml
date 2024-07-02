@@ -54,3 +54,10 @@ let warning msg pos = match pos with
   | Some p -> eprintf "Warning at %s: %s\n" (string_of_pos p) msg
   | None -> eprintf "Warning: %s\n" msg
 
+let invert_int_string_multimap (m: (int, string list, _) Map.t) : (string, int list, _) Map.t =
+  Map.fold m ~init:(Map.empty (module String)) ~f:(fun ~key:k ~data:v acc ->
+      List.fold v ~init:acc ~f:(fun acc s ->
+          match Map.find acc s with
+          | Some l -> Map.set acc ~key:s ~data:(k::l)
+          | None -> Map.set acc ~key:s ~data:[k]))
+

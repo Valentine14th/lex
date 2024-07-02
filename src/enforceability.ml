@@ -564,14 +564,129 @@ let type_scope s _ f = Eformula.of_tformula s.tevents f
 let type_scopes pol scopes =
   List.map scopes ~f:(type_scope pol) *)
 
-let do_type _ tprog =
+let collect_internal_def (tprog: Tlex.tprog) =
+  let aux m stmt =
+    match stmt with
+    | TSRule (_, idx, _, _, rule, _, _, _) -> begin
+        match rule with
+        | TConstitutive (_, _, f2) -> begin
+            let aux' = function
+              | pos', Tformula.TPredicate (name, terms, t) ->
+                begin match Map.find tprog.tevents name with
+                  | Some (_, _, TInternal, _) -> name, terms, t
+                  | Some (_, _, pol, _) ->
+                    let err_msg = Printf.sprintf "Can only constitute 'Internal' events, but \"%s\" is \"%s\"" name (Lex.string_of_pol pol) in
+                    Util.type_error err_msg pos'
+                  | None ->
+                    let err_msg = Printf.sprintf "Unknown event \"%s\"" name in
+                    Util.type_error err_msg pos'
+                end
+              | pos', _ -> Util.type_error "The right hand side of a constitute rule can only contain predicates" pos'
+            in
+            let predicates = List.map f2 ~f:aux' in
+            List.fold predicates ~f:(fun m' pred -> Map.add_multi m' ~key:idx ~data:pred) ~init:m
+          end
+        | TException (_, _, _, Tformula.TPredicate (name, terms, t))
+        | TExceptionC (_, _, _, Tformula.TPredicate (name, terms, t), _)
+        | TScope (_, _, _, Tformula.TPredicate (name, terms, t))
+          -> Map.add_multi m ~key:idx ~data:(name, terms, t)
+        | TException (_, _, _, _)
+        | TExceptionC (_, _, _, _, _)
+        | TScope (_, _, _, _)
+          -> assert false
+        | _ -> m
+      end
+    | _ -> m
+  in
+  List.fold tprog.tstmts ~f:aux ~init:(Map.empty (module Int))
+
+let collect_internal_use (tprog: Tlex.tprog) =
+  let aux m stmt =
+    match stmt with
+    | TSRule (_, idx, _, _, rule, _, _, _) -> begin
+        let exception_indices = Map.find_multi tprog.rule_tree.exceptions idx in
+        let exception_predicates = List.map exception_indices ~f:(fun idx -> Map.find_exn tprog.exception_predicates idx) in
+        let scope_indices = Map.find_multi tprog.rule_tree.scopes idx in
+        let scope_predicates = List.map scope_indices ~f:(fun idx -> Map.find_exn tprog.scope_predicates idx) in
+        let unwrap_pred p = begin match p with
+          | Tformula.TPredicate (name, terms, t) -> name, terms, t
+          | _ -> assert false
+        end in
+        let es = List.map exception_predicates ~f:unwrap_pred in
+        let ss = List.map scope_predicates ~f:unwrap_pred in
+        let m' = List.fold (es@ss) ~f:(fun m' p -> Map.add_multi m' ~key:idx ~data:p) ~init:m in
+        let filter_internal (name, _, _) =
+          begin match Map.find tprog.tevents name with
+            | Some (_, _, TInternal, _) -> true
+            | _ -> false
+          end in
+        match rule with
+        | TObligation (f1, p1, f2, p2)
+        | TPermission (f1, p1, f2, p2) ->
+          let p1_preds = Tlex.predicates_of_tpattern p1 in
+          let p2_preds = Tlex.predicates_of_tpattern p2 in
+          let f1_preds = List.concat_map f1 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
+          let f2_preds = List.concat_map f2 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
+          let internal_preds = List.filter (p1_preds@f1_preds@p2_preds@f2_preds) ~f:filter_internal in
+          List.fold internal_preds ~f:(fun m'' p -> Map.add_multi m'' ~key:idx ~data:p) ~init:m'
+        | TConstitutive (f1, p, _)
+        | TException (f1, p, _, _)
+        | TScope (f1, p, _, _) ->
+          let p_preds = Tlex.predicates_of_tpattern p in
+          let f1_preds = List.concat_map f1 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
+          let internal_preds = List.filter (p_preds@f1_preds) ~f:filter_internal in
+          List.fold internal_preds ~f:(fun m'' p -> Map.add_multi m'' ~key:idx ~data:p) ~init:m'
+        | TExceptionC (f1, p, _, _, f2) ->
+          let p_preds = Tlex.predicates_of_tpattern p in
+          let f1_preds = List.concat_map f1 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
+          let f2_preds = List.concat_map f2 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
+          let internal_preds = List.filter (p_preds@f1_preds@f2_preds) ~f:filter_internal in
+          List.fold internal_preds ~f:(fun m'' p -> Map.add_multi m'' ~key:idx ~data:p) ~init:m'
+      end
+    | _ -> m
+  in
+  List.fold tprog.tstmts ~f:aux ~init:(Map.empty (module Int))
+
+let collect_rule_indices (tprog: Tlex.tprog) =
+  let aux l stmt =
+    match stmt with
+    | TSRule (_, idx, _, _, _, _, _, _) -> idx::l
+    | _ -> l
+  in
+  List.fold tprog.tstmts ~f:aux ~init:[]
+
+let topological_sort rules def use =
+  let def = Map.map def ~f:(List.map ~f:(fun (name, _, _) -> name)) in
+  let use = Map.map use ~f:(List.map ~f:(fun (name, _, _) -> name)) in
+  let def_inv = Util.invert_int_string_multimap def in
+  let init, rest = List.partition_tf rules ~f:(fun r -> not (Map.mem use r)) in (*all rules that do not 'use' any internal events*)
+  let rec aux sorted rest =
+    match rest with
+      | [] -> sorted
+      | _ ->
+        let fully_defined, rest' = List.partition_tf rest ~f:(fun r -> List.for_all (Map.find_multi use r) ~f:(fun e -> List.for_all (Map.find_multi def_inv e) ~f:(fun f -> List.mem sorted f ~equal:Int.equal))) in
+        begin match fully_defined with
+        (* TODO: improve this error reporting, maybe report the actual cycle *)
+        | [] -> Util.type_error "Circular dependency of internal events" Lexing.dummy_pos
+        | _ -> ()
+        end;
+        aux (sorted @ fully_defined) rest'
+    in
+  aux init rest
+
+let do_type _ (tprog: Tlex.tprog) : Elex.eprog =
   let pols = Tlex.pol_map tprog in
+  let def_internal = collect_internal_def tprog in
+  let use_internal = collect_internal_use tprog in
+  let rule_indices = collect_rule_indices tprog in
+  let rules_sorted = topological_sort rule_indices def_internal use_internal in
   {
     estmts     = List.map tprog.tstmts ~f:(type_tstmt tprog pols);
     ealiases   = tprog.taliases;
     eevents    = tprog.tevents;
     efunctions = tprog.tfunctions;
     variables  = tprog.variables;
+    rule_order = rules_sorted;
     rule_tree  = tprog.rule_tree;
     exception_predicates = Map.map tprog.exception_predicates ~f:(type_exception tprog pols);
     scope_predicates     = Map.map tprog.scope_predicates ~f:(type_scope tprog pols);

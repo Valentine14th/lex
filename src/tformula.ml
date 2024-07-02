@@ -348,6 +348,28 @@ let rec to_string_rec l = function
                              (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | TType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> ty_to_string) ty
 
+let rec collect_tpredicates l = function
+  | TTT
+  | TFF
+  | TEqConst _ 
+  | TType _
+    | TAgg _ -> l
+  | TPredicate (name, terms, t) -> (name, terms, t) :: l
+  | TAnd (_, fs)
+    | TOr (_, fs) -> List.fold fs ~init:l ~f:collect_tpredicates
+  | TNeg f
+  | TExists (_, f)
+  | TForall (_, f)
+  | TPrev (_, f)
+  | TNext (_, f)
+  | TOnce (_, f)
+  | TEventually (_, f)
+  | THistorically (_, f)
+    | TAlways (_, f) -> collect_tpredicates l f
+  | TImp (_, f, g)
+  | TIff (_, _, f, g)
+  | TSince (_, _, f, g)
+    | TUntil (_, _, f, g) -> collect_tpredicates (collect_tpredicates l f) g
 
 let to_string = to_string_rec 0
 

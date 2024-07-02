@@ -157,6 +157,14 @@ let string_of_tpattern = function
   | TPHistorically i -> " always in the past " ^ Interval.to_string i
   | TPSince (i, f) -> " always since " ^ Tformula.to_string f ^ " " ^ Interval.to_string i
 
+let predicates_of_tpattern = function
+  | TPPresent
+  | TPEventually _
+  | TPAlways _
+  | TPHistorically _
+    | TPOnce _ -> []
+  | TPUntil (_, f)
+    | TPSince (_, f) -> Tformula.collect_tpredicates [] f
 
 let string_of_trule i trule =
   let to_string f = Etc.tabs (i+1) ^ Tformula.to_string f in
