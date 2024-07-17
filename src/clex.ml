@@ -18,9 +18,10 @@ type cprog =
 let pol_to_symbol_string pol =
   match pol with
   | TCau -> "+"
+  | TCauObs -> "+"
   | TSup -> "-"
   | TCauSup -> "+-"
-  | TInternal -> "+-" (* TODO: are internal events acutally both causable and suppressable? and are exception predicates of internal type? *)
+  | TItl -> "+-" (* TODO: are internal events acutally both causable and suppressable? and are exception predicates of internal type? *)
   | TObs -> ""
 
 let string_of_signatures signatures =

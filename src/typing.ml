@@ -472,7 +472,7 @@ let type_pattern s pos t_vars = function
   | PSince (i, f) -> let t_vars, f = type_formula s pos t_vars f in t_vars, TPSince (i, f)
 
 let type_rule s pos = function
-  | SRule (_, rule_id, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
+  | SRule (_, rule_id, type_fixes, rule, doc_string) -> begin
       let label' = Label.set_rule_id_force rule_id s.label in
       let _ = Label.valid_rule_label pos label' in
       let t_vars = Map.of_alist_exn (module String) type_fixes in
@@ -530,18 +530,18 @@ let type_rule s pos = function
              let s' = add_scope_first_pass rule_num pred reference_labels s in
              let _, p = type_pattern s.tprog pos t_vars p in
              s', t_vars, TScope (f, p, reference_labels, pred)
-          | Obligation (f1, p, f2, q) ->
+          | Obligation (f1, p, f2, q, rt, rcs) ->
              let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, p = type_pattern s.tprog pos t_vars p in
              let _, q = type_pattern s.tprog pos t_vars q in
-             s, t_vars, TObligation (f1, p, f2, q)
-          | Permission (f1, p, f2, q) ->
+             s, t_vars, TObligation (f1, p, f2, q, rt, rcs)
+          | Permission (f1, p, f2, q, rt, rcs) ->
              let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, p = type_pattern s.tprog pos t_vars p in
              let _, q = type_pattern s.tprog pos t_vars q in
-             s, t_vars, TPermission (f1, p, f2, q)
+             s, t_vars, TPermission (f1, p, f2, q, rt, rcs)
           | Constitutive (f1, p, f2) ->
              let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula_pos s pos) in
              let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula_pos s pos) in
@@ -562,7 +562,7 @@ let type_rule s pos = function
       let s' = add_vars rule_num t_vars s in
       let s'' = add_rule pos rule_num label' s' in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
-      add_tstmt (TSRule (pos, rule_num, label', type_fixes, rule, rule_type, rule_constrs, doc_string')) s''
+      add_tstmt (TSRule (pos, rule_num, label', type_fixes, rule, doc_string')) s''
     end
   | _ -> assert false
 
@@ -573,7 +573,7 @@ let type_stmt s = function
      let title' = Option.map title ~f:(fun x -> TALex x) in
      let s' = add_section pos s.label s in
      add_tstmt (TSSection (section_kind, s.label, label_description, title')) s'
-  | SRule (pos, _, _, _, _, _, _) as rule -> type_rule s pos rule
+  | SRule (pos, _, _, _, _) as rule -> type_rule s pos rule
   | SEvent (pos, event_type, name, args, pol, ds) -> add_tevent event_type name args pol ds s pos
   | SType (pos, name, typ, doc_string) -> add_talias name typ doc_string s pos
   | SFunction (pos, name, arg_types, return_type, doc_string) -> add_tfunction name arg_types return_type doc_string s pos

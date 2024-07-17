@@ -137,10 +137,30 @@ let html_of_reference (l, (rs, rule)) =
 let html_of_ref ref_id r =
   div "lex-formula" (span "lex-subformula" ~id:(Some ref_id) (html_of_reference r))
   
-let html_of_erule rule_id erule =
+let html_of_rule_type = function
+  | Lex.Vanilla -> ""
+  | Enforceable -> "enforceable"
+  | Transparent -> "transparently enforceable"
+
+let html_of_rule_constr_type = function
+  | Lex.Suppressing idents -> "suppressing", idents
+  | Causing idents -> "causing", idents
+
+let html_of_rule_constr constr =
+  let keyword, idents =  html_of_rule_constr_type constr in
+  div "lex-rule-constr" (
+      kw keyword ^ String.concat ~sep:", " (List.map ~f:ident idents)
+    )
+    
+let html_of_rule_constrs rule_constrs =
+  div "lex-rule-constrs" (
+      String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
+    )
+
+let html_of_erule compilation_rules rule_id erule =
   let formula_id infix =
     Printf.sprintf "%s-%s-%d" rule_id infix in
-  let string_of_imp_rule verb f p g q =
+  let string_of_imp_rule verb f p g q rcs rt =
     div "lex-rule-if" (
         kw "whenever"
         ^ html_of_pattern "if-pattern" p
@@ -149,6 +169,19 @@ let html_of_erule rule_id erule =
     ^ div "lex-rule-then" (
           kw verb
           ^ html_of_pattern "then-pattern" q
+          ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
+        )
+    ^ kw (html_of_rule_type rt)
+    ^ (if List.is_empty rcs then "" else html_of_rule_constrs rcs)
+  in
+  let string_of_cons_rule verb f p g =
+    div "lex-rule-if" (
+        kw "whenever"
+        ^ html_of_pattern "if-pattern" p
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
+      )
+    ^ div "lex-rule-then" (
+          kw verb
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
@@ -179,36 +212,24 @@ let html_of_erule rule_id erule =
         )
   in
   match erule with
-  | EObligation (f, p, g, q)
-    | EPermission (f, p, g, q)
-    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q
-  | EConstitutive (f, p, g)
-    -> string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
-  | EException (f, p, refs, _)
-  | EScope (f, p, refs, _)
-    -> string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs)
-  | EExceptionC (f, p, refs, _, g)
-    -> string_of_refc_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs) (List.map ~f:snd g)
-
-let html_of_rule_type = function
-  | Lex.Vanilla -> ""
-  | Enforceable -> "enforceable"
-  | Transparent -> "transparently enforceable"
-
-let html_of_rule_constr_type = function
-  | Lex.Suppressing idents -> "suppressing", idents
-  | Causing idents -> "causing", idents
-
-let html_of_rule_constr constr =
-  let keyword, idents =  html_of_rule_constr_type constr in
-  div "lex-rule-constr" (
-      kw keyword ^ String.concat ~sep:", " (List.map ~f:ident idents)
-    )
-    
-let html_of_rule_constrs rule_constrs =
-  div "lex-rule-constrs" (
-      String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
-    )
+  | EObligation _ ->
+    let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
+    string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+  | EPermission _ ->
+    let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
+    string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+  | EConstitutive _ ->
+    let f, p, g = get_constitutive_params compilation_rules erule in
+    string_of_cons_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g)
+  | EException _ ->
+    let f, p, refs = get_exception_params compilation_rules erule in
+    string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs)
+  | EExceptionC _ ->
+    let f, p, refs, g = get_exceptionc_params compilation_rules erule in
+    string_of_refc_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs) (List.map ~f:snd g)
+  | EScope _ ->
+    let f, p, refs = get_exception_params compilation_rules erule in
+    string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs)
 
 let html_of_tannot = function
   | Tlex.TALex s -> s
@@ -311,21 +332,14 @@ let html_of_estmt eprog =
              )
            )
        )
-  | ESRule (_, _, label, type_fixes, erule, rule_type, rule_constrs, doc_string) ->
+  | ESRule (_, _, label, type_fixes, erule, doc_string) ->
     let rule_id = Label.qualified_id label in
     div ~id:(Some rule_id) "lex-stmt-rule" (
         two_column (
             kw "rule"
             ^ (match label.rule_id with Some name -> span "lex-rule-label" name | None -> "")
             ^ html_of_type_fixes ("lex-subformula-" ^ rule_id) type_fixes
-            ^ html_of_erule ("lex-subformula-" ^ rule_id) erule
-            ^ kw (html_of_rule_type rule_type)
-            ^ (
-              if List.is_empty rule_constrs then
-                ""
-              else
-                html_of_rule_constrs rule_constrs
-            )
+            ^ html_of_erule eprog.compilation_rules ("lex-subformula-" ^ rule_id) erule
           )
           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id)
              eprog type_fixes erule doc_string)

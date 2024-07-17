@@ -382,10 +382,15 @@ let verb_of_erule = function
 
 let reading_of_erule rule_id eprog type_fixes erule =
   let prefix_id = Printf.sprintf "%s-%s" rule_id in
-  let reading_of_imp_rule verb f p g q =
+  (* let reading_of_imp_rule verb f p g q rcs rt = *)
+  let reading_of_imp_rule verb f p g q _ _ =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f p
     ^ reading_of_rule_then (prefix_id "then") eprog verb g q in
+  let reading_of_cons_rule verb f p g =
+    reading_of_type_fixes eprog rule_id type_fixes
+    ^ reading_of_rule_if (prefix_id "if") eprog f p
+    ^ reading_of_rule_then (prefix_id "then") eprog verb g EPPresent in
   let reading_of_exc_rule f p refs =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog f p
@@ -400,13 +405,23 @@ let reading_of_erule rule_id eprog type_fixes erule =
     ^ reading_of_rule_if (prefix_id "if") eprog f p
     ^ reading_of_rule_scope (prefix_id "then") refs in
   match erule with
-  | EObligation (f, p, g, q)
-    | EPermission (f, p, g, q)
-    -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q
-  | EConstitutive (f, p, g)
-    -> reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) EPPresent
-  | EException (f, p, refs, _) -> reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
-  | EExceptionC (f, p, refs, _, g) -> reading_of_excc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs) (List.map ~f:snd g)
-  | EScope (f, p, refs, _) -> reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
+  | EObligation _ ->
+    let f, p, g, q, rt, rcs = get_obligation_params eprog.compilation_rules erule in
+    reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+  | EPermission _ ->
+    let f, p, g, q, rt, rcs = get_permission_params eprog.compilation_rules erule in
+    reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+  | EConstitutive _ ->
+    let f, p, g = get_constitutive_params eprog.compilation_rules erule in
+    reading_of_cons_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g)
+  | EException _ ->
+    let f, p, refs = get_exception_params eprog.compilation_rules erule in
+    reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
+  | EExceptionC _ ->
+    let f, p, refs, g = get_exceptionc_params eprog.compilation_rules erule in
+    reading_of_excc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs) (List.map ~f:snd g)
+  | EScope _ ->
+    let f, p, refs = get_scope_params eprog.compilation_rules erule in
+    reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
 
 let reading_of_doc_string = Placeholders.mark_all

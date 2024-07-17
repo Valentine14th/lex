@@ -2,7 +2,15 @@ open Core
 
 type ident = string
 
-type pol = TCau | TSup | TObs | TCauSup | TInternal
+type pol = TCau | TCauObs | TSup | TObs | TCauSup | TItl
+
+let to_enftype (p: pol) = match p with
+  | TCau -> Formula.EnfType.Cau
+  | TObs -> Formula.EnfType.Obs
+  | TSup -> Formula.EnfType.Sup
+  | TCauObs -> Formula.EnfType.CauObs
+  | TCauSup -> Formula.EnfType.CauSup
+  | TItl -> Formula.EnfType.Itl
 
 type section_kind =
   | Law       of int
@@ -55,19 +63,19 @@ type pattern =
   | PHistorically of Interval.t
   | PSince of Interval.t * Formula.t
 
-type rule =
-  | Obligation   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern
-  | Permission   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern
-  | Constitutive of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list
-  | Exception    of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
-  | ExceptionC   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list * (Lexing.position * Formula.t) list
-  | Scope        of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
-
 type rule_type = Vanilla | Enforceable | Transparent
 
 type rule_constr =
   | Suppressing of ident list
   | Causing     of ident list
+
+type rule =
+  | Obligation   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern * rule_type * rule_constr list
+  | Permission   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern * rule_type * rule_constr list
+  | Constitutive of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list
+  | Exception    of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
+  | ExceptionC   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list * (Lexing.position * Formula.t) list
+  | Scope        of (Lexing.position * Formula.t) list * pattern * (Lexing.position * reference) list
 
 type import_format =
   | ILex
@@ -84,7 +92,7 @@ type event_type = Event of bool * event_syntax | Predicate
 type stmt =
   | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
   | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
-  | SRule      of Lexing.position * string option * (ident * Formula.TypeTerm.t) list * rule * rule_type * rule_constr list * string option (* location points to the beginning of the "rule" keyword *)
+  | SRule      of Lexing.position * string option * (ident * Formula.TypeTerm.t) list * rule * string option (* location points to the beginning of the "rule" keyword *)
   | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option (* location points to beginning of event identifier *)
   | SType      of Lexing.position * ident * (Formula.TypeTerm.t option) * string option (* location points to beginning of type identifier *)
   | SFunction  of Lexing.position * ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
@@ -109,8 +117,9 @@ let string_of_pol = function
   | TCau -> "causable"
   | TSup -> "suppressable"
   | TObs -> "observable"
+  | TCauObs -> "causable observable"
   | TCauSup -> "causable suppressable"
-  | TInternal -> "internal"
+  | TItl -> "internal"
 
 let string_of_typed_idents (name, tt) =
   Printf.sprintf "%s : %s" name (Dom.string_of_tt tt)
@@ -172,10 +181,19 @@ let string_of_rule i rule =
     String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
-  let string_of_imp_rule verb f p g q =
+  let string_of_imp_rule verb f p g q rcs rt =
     Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
     ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb       ^ string_of_pattern q ^ "\n"
+    ^ string_of_formula_list g
+    ^ Etc.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
+    ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
+      else Etc.tabs i ^ (string_of_rule_constrs rcs))
+  in
+  let string_of_cons_rule verb f p g =
+    Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
+    ^ Etc.tabs i   ^ verb      ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_exc_rule verb f p rs =
@@ -193,10 +211,10 @@ let string_of_rule i rule =
     ^ string_of_formula_list g
   in
   match rule with
-  | Obligation (f, p, g, q) | Permission (f, p, g, q)
-    -> string_of_imp_rule (verb_of_rule rule) f p g q
+  | Obligation (f, p, g, q, rt, rcs) | Permission (f, p, g, q, rt, rcs)
+    -> string_of_imp_rule (verb_of_rule rule) f p g q rcs rt
   | Constitutive (f, p, g)
-    -> string_of_imp_rule (verb_of_rule rule) f p g PPresent
+    -> string_of_cons_rule (verb_of_rule rule) f p g
   | Exception (f, p, references) | Scope (f, p, references)
     -> string_of_exc_rule (verb_of_rule rule) f p references
   | ExceptionC (f, p, references, g)
@@ -248,23 +266,17 @@ let string_of_stmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf " \"%s\"" title | None -> "")
-  | SRule (_, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
+  | SRule (_, label, type_fixes, rule, doc_string) ->
      let description = 
        match doc_string with
        | Some s -> "\n" ^ make_doc_string s i
        | None -> ""
       in
-     Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
+     Printf.sprintf "%srule%s\n%s%s\n%s"
        (Etc.tabs i)
        (Option.value_map label ~default:"" ~f:(fun label -> " " ^ label))
        (string_of_type_fixes (i+1) type_fixes)
        (string_of_rule (i+1) rule)
-       (Etc.tabs i)
-       (string_of_rule_type rule_type)
-       (if List.is_empty rule_constrs then
-          ""
-        else
-          Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
        description
   | SEvent (_, event_type, name, typed_args, pol, doc_string) ->
       let description =

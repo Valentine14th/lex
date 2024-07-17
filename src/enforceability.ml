@@ -8,6 +8,7 @@
 (*******************************************************************)
 
 open Base
+open Core
 
 open Formula
 open Tformula
@@ -130,6 +131,9 @@ module Constraints = struct
     | CConj (c, d) -> List.filter_map (cartesian (solve c) (solve d)) ~f:try_merge
     | CDisj (c, d) -> (solve c) @ (solve d)
 
+  (** Disjunctive normal form *)
+  let dnf c = solve c |> List.map ~f:(fun m -> Map.to_alist m |> List.fold ~init:CTT ~f:(fun c (s, t) -> CConj (c, CEq (s, t))))
+
   let rec to_string_rec l = function
     | CTT -> Printf.sprintf "⊤"
     | CFF -> Printf.sprintf "⊥"
@@ -151,10 +155,10 @@ let types_predicate pols t e =
   let t' = Map.find_exn pols e in
   match t', t with
   | _, _ when EnfType.equal t t' -> Possible CTT
-  | CauSup, _ -> Possible (eq e t)
+  | _, _ when EnfType.leq t t' -> Possible (eq e t)
   | _, _      -> Impossible (ECast (e, t', t))
 
-let rec types s pols t f =
+let rec types s pols (t: EnfType.t) (f: Tformula.t) =
   let error s = Impossible (EFormula (Some s, f, t)) in
   match t with
   | Cau -> begin
@@ -227,7 +231,7 @@ let rec types s pols t f =
   | _ -> Impossible (EFormula (None, f, t))
 
 (* todo [FH]: Extend to set ids *)
-let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t option =
+let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) : Eformula.t option =
   let convert = convert s pols b in
   let default_L (s: Side.t) = if Side.equal s R then Side.R else L in
   let set_b = function
@@ -369,10 +373,10 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype form : Eformula.t op
   (*Stdio.print_string (EnfType.to_string enftype ^ " " ^ Formula.to_string form ^ " -> ");*)
   match f with Some f -> Some Eformula.{ f; enftype; id = 0 } | None -> None
 
-let convert_enforceable s pols f b pos =
+let convert_enforceable s pols (f: Tformula.t) b pos =
   if not (Set.is_empty (Tformula.fv f)) then
     ignore (raise (Invalid_argument (Printf.sprintf "formula %s is not closed" (Tformula.to_string f))));
-  match types pols s Cau f with
+  match types s pols Cau f with
   | Possible c ->
      begin
        match Constraints.solve c with
@@ -380,7 +384,7 @@ let convert_enforceable s pols f b pos =
           begin
             (*Map.iteri sol ~f:(fun ~key ~data -> Pred.Sig.update_enftype key data);*)
             ignore sol; (* todo [FH]: check consistency of solutions over formulae *)
-            match convert pols s b Cau f with
+            match convert s pols b Cau f with
               Some f' -> f'
             | None    -> let err_msg = Printf.sprintf "formula\n %s\ncannot be converted" (Tformula.to_string f) in
                          Util.type_error err_msg pos
@@ -419,7 +423,7 @@ let rec relative_interval (f: Eformula.t) =
         (Zinterval.sum i' (relative_interval f2)))
   | EType (f, _) -> relative_interval f
 
-let strict f =
+let strict (f: Eformula.t) =
   let rec _strict itv fut (f: Eformula.t) =
     ((Zinterval.mem 0 itv) && fut)
     || (match f.f with
@@ -442,10 +446,10 @@ let strict f =
         | EType (f, _) -> _strict itv fut f)
   in not (_strict (Zinterval.singleton 0) false f)
 
-let relative_past f =
+let relative_past (f: Eformula.t) =
   Zinterval.is_nonpositive (relative_interval f)
 
-let strictly_relative_past f =
+let strictly_relative_past (f: Eformula.t) =
   (relative_past f) && (strict f)
 
 let is_transparent (f: Eformula.t) =
@@ -497,7 +501,7 @@ let is_transparent (f: Eformula.t) =
   in
   aux f
 
-let convert_transparently_enforceable s pols f b pos =
+let convert_transparently_enforceable s pols (f: Tformula.t) b pos =
   let f' = convert_enforceable s pols f b pos in
   if is_transparent f' then
     f'
@@ -515,38 +519,35 @@ let epattern_of_tpattern s = function
   | TPHistorically i -> EPHistorically i
   | TPSince (i, f) -> EPSince (i, Eformula.of_tformula s.tevents f)
 
-(* TODO: type check formulas with information in pols *)
-(* let type_trule pols = function *)
-let type_trule s _ =
-  let of_tformulas f =
-    List.map f ~f:(fun (p,f') -> (p, Eformula.of_tformula s.tevents f')) in
+(* let type_tsrule (s:Tlex.tprog) = *)
+let type_tsrule _ =
   function
-  | TSRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string) -> begin
+  | TSRule (pos, idx, label, type_fixes, rule, doc_string) -> begin
       let rule =  (*[FH] todo, filler code!*) 
         match rule with
-        | TException (f1, p, refs, f2) -> 
-           EException (of_tformulas f1, epattern_of_tpattern s p, refs, Eformula.of_tformula s.tevents f2)
-        | TExceptionC (f1, p, refs, f2, f3) -> 
-           EExceptionC (of_tformulas f1, epattern_of_tpattern s p, refs, Eformula.of_tformula s.tevents f2, of_tformulas f3)
-        | TScope (f1, p, refs, f2) -> 
-           EScope (of_tformulas f1, epattern_of_tpattern s p, refs, Eformula.of_tformula s.tevents f2)
-        | TObligation (f1, p, f2, q) ->
-           EObligation (of_tformulas f1, epattern_of_tpattern s p, of_tformulas f2, epattern_of_tpattern s q)
-        | TPermission (f1, p, f2, q) ->
-           EPermission (of_tformulas f1, epattern_of_tpattern s p, of_tformulas f2, epattern_of_tpattern s q)
-        | TConstitutive (f1, p, f2) ->
-           EConstitutive (of_tformulas f1, epattern_of_tpattern s p, List.map f2 ~f:(fun (p,f') -> (p, Eformula.of_tformula s.tevents f')))
+        | TException _ -> 
+           EException 0
+        | TExceptionC _ -> 
+           EExceptionC (0,[])
+        | TScope _ -> 
+           EScope 0
+        | TObligation _ ->
+           EObligation 0
+        | TPermission _ ->
+           EPermission 0
+        | TConstitutive _ ->
+           EConstitutive []
       in
-      ESRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string)
+      ESRule (pos, idx, label, type_fixes, rule, doc_string)
     end
   | _ -> assert false
 
-let type_tstmt s pols = function
+let type_tstmt s = function
   | TSImport (pos, idents, import_format) ->
      ESImport (pos, idents, import_format)
   | TSSection (section_kind, full_label, label, title) -> 
      ESSection (section_kind, full_label, label, title)
-  | TSRule _ as trule -> type_trule s pols trule
+  | TSRule _ as trule -> type_tsrule s trule
   | TSEvent (event_type, name, typed_args, pol, doc_string) ->
      ESEvent (event_type, name, typed_args, pol, doc_string)
   | TSType (name, typ, doc_string) -> ESType (name, typ, doc_string)
@@ -554,110 +555,70 @@ let type_tstmt s pols = function
      ESFunction (name, arg_types, return_type, doc_string)
   | TSNote text -> ESNote text
 
-let type_exception s _ f = Eformula.of_tformula s.tevents f
+let type_exception s f = Eformula.of_tformula s.tevents f
 
-let type_scope s _ f = Eformula.of_tformula s.tevents f
+let type_scope s f = Eformula.of_tformula s.tevents f
 
-(* let type_exceptions pol exceptions =
-  List.map exceptions ~f:(type_exception pol)
-
-let type_scopes pol scopes =
-  List.map scopes ~f:(type_scope pol) *)
-
-let collect_internal_def (tprog: Tlex.tprog) =
-  let aux m stmt =
-    match stmt with
-    | TSRule (_, idx, _, _, rule, _, _, _) -> begin
-        match rule with
-        | TConstitutive (_, _, f2) -> begin
-            let aux' = function
-              | pos', Tformula.TPredicate (name, terms, t) ->
-                begin match Map.find tprog.tevents name with
-                  | Some (_, _, TInternal, _) -> name, terms, t
-                  | Some (_, _, pol, _) ->
-                    let err_msg = Printf.sprintf "Can only constitute 'Internal' events, but \"%s\" is \"%s\"" name (Lex.string_of_pol pol) in
-                    Util.type_error err_msg pos'
-                  | None ->
-                    let err_msg = Printf.sprintf "Unknown event \"%s\"" name in
-                    Util.type_error err_msg pos'
-                end
-              | pos', _ -> Util.type_error "The right hand side of a constitute rule can only contain predicates" pos'
-            in
-            let predicates = List.map f2 ~f:aux' in
-            List.fold predicates ~f:(fun m' pred -> Map.add_multi m' ~key:idx ~data:pred) ~init:m
-          end
-        | TException (_, _, _, Tformula.TPredicate (name, terms, t))
-        | TExceptionC (_, _, _, Tformula.TPredicate (name, terms, t), _)
-        | TScope (_, _, _, Tformula.TPredicate (name, terms, t))
-          -> Map.add_multi m ~key:idx ~data:(name, terms, t)
-        | TException (_, _, _, _)
-        | TExceptionC (_, _, _, _, _)
-        | TScope (_, _, _, _)
-          -> assert false
-        | _ -> m
-      end
-    | _ -> m
+let def_sets rules events =
+  let aux = function
+    | TCImplication _ -> []
+    | TCDefinition (_, _, _, _, _, _, Tformula.TPredicate (name, _, _)) -> [name]
+    | TCDefinition _ -> assert false
+    | TCDefinitionDis (disjuncts, Tformula.TPredicate (name, _, _)) ->
+      let positions = List.map disjuncts ~f:(fun (_, pos, _, _, _, _, _) -> pos) in
+      (match Map.find events name with
+        | Some (_, _, Lex.TItl, _) -> ()
+        | Some (_, _, pol, _) ->
+          let err_msg = Printf.sprintf "Can only constitute 'Internal' events, but \"%s\" is \"%s\"" name (Lex.string_of_pol pol) in
+          Util.type_error err_msg (positions |> List.hd_exn) (* TODO: output all locations where this non-internal event is constituted *)
+        | None -> (* TODO: is this even possible, i.e. could/should this be an `assert false` instead? *)
+          let err_msg = Printf.sprintf "Unknown event \"%s\"" name in
+          Util.type_error err_msg (positions |> List.hd_exn) (* TODO: output all locations where this non-internal event is constituted *)
+      );
+      [name]
+    | TCDefinitionDis _ -> assert false
   in
-  List.fold tprog.tstmts ~f:aux ~init:(Map.empty (module Int))
+  Map.map rules ~f:aux
 
-let collect_internal_use (tprog: Tlex.tprog) =
-  let aux m stmt =
-    match stmt with
-    | TSRule (_, idx, _, _, rule, _, _, _) -> begin
-        let exception_indices = Map.find_multi tprog.rule_tree.exceptions idx in
-        let exception_predicates = List.map exception_indices ~f:(fun idx -> Map.find_exn tprog.exception_predicates idx) in
-        let scope_indices = Map.find_multi tprog.rule_tree.scopes idx in
-        let scope_predicates = List.map scope_indices ~f:(fun idx -> Map.find_exn tprog.scope_predicates idx) in
-        let unwrap_pred p = begin match p with
-          | Tformula.TPredicate (name, terms, t) -> name, terms, t
-          | _ -> assert false
-        end in
-        let es = List.map exception_predicates ~f:unwrap_pred in
-        let ss = List.map scope_predicates ~f:unwrap_pred in
-        let m' = List.fold (es@ss) ~f:(fun m' p -> Map.add_multi m' ~key:idx ~data:p) ~init:m in
-        let filter_internal (name, _, _) =
-          begin match Map.find tprog.tevents name with
-            | Some (_, _, TInternal, _) -> true
-            | _ -> false
-          end in
-        match rule with
-        | TObligation (f1, p1, f2, p2)
-        | TPermission (f1, p1, f2, p2) ->
-          let p1_preds = Tlex.predicates_of_tpattern p1 in
-          let p2_preds = Tlex.predicates_of_tpattern p2 in
-          let f1_preds = List.concat_map f1 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
-          let f2_preds = List.concat_map f2 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
-          let internal_preds = List.filter (p1_preds@f1_preds@p2_preds@f2_preds) ~f:filter_internal in
-          List.fold internal_preds ~f:(fun m'' p -> Map.add_multi m'' ~key:idx ~data:p) ~init:m'
-        | TConstitutive (f1, p, _)
-        | TException (f1, p, _, _)
-        | TScope (f1, p, _, _) ->
-          let p_preds = Tlex.predicates_of_tpattern p in
-          let f1_preds = List.concat_map f1 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
-          let internal_preds = List.filter (p_preds@f1_preds) ~f:filter_internal in
-          List.fold internal_preds ~f:(fun m'' p -> Map.add_multi m'' ~key:idx ~data:p) ~init:m'
-        | TExceptionC (f1, p, _, _, f2) ->
-          let p_preds = Tlex.predicates_of_tpattern p in
-          let f1_preds = List.concat_map f1 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
-          let f2_preds = List.concat_map f2 ~f:(fun (_, f) -> (Tformula.collect_tpredicates []) f) in
-          let internal_preds = List.filter (p_preds@f1_preds@f2_preds) ~f:filter_internal in
-          List.fold internal_preds ~f:(fun m'' p -> Map.add_multi m'' ~key:idx ~data:p) ~init:m'
-      end
-    | _ -> m
+let use_sets rules events =
+  let use_formula = function
+    | TPredicate (name, _, _) -> (match Map.find events name with
+      | Some (_, _, Lex.TItl, _) -> [name]
+      | _ -> [])
+    | _ -> []
   in
-  List.fold tprog.tstmts ~f:aux ~init:(Map.empty (module Int))
+  let use_formulas f = List.concat_map f ~f:use_formula in
+  let use_pattern = function
+    | TPPresent
+    | TPEventually _
+    | TPAlways _
+    | TPOnce _
+    | TPHistorically _ -> []
+    | TPUntil (_, f)
+    | TPSince (_, f) -> use_formula f
+  in
+  let use_disjunct (_, _, f, term_conditions, exceptions, scopes, p) = ((List.map ~f:snd (f@exceptions@scopes) @ term_conditions) |> use_formulas) @ use_pattern p in
+  let use_disjuncts disjuncts = List.map disjuncts ~f:use_disjunct |> List.concat in
+  let snd_map l = List.map l ~f:snd in
+  let aux = function
+    | TCImplication (_, f1, exceptions, scopes, p, f2, q, _, _) ->
+      use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p @ use_formulas (snd_map f2) @ use_pattern q |> List.dedup_and_sort ~compare:String.compare
+    | TCDefinition (_, f1, exceptions, scopes, p, _, _) ->
+      use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p |> List.dedup_and_sort ~compare:String.compare
+    | TCDefinitionDis (disjuncts, _) ->
+      use_disjuncts disjuncts |> List.dedup_and_sort ~compare:String.compare
+  in
+  Map.map rules ~f:aux
 
 let collect_rule_indices (tprog: Tlex.tprog) =
   let aux l stmt =
     match stmt with
-    | TSRule (_, idx, _, _, _, _, _, _) -> idx::l
+    | TSRule (_, idx, _, _, _, _) -> idx::l
     | _ -> l
   in
   List.fold tprog.tstmts ~f:aux ~init:[]
 
 let topological_sort rules def use =
-  let def = Map.map def ~f:(List.map ~f:(fun (name, _, _) -> name)) in
-  let use = Map.map use ~f:(List.map ~f:(fun (name, _, _) -> name)) in
   let def_inv = Util.invert_int_string_multimap def in
   let init, rest = List.partition_tf rules ~f:(fun r -> not (Map.mem use r)) in (*all rules that do not 'use' any internal events*)
   let rec aux sorted rest =
@@ -674,20 +635,266 @@ let topological_sort rules def use =
     in
   aux init rest
 
+let rec update_pols_sup pos pols = function
+  | [] -> pols
+  | id::ids ->
+    let event_type = begin match Map.find pols id with
+      | Some Sup -> Sup
+      | Some CauSup -> CauSup
+      | Some Itl -> Itl
+      | Some Cau -> Cau
+      | Some Obs -> Obs
+      | Some CauObs -> CauObs
+      | Some Non | None -> Non
+    end in
+    begin match event_type with
+    | Sup | CauSup | Itl ->
+      let pols' = Map.update pols id ~f:(fun _ -> Sup) in
+      update_pols_sup pos pols' ids
+    | _ ->
+      let err_msg = Printf.sprintf "Cannot suppress \"%s\", because its declared type \"%s\" is not suppressable" id (EnfType.to_string event_type) in
+      Util.type_error err_msg pos
+    end
+
+let rec update_pols_cau pos pols = function
+  | [] -> pols
+  | id::ids ->
+    let event_type = begin match Map.find pols id with
+      | Some Sup -> Sup
+      | Some CauSup -> CauSup
+      | Some Itl -> Itl
+      | Some Cau -> Cau
+      | Some Obs -> Obs
+      | Some CauObs -> CauObs
+      | Some Non | None -> Non
+    end in
+    begin match event_type with
+    | Cau | CauSup | Itl ->
+      let pols' = Map.update pols id ~f:(fun _ -> Sup) in
+      update_pols_cau pos pols' ids
+    | _ ->
+      let err_msg = Printf.sprintf "Cannot cause \"%s\", because its declared type \"%s\" is not causable" id (EnfType.to_string event_type) in
+      Util.type_error err_msg pos
+    end
+
+let rec update_pols pos pols = function
+  | [] -> pols
+  | (Lex.Suppressing ids)::cs ->
+    let pols' = update_pols_sup pos pols ids in
+    update_pols pos pols' cs
+  | (Lex.Causing ids)::cs ->
+    let pols' = update_pols_cau pos pols ids in
+    update_pols pos pols' cs
+
+let type_formulas (s:Tlex.tprog) (pos:Lexing.position) rule_constrs pols enftype f : Tlex.tpattern -> verdict =
+  let pols' = update_pols pos pols rule_constrs in
+  function
+  | TPPresent ->
+    let f' = List.map f ~f:snd in
+    let verdicts = List.map f' ~f:(types s pols' enftype) in
+    let verdict = List.fold verdicts ~f:conj ~init:(Possible CTT) in
+    verdict
+  | _ -> assert false (* TODO finish implementing type checking *)
+  (* | TPEventually i -> EPEventually i
+  | TPAlways i -> EPAlways i
+  | TPUntil (i, f) -> EPUntil (i, Eformula.of_tformula s.tevents f)
+  | TPOnce i -> EPOnce i
+  | TPHistorically i -> EPHistorically i
+  | TPSince (i, f) -> EPSince (i, Eformula.of_tformula s.tevents f) *)
+
+let get_exception_predicates ?(negated=false) (s: Tlex.tprog) rule_idx =
+  let exception_idxs = Map.find_multi s.rule_tree.exceptions rule_idx in
+  let exception_predicates = List.map exception_idxs ~f:(try Map.find_exn s.exception_predicates with _ -> assert false) in
+  let exception_predicates = if negated then List.map exception_predicates ~f:Tformula.tneg else exception_predicates in
+  let exception_positions = List.map exception_idxs ~f:(fun x -> try snd (Map.find_exn s.rule_tree.label_of_rule x) with _ -> assert false) in
+  List.zip_exn exception_positions exception_predicates
+
+let get_scope_predicates (s: Tlex.tprog) rule_idx = 
+  let scope_idxs = Map.find_multi s.rule_tree.scopes rule_idx in
+  let scope_predicates = List.map scope_idxs ~f:(try Map.find_exn s.scope_predicates with _ -> assert false) in
+  let scope_positions = List.map scope_idxs ~f:(fun x -> try snd (Map.find_exn s.rule_tree.label_of_rule x) with _ -> assert false) in
+  List.zip_exn scope_positions scope_predicates
+
+let type_trule_compilation (s:Tlex.tprog) (verdict:verdict) rule =
+  let pols = Tlex.pol_map s |> Map.map ~f:Lex.to_enftype in
+  let dnf_of_v = match verdict with
+    | Possible c -> dnf c
+    | Impossible e ->
+      let err_msg = Printf.sprintf "Impossible: %s" (Errors.to_string e) in
+      Util.type_error err_msg Lexing.dummy_pos (* TODO: improve error reporting, e.g. with an actual position *)
+  in
+  let get_predicate_name = function
+    | Tformula.TPredicate (n,_,_) -> n
+    | _ -> assert false
+  in
+  match rule with
+    (* | TCImplication (idx, f1, p, f2, q, rt, rcs) -> *)
+    | TCImplication (idx, f1, exceptions, scopes, p, f2, q, _, rcs) ->
+      let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
+      let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
+      let f1_ = f1@ex_neg@scopes in
+      let verdict_lhs = type_formulas s pos rcs pols Sup f1_ p in
+      let verdict_rhs = type_formulas s pos rcs pols Cau f2 q in
+      let verdict' = conj verdict_lhs verdict_rhs |> conj verdict in
+      (* TODO: check `rt`, i.e. transparency and/or enforceability *)
+      verdict'
+    | TCDefinition (idx, f1, exceptions, scopes, p, _, f2) ->
+      let name = get_predicate_name f2 in
+      let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
+      let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
+      let f1_ = f1@ex_neg@scopes in
+      let aux d =
+        let v_pols = solve d in
+        assert (List.length v_pols = 1); (* If assertion fails, dnf function is wrong *)
+        let v_pols = List.hd_exn v_pols in
+        let t = (match Map.find v_pols name with
+          | Some t -> t
+          | None -> Obs) in
+        let verdict_lhs = type_formulas s pos [] pols t f1_ p in
+        conj verdict_lhs verdict
+      in
+      let verdicts = List.map dnf_of_v ~f:aux in
+      List.fold ~f:disj ~init:(Possible CFF) verdicts
+    | TCDefinitionDis _ -> assert false
+
+let type_trules_compilation (tprog:Tlex.tprog) rules : verdict =
+  let update_constraints verdict (rule: trule_compilation) =
+    type_trule_compilation tprog verdict rule
+  in
+  List.fold rules ~f:update_constraints ~init:(Possible CTT)
+
+let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * trule * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list) list =
+  List.filter_map tprog.tstmts ~f:(function
+    | TSRule (pos, idx, _, _, trule, _) ->
+      let exceptions = get_exception_predicates ~negated:false tprog idx in
+      let scopes = get_scope_predicates tprog idx in
+      begin match trule with
+        | TConstitutive (f1, p, f2)
+        | TExceptionC (f1, p, _, _, f2) ->
+          Some (pos, idx, TConstitutive (f1, p, f2), exceptions, scopes)
+        | _ -> None
+      end
+    | _ -> None)
+
+let combine_constitutive_rules (rules: (Lexing.position * int * trule * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list) list) : trule_compilation list =
+  let event_map = List.fold rules ~init:(Map.empty (module String)) ~f:(fun m (pos, idx, rule, exceptions, scopes) ->
+    match rule with
+    | TConstitutive (f1, p, f2) ->
+      List.fold f2 ~init:m ~f:(fun m' (_, f) -> (match f with
+        | Tformula.TPredicate (name, terms, _) ->  Map.add_multi m' ~key:name ~data:(terms, f1, exceptions, scopes, p, pos, idx)
+        | _ -> assert false))
+    | _ -> assert false) in
+  let replace_variables (terms, f1, exceptions, scopes, p, pos, idx) =
+    let terms' = List.fold terms
+                    ~init:([],0)
+                    ~f:(fun (ts,i) t
+                        -> Term.{trm=TVar ("__t" ^ string_of_int i); tt=t.tt}::ts, i+1)
+                 |> fst in
+    let term_conditions = List.map2_exn terms terms'
+          ~f:(fun t1 t2 -> Tformula.TEqConst (t1, t2)) in
+    (terms', f1, exceptions, scopes, term_conditions, p, pos, idx)
+  in
+  let event_map_renamed = Map.map event_map ~f:(List.map ~f:replace_variables) in
+  let terms_per_event = Map.map event_map_renamed
+                          ~f:(fun x
+                              -> List.map x ~f:(fun (terms,_,_,_,_,_,_,_) -> terms)
+                                |> List.hd_exn)
+  in
+  let to_tr_def_dis ((name,definitions): (string * 'a)) =
+    let disjunction = List.map definitions
+                        ~f:(fun (_, f, exceptions, scopes, cs, p, pos, idx)
+                              -> (idx, pos, f, cs, exceptions, scopes, p))
+    in
+    let terms = Map.find_exn terms_per_event name in
+    TCDefinitionDis (disjunction, Tformula.TPredicate (name, terms, Lex.Predicate))
+  in
+  Map.to_alist event_map_renamed |> List.map ~f:to_tr_def_dis
+
+let create_def_dis_rules tprog =
+  let constitutive_rules = collect_constitutive_rules tprog in
+  combine_constitutive_rules constitutive_rules
+
+let create_def_rules tprog =
+  List.filter_map tprog.tstmts ~f:(function
+    | TSRule (_, idx, _, _, trule, _) ->
+      let exceptions = get_exception_predicates ~negated:false tprog idx in
+      let scopes = get_scope_predicates tprog idx in
+      begin match trule with
+        | TScope (f1, p, r, f2)
+        | TException (f1, p, r, f2)
+        | TExceptionC (f1, p, r, f2, _)
+          -> Some (TCDefinition (idx, f1, exceptions, scopes, p, r, f2))
+        | _ -> None
+      end
+    | _ -> None)
+
+let create_imp_rules tprog =
+  List.filter_map tprog.tstmts ~f:(function
+    | TSRule (_, idx, _, _, trule, _) ->
+      let exceptions = get_exception_predicates ~negated:true tprog idx in
+      let scopes = get_scope_predicates tprog idx in
+      begin match trule with
+        | TObligation (f1, p, f2, q, rt, rcs)
+        | TPermission (f1, p, f2, q, rt, rcs)
+          -> Some (TCImplication (idx, f1, exceptions, scopes, p, f2, q, rt, rcs))
+        | _ -> None
+      end
+    | _ -> None)
+
+let create_compilation_rules tprog =
+  let def_dis_rules = create_def_dis_rules tprog in
+  let def_rules = create_def_rules tprog in
+  let imp_rules = create_imp_rules tprog in
+  List.fold (def_dis_rules @ def_rules @ imp_rules)
+            ~init:((Map.empty (module Int), 0))
+            ~f:(fun (m,i) r -> (Map.add_exn m ~key:i ~data:r, i+1))
+  |> fst
+
 let do_type _ (tprog: Tlex.tprog) : Elex.eprog =
-  let pols = Tlex.pol_map tprog in
-  let def_internal = collect_internal_def tprog in
-  let use_internal = collect_internal_use tprog in
-  let rule_indices = collect_rule_indices tprog in
-  let rules_sorted = topological_sort rule_indices def_internal use_internal in
+  let rule_map  = create_compilation_rules tprog in
+  let def_internal = def_sets rule_map tprog.tevents in
+  let use_internal = use_sets rule_map tprog.tevents in
+  let all_defined_events = List.concat (Map.data def_internal)
+                           |> List.dedup_and_sort
+                              ~compare:String.compare in
+  let check_used_are_defined idx =
+    let used = Map.find_exn use_internal idx in
+    let pos = Map.find_exn tprog.rule_tree.label_of_rule idx |> snd in
+    List.iter used ~f:(fun name ->
+      if not (List.mem all_defined_events name ~equal:String.equal) then
+        let err_msg = Printf.sprintf
+            "Internal event \"%s\" is used but never constituted (defined)"
+            name in
+        Util.type_error err_msg pos) in
+  Map.iter_keys use_internal ~f:check_used_are_defined;
+  let compilation_rule_indices = Map.keys rule_map in
+  let sorted_rule_indices = topological_sort compilation_rule_indices
+                              def_internal use_internal in
+  let sorted_rules = List.map sorted_rule_indices
+                     ~f:(fun idx -> Map.find_exn rule_map idx) in
+  let verdict = type_trules_compilation tprog sorted_rules in
+  let constraints = match verdict with
+    | Possible c -> c
+    | Impossible e ->
+      let err_msg = Printf.sprintf "Impossible: %s" (Errors.to_string e) in
+      Util.type_error err_msg Lexing.dummy_pos (* TODO: improve error reporting, e.g. with an actual position *)
+  in
+  let possible_policies = Constraints.solve constraints in
+  let pol_ = match List.hd possible_policies with
+    | Some pol_ -> pol_
+    | None -> Map.empty (module String)
+  in
   {
-    estmts     = List.map tprog.tstmts ~f:(type_tstmt tprog pols);
+    estmts     = List.map tprog.tstmts ~f:(type_tstmt tprog);
     ealiases   = tprog.taliases;
     eevents    = tprog.tevents;
     efunctions = tprog.tfunctions;
     variables  = tprog.variables;
-    rule_order = rules_sorted;
+    (* rule_order = sorted_rule_indices; *)
     rule_tree  = tprog.rule_tree;
-    exception_predicates = Map.map tprog.exception_predicates ~f:(type_exception tprog pols);
-    scope_predicates     = Map.map tprog.scope_predicates ~f:(type_scope tprog pols);
+    compilation_rules = Map.empty (module Int);
+    (* exception_predicates = Map.map tprog.exception_predicates
+                            ~f:(type_exception tprog);
+    scope_predicates     = Map.map tprog.scope_predicates
+                            ~f:(type_scope tprog); *)
   }

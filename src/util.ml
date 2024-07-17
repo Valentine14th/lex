@@ -28,6 +28,9 @@ let butlast l = List.take l (List.length l - 1)
 
 let string_of_string_list l = Printf.sprintf "[%s]"
                               (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s\"%s\";" acc s))
+
+let string_of_string_list_new_line ?(prefix="") l = Printf.sprintf "%s"
+                            (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%s%s\n" acc prefix s))
 let string_of_int_list l = Printf.sprintf "[%s]"
                            (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%d; " acc s))
 let string_of_int_to_int_multi_map m = Printf.sprintf "{%s}"

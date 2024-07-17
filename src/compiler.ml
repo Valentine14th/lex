@@ -107,17 +107,17 @@ let compile_pattern (f: Eformula.t) = function
                       let since_f = { f = ESince (R, i, neg_f, g); enftype = Non; id = 0 } in
                       { f = ENeg since_f; enftype = Non; id = 0 }
 
-let complete_erule (eprog:Elex.eprog) =
+(* let complete_erule (eprog:Elex.eprog) =
   let aux f' = function
-    | EObligation (f, p, g, q) -> EObligation (f@f', p, g, q)
-    | EPermission (f, p, g, q) -> EPermission (f@f', p, g, q)
+    | EObligation (f, p, g, q, rt, rcs) -> EObligation (f@f', p, g, q, rt, rcs)
+    | EPermission (f, p, g, q, rt, rcs) -> EPermission (f@f', p, g, q, rt, rcs)
     | EConstitutive (f, p, g) -> EConstitutive (f@f', p, g)
     | EException (f, p, ref, pred) -> EException (f@f', p, ref, pred)
     | EExceptionC (f, p, ref, pred, g) -> EExceptionC (f@f', p, ref, pred, g)
     | EScope (f, p, ref, pred) -> EScope (f@f', p, ref, pred)
   in
   function
-  | ESRule (_, idx, _, _, rule, _, _, _) ->
+  | ESRule (_, idx, _, _, rule, _) ->
     let exception_idxs' = Map.find_multi eprog.rule_tree.exceptions idx in
     let scope_idxs' = Map.find_multi eprog.rule_tree.scopes idx in
     let exception_idxs = List.filter exception_idxs' ~f:(fun x -> x=idx) in
@@ -131,9 +131,9 @@ let complete_erule (eprog:Elex.eprog) =
     let scopes = List.zip_exn scope_positions scope_predicates in
     let rule' = aux (exceptions@scopes) rule in
     rule'
-  | _ -> assert false
+  | _ -> assert false *)
 
-let compile_let_binding f p pred =
+(* let compile_let_binding f p pred =
   match pred with
   | { f = EPredicate (p_name, trms, event_type); _} ->
      let process_term f (trm: Tformula.Term.t) =
@@ -148,16 +148,16 @@ let compile_let_binding f p pred =
      let lhs = { pred with f = EPredicate (p_name, trms, event_type) } in
      let rhs = (compile_pattern (tbigcauconj f) p) in
      (lhs, rhs)
-  | _ -> assert false
+  | _ -> assert false *)
 
-let compile_erule_let = function
+(* let compile_erule_let = function
   | EObligation _ | EPermission _ -> None
   | EConstitutive (f, p, pred) -> Some (compile_let_binding (List.map ~f:snd f) p (List.hd_exn pred |> snd))
   | EException (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
   | EScope (f, p, _, pred) -> Some (compile_let_binding (List.map ~f:snd f) p pred)
-  | EExceptionC _ -> assert false
+  | EExceptionC _ -> assert false *)
 
-let compile_imp f p g q =
+(* let compile_imp f p g q =
   let vars =
     Set.elements
       (Set.union_list (module String)
@@ -168,12 +168,12 @@ let compile_imp f p g q =
      tbigcauforall vars
        ((make (EImp (N, compile_pattern
                           (tbigcauconj f) p, compile_pattern (tbigcauconj g) q)) Non 0))))
-    Non 0
+    Non 0 *)
 
-let compile_erule_imp = function
-  | EObligation (f, p, g, q) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
-  | EPermission (f, p, g, q) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
-  | EConstitutive _ | EException _ | EExceptionC _ | EScope _ -> None
+(* let compile_erule_imp = function
+  | EObligation (f, p, g, q, _, _) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
+  | EPermission (f, p, g, q, _, _) -> Some (compile_imp (List.map ~f:snd f) p (List.map ~f:snd g) q)
+  | EConstitutive _ | EException _ | EExceptionC _ | EScope _ -> None *)
 
 let rec compile_typeterm = function
   | Formula.TypeTerm.TypeConst d -> ["", d]
@@ -238,7 +238,7 @@ let compile_exception_or_scope_signature predicate_map aliases variables =
       (* TODO: constants are not actually possible to be part of an exception predicate *)
     in
     let typed_terms = List.concat (List.map terms ~f:type_term) in
-    CEvent (fst pred_name_and_terms, Event (false, Standard), Lex.TInternal, typed_terms)
+    CEvent (fst pred_name_and_terms, Event (false, Standard), Lex.TItl, typed_terms)
   in
   List.map indexed_predicates ~f:compile_predicate
 
@@ -254,20 +254,22 @@ let compile_signature events functions aliases variables exceptions scopes =
 let topological_sort_erules rules = rules
 
 
-let rec remove_special = function
+(* let rec remove_special = function
   | [] -> []
   | EExceptionC (f, p, refs, pred, g) :: t ->
      EException (f, p, refs, pred) :: EConstitutive (f, p, g) :: (remove_special t)
-  | h :: t -> h :: (remove_special t)
+  | h :: t -> h :: (remove_special t) *)
 
-let compile (eprog:Elex.eprog) =
-  let rules' = List.filter eprog.estmts ~f:is_erule in
-  let rules = remove_special (List.map rules' ~f:(complete_erule eprog)) in
-  let sorted_rules = topological_sort_erules rules in
-  let let_bindings = List.filter_map sorted_rules ~f:compile_erule_let in
-  let formulae = List.filter_map sorted_rules ~f:compile_erule_imp in
-  let phi = tbigcauconj formulae in
-  let signature = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
-                    eprog.variables eprog.exception_predicates eprog.scope_predicates in
-  { signature; let_bindings; phi }
+(* let compile (eprog:Elex.eprog) = *)
+let compile _ =
+  (* let rules' = List.filter eprog.estmts ~f:is_erule in *)
+  (* let rules = remove_special (List.map rules' ~f:(complete_erule eprog)) in *)
+  (* let sorted_rules = topological_sort_erules rules in *)
+  (* let let_bindings = List.filter_map sorted_rules ~f:compile_erule_let in *)
+  (* let formulae = List.filter_map sorted_rules ~f:compile_erule_imp in *)
+  (* let phi = tbigcauconj formulae in *)
+  (* let signature = compile_signature eprog.eevents eprog.efunctions eprog.ealiases
+                    eprog.variables eprog.exception_predicates eprog.scope_predicates in *)
+  (* { signature; let_bindings; phi } *)
+  ()
 

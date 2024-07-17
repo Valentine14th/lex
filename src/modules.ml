@@ -87,7 +87,7 @@ let parse_module filename =
   prog
 
 let link_formex_stmt modules = function
-  | Tlex.TSRule (_, _, _, _, _, _, _, Some _) as s -> s
+  | Tlex.TSRule (_, _, _, _, _, Some _) as s -> s
   | TSSection (section_kind, full_label, label, None) ->
     let law = Label.qualified_name_of_law full_label.law in
     let title = begin
@@ -101,7 +101,7 @@ let link_formex_stmt modules = function
         | _ -> None
       end 
     in TSSection (section_kind, full_label, label, title)
-  | TSRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, None) ->
+  | TSRule (pos, idx, label, type_fixes, rule, None) ->
     let law = Label.qualified_name_of_law label.law in
     let doc_string = begin
         match Map.find modules law with
@@ -110,7 +110,7 @@ let link_formex_stmt modules = function
             ~f:(fun x -> Tlex.TAFormex (law, x))
         | _ -> None
       end 
-     in TSRule (pos, idx, label, type_fixes, rule, rule_type, rule_constrs, doc_string)
+     in TSRule (pos, idx, label, type_fixes, rule, doc_string)
   | s -> s
 
 let link_formex modules tprog =

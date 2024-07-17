@@ -241,21 +241,24 @@ for $1 \leq i \leq k$. The capabilities associated to an event are organized int
 \begin{figure}
   \centering
   \begin{tikzpicture}
-    \node[text depth=0.1cm] (cau_sup) at (0,0) {\kw{causable suppressable}};
-    \node[text depth=0.1cm] (cau_obs) at (0,-1) {\kw{causable observable}};
-    \node[text depth=0.1cm] (cau) at (-4,-2) {\kw{causable}};
-    \node[text depth=0.1cm] (sup) at (4,-1) {\kw{suppressable}};
-    \node[text depth=0.1cm] (obs) at (4,-2) {\kw{observable}};
-    \node[text depth=0.1cm] (int) at (6,0) {\kw{internal}};
-    \node[text depth=0.1cm] (bot) at (0,-3) {$\bot$};
-    \draw[->] (cau) -- (cau_sup);
+    \node[text depth=0.1cm] (itl) at (1,1) {\kw{internal}};
+    \node[text depth=0.1cm] (cau_sup) at (1,0) {\kw{causable suppressable}};
+
+    \node[text depth=0.1cm] (cau_obs) at (-1,-1) {\kw{causable observable}};
+    \node[text depth=0.1cm] (sup) at (3,-1) {\kw{suppressable}};
+
+    \node[text depth=0.1cm] (obs) at (1,-2) {\kw{observable}};
+    \node[text depth=0.1cm] (cau) at (-3,-2) {\kw{causable}};
+
+    \node[text depth=0.1cm] (bot) at (-1,-3) {$\bot$};
+    \draw[->, dashed] (cau_sup) -- (itl);
     \draw[->] (sup) -- (cau_sup);
-    \draw[->] (obs) -- (sup);
     \draw[->] (cau_obs) -- (cau_sup);
     \draw[->] (cau) -- (cau_obs);
     \draw[->] (obs) -- (cau_obs);
-    \draw[->] (bot) -- (cau);
+    \draw[->] (obs) -- (sup);
     \draw[->] (bot) -- (obs);
+    \draw[->] (bot) -- (cau);
   \end{tikzpicture}
   \caption{Capability lattice}
 \end{figure}

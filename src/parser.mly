@@ -139,7 +139,9 @@ pol:
   | TCAUSABLE               { TCau }
   | TSUPPRESSABLE           { TSup }
   | TOBSERVABLE             { TObs }
-  | TINTERNAL               { TInternal }
+  | TINTERNAL               { TItl }
+  | TCAUSABLE TOBSERVABLE   { TCauObs }
+  | TOBSERVABLE TCAUSABLE   { TCauObs }
   | TCAUSABLE TSUPPRESSABLE { TCauSup }
   | TSUPPRESSABLE TCAUSABLE { TCauSup }
   |                         { TObs }
@@ -184,13 +186,13 @@ reference:
                                  { (fst (List.hd $1)), (List.map snd $1, None) }
 
 rule:
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWHITE, e) { Obligation ($4, $2, $9, $7) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWHITE, e) { Permission ($4, $2, $9, $7) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)     { Constitutive ($4, $2, $8) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWHITE, reference) { Exception ($4, $2, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Obligation ($4, $2, $9, $7, fst $10, snd $10) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Permission ($4, $2, $9, $7, fst $10, snd $10) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)               { Constitutive ($4, $2, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWHITE, reference)           { Exception ($4, $2, $8) }
   | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN REPLACE NEWUP separated_nonempty_list(NEWHITE, reference) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)
-                                                                                                                            { ExceptionC ($4, $2, $8, $12) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWHITE, reference)  { Scope ($4, $2, $8) }
+                                                                                                                                          { ExceptionC ($4, $2, $8, $12) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWHITE, reference)            { Scope ($4, $2, $8) }
 
 ident:
   | IDENT { snd $1 }
@@ -213,10 +215,10 @@ fun_args:
   | list(type_fix) { $1 }
 
 srule:
-  | RULE NEWUP DOCSTRING NEWHITE type_fixes rule rule_type        { SRule ($1, None, $5, $6, fst $7, snd $7, Some $3) }
-  | RULE STRING NEWUP DOCSTRING NEWHITE type_fixes rule rule_type { SRule ($1, Some (snd $2), $6, $7, fst $8, snd $8, Some $4) }
-  | RULE NEWUP type_fixes rule rule_type                          { SRule ($1, None, $3, $4, fst $5, snd $5, None) }
-  | RULE STRING NEWUP type_fixes rule rule_type                   { SRule ($1, Some (snd $2), $4, $5, fst $6, snd $6, None) }
+  | RULE NEWUP DOCSTRING NEWHITE type_fixes rule         { SRule ($1, None, $5, $6, Some $3) }
+  | RULE STRING NEWUP DOCSTRING NEWHITE type_fixes rule  { SRule ($1, Some (snd $2), $6, $7, Some $4) }
+  | RULE NEWUP type_fixes rule                           { SRule ($1, None, $3, $4, None) }
+  | RULE STRING NEWUP type_fixes rule                    { SRule ($1, Some (snd $2), $4, $5, None) }
 
 event_def:
   | pol event_type IDENT NEWUP separated_list(NEWHITE, arg)                   { SEvent (fst $3, $2, snd $3, $5, $1, None) }

@@ -11,12 +11,18 @@ type tpattern =
   | TPSince of Interval.t * Tformula.t
 
 type trule =
-  | TObligation   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
-  | TPermission   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern
+  | TObligation   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
+  | TPermission   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
   | TConstitutive of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list
   | TException    of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
   | TExceptionC   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t * (Lexing.position * Tformula.t) list
   | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+
+type trule_compilation =
+  | TCImplication   of int * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
+  | TCDefinition    of int * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+  | TCDefinitionDis of (int * Lexing.position * (Lexing.position * Tformula.t) list * Tformula.t list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern) list * Tformula.t
+                      (* rule_id, rule pos,     f1,                                   term conditions, exceptions,                           scopes,                              pattern *)
 
 type 'a tannot =
   | TALex of 'a
@@ -29,7 +35,7 @@ let of_annot = function
 type tstmt =
   | TSImport  of Lexing.position * string list * import_format
   | TSSection of section_kind * Label.t * string * string tannot option
-  | TSRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * trule * rule_type * rule_constr list * string tannot option
+  | TSRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * trule * string tannot option
   | TSEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
   | TSType    of ident * Formula.TypeTerm.t option * string option
   | TSFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
@@ -172,10 +178,19 @@ let string_of_trule i trule =
     String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
-  let string_of_imp_rule verb f p g q =
+  let string_of_imp_rule verb f p g q rcs rt =
     Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
     ^ string_of_formula_list f ^ "\n"
     ^ Etc.tabs i   ^ verb     ^ string_of_tpattern q ^ "\n"
+    ^ string_of_formula_list g
+    ^ Etc.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
+    ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
+      else Etc.tabs i ^ (string_of_rule_constrs rcs))
+  in
+  let string_of_cons_rule verb f p g =
+    Etc.tabs i     ^ "whenever" ^ string_of_tpattern p ^ "\n"
+    ^ string_of_formula_list f ^ "\n"
+    ^ Etc.tabs i   ^ verb      ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_ref_rule verb f p refs =
@@ -194,11 +209,11 @@ let string_of_trule i trule =
     ^ string_of_formula_list g
   in
   match trule with
-  | TObligation (f, p, g, q)
-  | TPermission (f, p, g, q)
-    -> string_of_imp_rule (verb_of_trule trule) f p g q
+  | TObligation (f, p, g, q, rt, rcs)
+  | TPermission (f, p, g, q, rt, rcs)
+    -> string_of_imp_rule (verb_of_trule trule) f p g q rcs rt
   | TConstitutive (f, p, g)
-    -> string_of_imp_rule (verb_of_trule trule) f p g TPPresent
+    -> string_of_cons_rule (verb_of_trule trule) f p g
   | TException (f, p, trefs, _)
   | TScope (f, p, trefs, _)
     -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:(fun (_,_,x) -> x) trefs)
@@ -216,23 +231,17 @@ let string_of_tstmt ?(i=0) =
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf ": \"%s\"" (of_annot title) | None -> "")
-  | TSRule (_, _, label, type_fixes, rule, rule_type, rule_constrs, doc_string) ->
+  | TSRule (_, _, label, type_fixes, rule, doc_string) ->
      let description =
           match doc_string with
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-      Printf.sprintf "%srule%s\n%s%s\n%s%s%s%s"
+      Printf.sprintf "%srule%s\n%s%s\n%s"
         (Etc.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_trule (i+1) rule)
-        (Etc.tabs i)
-        (string_of_rule_type rule_type)
-        (if List.is_empty rule_constrs then
-          ""
-        else
-          Etc.tabs i ^ (string_of_rule_constrs rule_constrs))
        description
   | TSEvent (event_type, name, typed_args, pol, doc_string) ->
       let description =
