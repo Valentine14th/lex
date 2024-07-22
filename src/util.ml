@@ -6,11 +6,15 @@ let string_of_pos pos =
   sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
   (* pos.pos_cnum *)
 
-let import_error msg pos = eprintf "Import error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+let import_error (msg: string) (pos: Lexing.position) = eprintf "Import error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
 
-let type_error msg pos = eprintf "Type error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+let type_error (msg: string) (pos: Lexing.position) = eprintf "Type error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
 
-let label_error msg pos = eprintf "Label error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+let label_error (msg: string) (pos: Lexing.position) = eprintf "Label error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+
+let enf_error (msg: string) (pos: Lexing.position option) = match pos with
+  | Some pos -> eprintf "Enforcement error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+  | None -> eprintf "Enforcement error: %s\n" msg; exit (-1)
 
 let reference_error msg pos = eprintf "Reference error at %s: %s\n" (string_of_pos pos) msg; exit(-1)
 

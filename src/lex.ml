@@ -4,13 +4,22 @@ type ident = string
 
 type pol = TCau | TCauObs | TSup | TObs | TCauSup | TItl
 
-let to_enftype (p: pol) = match p with
+let pol_to_enftype (p: pol) = match p with
   | TCau -> Formula.EnfType.Cau
   | TObs -> Formula.EnfType.Obs
   | TSup -> Formula.EnfType.Sup
   | TCauObs -> Formula.EnfType.CauObs
   | TCauSup -> Formula.EnfType.CauSup
   | TItl -> Formula.EnfType.Itl
+
+let enftype_to_pol (t: Formula.EnfType.t) = match t with
+  | Formula.EnfType.Cau -> TCau
+  | Formula.EnfType.Obs -> TObs
+  | Formula.EnfType.Sup -> TSup
+  | Formula.EnfType.CauObs -> TCauObs
+  | Formula.EnfType.CauSup -> TCauSup
+  | Formula.EnfType.Itl -> TItl
+  | Formula.EnfType.Non -> assert false
 
 type section_kind =
   | Law       of int

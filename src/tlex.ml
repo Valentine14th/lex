@@ -18,11 +18,13 @@ type trule =
   | TExceptionC   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t * (Lexing.position * Tformula.t) list
   | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
 
+type trule_type = TRTObligation | TRTPermission | TRTConstitutive | TRTException | TRTExceptionC | TRTScope
+
 type trule_compilation =
-  | TCImplication   of int * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
-  | TCDefinition    of int * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
-  | TCDefinitionDis of (int * Lexing.position * (Lexing.position * Tformula.t) list * Tformula.t list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern) list * Tformula.t
-                      (* rule_id, rule pos,     f1,                                   term conditions, exceptions,                           scopes,                              pattern *)
+  | TCImplication   of int * trule_type * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
+  | TCDefinition    of int * trule_type * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+  | TCDefinitionDis of (int, (int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * Tformula.t list * tpattern), Int.comparator_witness) Map.t * Tformula.t
+                             (* rule_id, trule_type, rule pos,     f1,                                   exceptions,                           scopes,                               term conditions,   pattern *)
 
 type 'a tannot =
   | TALex of 'a
@@ -62,7 +64,6 @@ type tprog =
     scope_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
   }
 
-
 let tempty =
   {
     tstmts = [];
@@ -74,6 +75,12 @@ let tempty =
     exception_predicates = Map.empty (module Int);
     scope_predicates = Map.empty (module Int);
   }
+
+let trule_map tprog =
+  List.fold tprog.tstmts ~init:(Map.empty (module Int))
+    ~f:(fun acc -> function
+        | TSRule (_, i, _, _, rule, _) -> Map.add_exn acc ~key:i ~data:rule
+        | _ -> acc)
 
 let pol_map tprog =
   Map.map tprog.tevents ~f:(fun (_, _, pol, _) -> pol)
