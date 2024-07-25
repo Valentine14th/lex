@@ -388,6 +388,10 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) :
   (*Stdio.print_string (EnfType.to_string enftype ^ " " ^ Formula.to_string form ^ " -> ");*)
   match f with Some f -> Some Eformula.{ f; enftype; id = 0 } | None -> None
 
+(** enfoceable conditions:
+ - no free variables
+ - types to `Possible c` and not `Impossible e`
+ - converts to `Some Eformula.t` and not `None`*)
 let convert_enforceable s pols (f: Tformula.t) b pos =
   if not (Set.is_empty (Tformula.fv f)) then
     ignore (raise (Invalid_argument (Printf.sprintf "formula %s is not closed" (Tformula.to_string f))));
@@ -562,7 +566,7 @@ let type_scope s f = Eformula.of_tformula s.tevents f
 let def_sets (rules: (int, trule_compilation, 'a) Map.t) (events: (string, tevent, 'b) Map.t) : (int, string list, 'a) Map.t =
   let aux = function
     | TCImplication _ -> []
-    | TCDefinition (_, _, _, _, _, _, _, Tformula.TPredicate (name, _, _)) -> [name]
+    | TCDefinition (_, _, _, _, _, _, _, _, Tformula.TPredicate (name, _, _)) -> [name]
     | TCDefinition _ -> assert false
     | TCDefinitionDis (disjuncts, Tformula.TPredicate (name, _, _)) ->
       let positions = Map.map disjuncts ~f:(fun (_, _, pos, _, _, _, _, _) -> pos) |> Map.data in
@@ -601,9 +605,9 @@ let use_sets (rules: (int, trule_compilation, Int.comparator_witness) Map.t) (ev
   let use_disjuncts disjuncts = Map.map disjuncts ~f:use_disjunct |> Map.data |> List.concat in
   let snd_map l = List.map l ~f:snd in
   let aux = function
-    | TCImplication (_, _, f1, exceptions, scopes, p, f2, q, _, _) ->
+    | TCImplication (_, _, _, f1, exceptions, scopes, p, f2, q, _, _) ->
       use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p @ use_formulas (snd_map f2) @ use_pattern q |> List.dedup_and_sort ~compare:String.compare
-    | TCDefinition (_, _, f1, exceptions, scopes, p, _, _) ->
+    | TCDefinition (_, _, _, f1, exceptions, scopes, p, _, _) ->
       use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p |> List.dedup_and_sort ~compare:String.compare
     | TCDefinitionDis (disjuncts, _) ->
       use_disjuncts disjuncts |> List.dedup_and_sort ~compare:String.compare
@@ -769,6 +773,43 @@ let get_scope_predicates (s: Tlex.tprog) rule_idx =
   let scope_positions = List.map scope_idxs ~f:(fun x -> try snd (Map.find_exn s.rule_tree.label_of_rule x) with _ -> assert false) in
   List.zip_exn scope_positions scope_predicates
 
+let fv_pattern pos1 fs = function
+  | TPPresent
+  | TPEventually _
+  | TPAlways _
+  | TPOnce _
+  | TPHistorically _ ->
+    let fvs = List.map fs ~f:(fun (pos2, f) -> pos2, f, Tformula.fv f) in
+    let filter_fun (_,_,v) = if Set.is_empty v then false else true in
+    let non_empty = List.filter fvs ~f:filter_fun in
+    non_empty
+  | TPUntil (_,f)
+  | TPSince (_,f) ->
+    let fvs = List.map ((pos1,f)::fs) ~f:(fun (pos2, f) -> pos2, f, Tformula.fv f) in
+    let filter_fun (_,_,v) = if Set.is_empty v then false else true in
+    let non_empty = List.filter fvs ~f:filter_fun in
+    non_empty
+
+let rule_is_closed = function
+  | TCImplication (_, _, pos, f1, exceptions, scopes, p, f2, q, _, _) ->
+    let fv_p = fv_pattern pos (f1 @ exceptions @ scopes) p in
+    let fv_q = fv_pattern pos f2 q in
+    let free_variables = fv_p @ fv_q in
+    begin match free_variables with
+      | [] -> None
+      | [(pos', f, v)] ->
+        Some (Printf.sprintf "rule at %s is not closed, because the formula %s at %s has free variables %s" (Util.string_of_pos pos) (Tformula.to_string f) (Util.string_of_pos pos') (Util.string_of_string_set v))
+      | _ ->
+        Some (Printf.sprintf "rule at %s is not closed, because the following formulas have free variables:\n%s" (Util.string_of_pos pos) (List.map free_variables ~f:(fun (pos', f, v) -> Printf.sprintf "%s at %s: %s" (Tformula.to_string f) (Util.string_of_pos pos') (Util.string_of_string_set v)) |> String.concat ~sep:"\n"))
+    end
+  | _ -> assert false
+
+let rule_is_transparent = function
+  | TCImplication (_, _, pos, f1, exceptions, scopes, p, f2, q, _, _) ->
+    (* modelled after as (p (f1 AND exceptions AND scopes) ==> q f2) with side argument N *)
+    assert false
+  | _ -> assert false
+
 let type_trule_compilation (s:Tlex.tprog) (verdict:verdict) rule =
   let pols = Tlex.pol_map s |> Map.map ~f:Lex.pol_to_enftype in
   let dnf_of_v = match verdict with
@@ -782,21 +823,33 @@ let type_trule_compilation (s:Tlex.tprog) (verdict:verdict) rule =
     | _ -> assert false
   in
   match rule with
-    | TCImplication (idx, _, f1, exceptions, scopes, p, f2, q, rt, rcs) ->
+    | TCImplication (idx, _, _, f1, exceptions, scopes, p, f2, q, rt, rcs) ->
       let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
       let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
       let f1_ = f1@ex_neg@scopes in
       let verdict_lhs = type_formulas s pos rcs pols Sup f1_ p in
       let verdict_rhs = type_formulas s pos rcs pols Cau f2 q in
       let verdict' = conj verdict_lhs verdict_rhs |> conj verdict in
-      (* TODO: check `rt`, i.e. transparency and/or enforceability *)
-      (* let h = TImp (N, complete_with_pattern f1 p, complete_with_pattern f2 q) in *)
-      (match rt with
+      begin match rt with
         | Vanilla -> verdict'
-        | Enforceable -> verdict' (*TODO*)
-        | Transparent -> verdict' (*TODO*)
-      )
-    | TCDefinition (idx, _, f1, exceptions, scopes, p, _, f2) ->
+        | Enforceable -> 
+          begin match rule_is_closed rule with
+            | None -> ()
+            | Some err_msg -> ignore (raise (Invalid_argument err_msg)) (* TODO: verify that this is intended/necessary for rule_type Enforceable, this is modelled after the convert_enforceable function *)
+          end;
+          verdict'
+        | Transparent ->
+          begin match rule_is_closed rule with
+            | None -> ()
+            | Some err_msg -> ignore (raise (Invalid_argument err_msg)) (* TODO: verify that this is intended/necessary for rule_type Enforceable, this is modelled after the convert_enforceable function *)
+          end;
+          begin match rule_is_transparent rule with
+            | None -> ()
+            | Some err_msg -> Util.enf_error err_msg (Some pos)
+          end;
+          verdict'
+      end
+    | TCDefinition (idx, _, _, f1, exceptions, scopes, p, _, f2) ->
       let name = get_predicate_name f2 in
       let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
       let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
@@ -937,30 +990,30 @@ let create_def_dis_rules tprog =
 
 let create_def_rules tprog =
   List.filter_map tprog.tstmts ~f:(function
-    | TSRule (_, idx, _, _, trule, _) ->
+    | TSRule (pos, idx, _, _, trule, _) ->
       let exceptions = get_exception_predicates ~negated:false tprog idx in
       let scopes = get_scope_predicates tprog idx in
       begin match trule with
         | TScope (f1, p, r, f2)
-          -> Some (TCDefinition (idx, TRTScope, f1, exceptions, scopes, p, r, f2))
+          -> Some (TCDefinition (idx, TRTScope, pos, f1, exceptions, scopes, p, r, f2))
         | TException (f1, p, r, f2)
-          -> Some (TCDefinition (idx, TRTException, f1, exceptions, scopes, p, r, f2))
+          -> Some (TCDefinition (idx, TRTException, pos, f1, exceptions, scopes, p, r, f2))
         | TExceptionC (f1, p, r, f2, _)
-          -> Some (TCDefinition (idx, TRTExceptionC, f1, exceptions, scopes, p, r, f2))
+          -> Some (TCDefinition (idx, TRTExceptionC, pos, f1, exceptions, scopes, p, r, f2))
         | _ -> None
       end
     | _ -> None)
 
 let create_imp_rules tprog =
   List.filter_map tprog.tstmts ~f:(function
-    | TSRule (_, idx, _, _, trule, _) ->
+    | TSRule (pos, idx, _, _, trule, _) ->
       let exceptions = get_exception_predicates ~negated:true tprog idx in
       let scopes = get_scope_predicates tprog idx in
       begin match trule with
         | TObligation (f1, p, f2, q, rt, rcs)
-          -> Some (TCImplication (idx, TRTObligation, f1, exceptions, scopes, p, f2, q, rt, rcs))
+          -> Some (TCImplication (idx, TRTObligation, pos, f1, exceptions, scopes, p, f2, q, rt, rcs))
         | TPermission (f1, p, f2, q, rt, rcs)
-          -> Some (TCImplication (idx, TRTPermission, f1, exceptions, scopes, p, f2, q, rt, rcs))
+          -> Some (TCImplication (idx, TRTPermission, pos, f1, exceptions, scopes, p, f2, q, rt, rcs))
         | _ -> None
       end
     | _ -> None)
@@ -982,7 +1035,8 @@ let convert_formulas_and_patterns (s: tprog) (enftype: EnfType.t) pols (fs: (Lex
   in
   let convert_formulas f = List.map f ~f:(fun f -> List.map f ~f:(convert_ (C Lextime.Span.zero) enftype)) in (* TODO: what is the correct bound value? is zero correct?*)
   match p with
-  | TPPresent -> convert_formulas fs, epattern_of_tpattern s p
+  | TPPresent ->
+    convert_formulas fs, EPPresent
   (* | TPEventually i -> assert false *)
   (* | TPAlways i -> assert false *)
   (* | TPUntil (i, g) -> assert false *)
@@ -992,7 +1046,7 @@ let convert_formulas_and_patterns (s: tprog) (enftype: EnfType.t) pols (fs: (Lex
   | _ -> assert false
 
 let convert_compilation_rule (s: tprog) pols = function
-  | TCImplication (idx, trt, f1, exceptions, scopes, p, f2, q, rt, rcs) ->
+  | TCImplication (idx, trt, pos, f1, exceptions, scopes, p, f2, q, rt, rcs) ->
     let f1s, p_e = convert_formulas_and_patterns s Sup pols [f1;exceptions;scopes] p in
     let f2s, q_e = convert_formulas_and_patterns s Cau pols [f2] q in
     let f1_e, e_e, s_e = match f1s with
@@ -1004,8 +1058,8 @@ let convert_compilation_rule (s: tprog) pols = function
       | _ -> assert false
     in
     let ert = erule_type_from_trule_type trt in
-    ECImplication (idx, ert, f1_e, e_e, s_e, p_e, f2_e, q_e, rt, rcs)
-  | TCDefinition (idx, trt, f1, exceptions, scopes, p, refs, f2) ->
+    ECImplication (idx, ert, pos, f1_e, e_e, s_e, p_e, f2_e, q_e, rt, rcs)
+  | TCDefinition (idx, trt, pos, f1, exceptions, scopes, p, refs, f2) ->
     let pred_name = match f2 with
       | Tformula.TPredicate (name, _, _) -> name
       | _ -> assert false
@@ -1024,7 +1078,7 @@ let convert_compilation_rule (s: tprog) pols = function
       | None -> Util.enf_error ("Internal predicate \"" ^ Tformula.to_string f2 ^ "\" cannot be converted.") None (* TODO, should this be replaced with assert false/ why might this happen, could it even happen after enforcement checking? *)
     in
     let ert = erule_type_from_trule_type trt in
-    ECDefinition (idx, ert, f1_e, e_e, s_e, p_e, refs, f2_e) 
+    ECDefinition (idx, ert, pos, f1_e, e_e, s_e, p_e, refs, f2_e) 
   | TCDefinitionDis (disjuncts, g) ->
     let pred_name = match g with
       | Tformula.TPredicate (name, _, _) -> name
@@ -1057,13 +1111,13 @@ let convert_compilation_rules tprog pols rules =
 let erules_from_compilation_rules (compilation_rules: (int, trule_compilation, Int.comparator_witness) Map.t) : (int, erule, Int.comparator_witness) Map.t =
   let c_rules = Map.to_alist compilation_rules in
   let aux erules (c_idx, c_rule) = match c_rule with
-    | TCImplication (r_idx, trt, _, _, _, _, _, _, _, _) ->
+    | TCImplication (r_idx, trt, _, _, _, _, _, _, _, _, _) ->
       begin match trt with
         | TRTObligation -> Map.add_exn erules ~key:r_idx ~data:(EObligation c_idx)
         | TRTPermission -> Map.add_exn erules ~key:r_idx ~data:(EPermission c_idx)
         | _ -> assert false
     end
-    | TCDefinition (r_idx, trt, _, _, _, _, _, _) ->
+    | TCDefinition (r_idx, trt, _, _, _, _, _, _, _) ->
       begin match trt with
         | TRTException -> Map.add_exn erules ~key:r_idx ~data:(EException c_idx)
         | TRTExceptionC -> Map.update erules r_idx ~f:(function

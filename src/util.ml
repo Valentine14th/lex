@@ -43,6 +43,9 @@ let string_of_int_to_int_multi_map m = Printf.sprintf "{%s}"
 let string_of_int_set s = Printf.sprintf "{%s}"
                            (Set.fold s ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%d; " acc s))
 
+let string_of_string_set s = Printf.sprintf "{%s}"
+                           (Set.fold s ~init:"" ~f:(fun acc s -> Printf.sprintf "%s\"%s\"; " acc s))
+
 let string_of_int_set_list l = Printf.sprintf "[%s]"
                                (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%s; " acc (string_of_int_set s)))
 
