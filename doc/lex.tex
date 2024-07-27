@@ -231,7 +231,7 @@ The syntax for event declarations is as follows:
                 &\mid \kw{observable}~\kw{causable} \mid \kw{causable}~\kw{observable} \\
                 &\mid \kw{suppressable}~\kw{causable} \mid \kw{causable}~\kw{suppressable} \\
   event\_decl ::=&~ capabilities~\kw{event}~ident~ \\
-                &~ [\kw{"""}event\_desc\kw{"""}]\\
+                 &\qquad~ [\kw{"""}event\_desc\kw{"""}]\\
                  &\qquad ident_{11}~\kw{:}~ident_{12}\\
                  &\qquad \dots\\
                  &\qquad ident_{k1}~\kw{:}~ident_{k2}
@@ -268,10 +268,10 @@ The pairs of identifiers $ident_{i1}\kw{:} ident_{i2}$ contained in the event de
   The following code declares a new suppressable event capturing personal data processing in a system, assuming three previously defined types \texttt{processing\_id}, \texttt{processor\_id}, and \texttt{data\_id}.
   \begin{align*}
     &\kw{suppressable}~\kw{event}~\texttt{PersonalDataProcessing}\\
-    &\kw{"""}\\
-    &\text{\itshape processor \kw{\{}x\kw{\}} is processing personal data \kw{\{}z\kw{\}} as part}\\
-    &\text{\itshape of processing operation \kw{\{}ep\kw{\}}}\\
-    &\kw{"""}\\
+    &\qquad \kw{"""}\\
+    &\qquad \text{\itshape processor \kw{\{}x\kw{\}} is processing personal data \kw{\{}z\kw{\}} as part}\\
+    &\qquad \text{\itshape of processing operation \kw{\{}ep\kw{\}}}\\
+    &\qquad \kw{"""}\\
     &\qquad\begin{array}{lll}
              \texttt{ep}&\kw{:}&\texttt{processing\_id}\\
              \texttt{x}&\kw{:}&\texttt{processor\_id}\\
@@ -285,7 +285,9 @@ The pairs of identifiers $ident_{i1}\kw{:} ident_{i2}$ contained in the event de
 
 The general syntax for rule declarations is as follows:
 \begin{align*}
-  rule\_verb\_action ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{prohibit} \mid \kw{constitute} \\
+  % rule\_verb\_action ::=&~\kw{oblige} \mid \kw{permit} \mid \kw{prohibit} \\ % TODO: allow for different action verbs (permit, prohibit)
+  rule\_verb\_action ::=&~\kw{oblige} \\
+  rule\_verb\_constitute ::=&~\kw{constitute} \\
   rule\_verb\_relative ::=&~\kw{except} \mid \kw{scope}\\
   rule\_constr\_verb ::=&~\kw{causing} \mid \kw{suppressing}\\
   rule\_constr ::=&~rule\_constr\_verb~ident_1~\dots~ident_m\\
@@ -343,7 +345,7 @@ The syntax of expressions closely follows MFOTL syntax:
 
 \label{sec:opt}
 
-Except for $\kw{except}$ and $\kw{scope}$ rules,
+Except for $\kw{except}$, $\kw{scope}$, and $\kw{constitute}$ rules, % TODO: possibly rewrtie as only for $\kw{oblige}$ rules (depending on whether or not permit/prohibit rules are implemented)
 every \Lex{} rule declaration represents a statement of the form
 \begin{align*}
   &\kw{FORALL}~ident_{11},\dots,ident_{1n}. \\
@@ -391,9 +393,47 @@ well as the conversion of $time\_interval$ expressions into intervals:
               & $\kw{always in the future}~[itv]$ & $\kw{ALWAYS}_I~\psi$ & Future\\
               & $\kw{once}~[itv]$ & $\kw{ONCE}_I~\psi$ & Past\\
               & $\kw{always in the past}~[itv]$ & $\kw{HISTORICALLY}_I~\psi$ & Past\\
+              & $\kw{always since}~\psi~[itv]$ & $(\kw{NOT}~\phi)~\kw{SINCE}_I~\psi$ & Past\\ % TODO: check if this pattern is correct
 \end{tabular}\\[10pt]
 \caption{Available temporal patterns for \Lex{} rules\label{tab:patterns}}
 \end{table}
+
+\textbf{Typing Rules of Temporal Patterns}
+
+\begin{align*}
+  \frac{\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+    {\Gamma \vdash \bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+    &\text{Present}^{\mathbb{C}} \quad
+  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
+    {\Gamma \vdash \bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+    &\text{Present}^{\mathbb{S}_j} \\
+  \frac{\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+    {\Gamma \vdash \kw{EVENTUALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+    &\text{Eventually}^{\mathbb{C}} \quad
+  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
+    {\Gamma \vdash \kw{EVENTUALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+    &\text{Eventually}^{\mathbb{S}_j} \\
+  \frac{\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+    {\Gamma \vdash \kw{ALWAYS}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+    &\text{Always}^{\mathbb{C}} \quad
+  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
+    {\Gamma \vdash \kw{ALWAYS}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+    &\text{Always}^{\mathbb{S}_j} \\
+  \frac{b\not=\infty \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+    {\Gamma \vdash \psi~\kw{Until}_{[0,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+    &\text{Until}^{\mathbb{C}} \quad
+  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
+    {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+    &\text{Until}^{\mathbb{S}_j} \\
+  \frac{0 \in [a,b] \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+    {\Gamma \vdash \kw{Once}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+    &\text{Once}^{\mathbb{C}} \quad
+  & \text{impossible }& \text{Once}^{\mathbb{S}} \\
+    \text{impossible } &\text{Historically}^{\mathbb{C}} \quad
+  & \frac{\Gamma \vdash \phi_j : \mathbb{S}}
+    {\Gamma \vdash \kw{HISTORICALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+    & \text{Historically}^{\mathbb{S}_j} \\
+\end{align*}
 
 \section{Compilation}
 
