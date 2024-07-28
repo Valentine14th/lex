@@ -393,7 +393,7 @@ well as the conversion of $time\_interval$ expressions into intervals:
               & $\kw{always in the future}~[itv]$ & $\kw{ALWAYS}_I~\psi$ & Future\\
               & $\kw{once}~[itv]$ & $\kw{ONCE}_I~\psi$ & Past\\
               & $\kw{always in the past}~[itv]$ & $\kw{HISTORICALLY}_I~\psi$ & Past\\
-              & $\kw{always since}~\psi~[itv]$ & $(\kw{NOT}~\phi)~\kw{SINCE}_I~\psi$ & Past\\ % TODO: check if this pattern is correct
+              & $\kw{always since}~\psi~[itv]$ & $~\phi~\kw{SINCE}_I~\psi$ & Past\\ % TODO: check if this pattern is correct
 \end{tabular}\\[10pt]
 \caption{Available temporal patterns for \Lex{} rules\label{tab:patterns}}
 \end{table}
@@ -429,10 +429,19 @@ well as the conversion of $time\_interval$ expressions into intervals:
     {\Gamma \vdash \kw{Once}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
     &\text{Once}^{\mathbb{C}} \quad
   & \text{impossible }& \text{Once}^{\mathbb{S}} \\
-    \text{impossible } &\text{Historically}^{\mathbb{C}} \quad
+  \text{impossible } &\text{Historically}^{\mathbb{C}} \quad
   & \frac{\Gamma \vdash \phi_j : \mathbb{S}}
     {\Gamma \vdash \kw{HISTORICALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
     & \text{Historically}^{\mathbb{S}_j} \\
+  \frac{0 \in [a,b] \quad \Gamma \vdash \psi : \mathbb{C}}
+    {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{C}}
+    &\text{Since}^{\mathbb{C}} \quad
+  & \frac{0 \not\in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S}}
+    {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
+    & \text{Since}^{\mathbb{S}L_j} \\
+  && \frac{0 \not\in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S} \quad \Gamma \vdash \psi : \mathbb{S}}
+    {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
+    & \text{Since}^{\mathbb{S}LR_j} \\
 \end{align*}
 
 \section{Compilation}
