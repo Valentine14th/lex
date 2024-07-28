@@ -439,7 +439,7 @@ well as the conversion of $time\_interval$ expressions into intervals:
   & \frac{0 \not\in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S}}
     {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
     & \text{Since}^{\mathbb{S}L_j} \\
-  && \frac{0 \not\in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S} \quad \Gamma \vdash \psi : \mathbb{S}}
+  && \frac{0 \in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S} \quad \Gamma \vdash \psi : \mathbb{S}}
     {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
     & \text{Since}^{\mathbb{S}LR_j} \\
 \end{align*}
