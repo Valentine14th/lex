@@ -280,6 +280,47 @@ The pairs of identifiers $ident_{i1}\kw{:} ident_{i2}$ contained in the event de
   \end{align*}
 \end{example}
 
+\subsubsection{Event capabilities}
+There are two classes of event capabilities: \kw{internal} and all other capabilities.
+Choosing a capability (other than internal) depends on two factors:
+1. whether the event can actually be observed, caused, suppressed, etc. and
+2. what the enforcer requires as a "minimal" capacity in order for the rules where the event is used to be enforced.
+
+\newpage
+\kw{observable}
+\begin{itemize}[*]
+  \item The event can be observed by the enforcer.
+  \item e.g. an event might not be observable if it is not always logged when it happens (this is highly dependent on the system in question).
+\end{itemize}
+
+\kw{causable} 
+\begin{itemize}[*]
+  \item The event can be caused by the enforcer.
+\end{itemize}
+
+\kw{suppressable}
+\begin{itemize}[*]
+  \item The event can be suppressed by the enforcer. (every occurence of the event is logged)
+  \item \kw{suppressable} events are \kw{observable} by definition. (an event cannot not be suppressed if it was never observed)
+\end{itemize}
+
+\kw{observable causable} or \kw{causable observable}
+\begin{itemize}[*]
+  \item combines the capabilities of \kw{observable} and \kw{causable}
+\end{itemize}
+
+\kw{suppressable causable} or \kw{causable suppressable}
+\begin{itemize}[*]
+  \item The event can be suppressed and caused by the enforcer.
+  \item This capability inherits observability from \kw{suppressable}
+\end{itemize}
+
+\kw{internal} events serve a special purpose in the \Lex{} language.
+\begin{itemize}[*]
+  \item They occur on the right-hand side of constitutive rules (after the \kw{constitute} keyword).
+  \item They are not "emmitted" by the system, rather they can be seen as placeholders for a combination of other events, as defined by constitutive rules.
+  \item Completely hidden from the programmer, they are also used to internally create special events for scope and exception rules.
+\end{itemize}
 
 \subsection{Rules}
 
