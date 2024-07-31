@@ -103,9 +103,7 @@ let compile_pattern (f: Eformula.t) = function
   | EPUntil (i, g) -> { f = EUntil (R, i, Interval.is_bounded i, g, f); enftype = Non; id = 0 }
   | EPOnce i -> { f = EOnce (i, f); enftype = Non; id = 0 }
   | EPHistorically i -> { f = EHistorically (i, f); enftype = Non; id = 0 }
-  | EPSince (i, g) -> let neg_f = { f = ENeg f; enftype = Non; id = 0} in
-                      let since_f = { f = ESince (R, i, neg_f, g); enftype = Non; id = 0 } in
-                      { f = ENeg since_f; enftype = Non; id = 0 }
+  | EPSince (i, g) -> { f = ESince (R, i, f, g); enftype = Non; id = 0 }
 
 let compile_let_binding f p pred : Eformula.t * Eformula.t =
   match pred with

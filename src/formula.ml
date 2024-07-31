@@ -75,12 +75,14 @@ module Side = struct
     let aux = function N  -> "N" | L  -> "L" | R  -> "R" | LR -> "LR"
     in function (N, N) -> "" | (a, b) -> ":" ^ aux a ^ "," ^ aux b
 
-  let of_string = function
+  let of_string pos = function
     | "N"  -> N
     | "L"  -> L
     | "R"  -> R
     | "LR" -> LR
-    | _ -> assert false
+    | _ as s->
+      let err_msg = Printf.sprintf "expected a side parameter (N, L, R, LR), but got %s" s in
+      Util.syntax_error err_msg pos
 
 end
 

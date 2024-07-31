@@ -299,10 +299,10 @@ ee:
 | e COL ty                             { fst $1, type_ (snd $1) $3 }
 
 side:
-| COL IDENT                            { Side.of_string (snd $2) }
+| COL IDENT                            { Side.of_string (fst $2) (snd $2) }
 
 sides:
-| COL IDENT COM IDENT                  { (Side.of_string (snd $2), Side.of_string (snd $4)) }
+| COL IDENT COM IDENT                  { (Side.of_string (fst $2) (snd $2), Side.of_string (fst $4) (snd $4)) }
 
 term2:
 | unop2 term                           { fst $1, Term.Unop (snd $1, snd $2) }

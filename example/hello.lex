@@ -96,7 +96,9 @@ rule
         lawfulness(ep)
         fairness(ep)
         transparency(ep)
-    enforceable suppressing PersonalDataProcessing 
+    enforce by suppressing condition 0
+    enforce by causing effect
+    # enforceable suppressing PersonalDataProcessing 
 
 article "6"
 paragraph "1"
@@ -119,7 +121,7 @@ rule
         PersonalData(z, w)
     constitute
         lawfulness(ep)
-    enforceable causing lawfulness
+    # enforceable causing lawfulness
 
 # article[1] "II" "dummy level to try out sublevels"
 # article[2] "A" "dummy level to try out sublevels"
