@@ -74,9 +74,15 @@ type pattern =
 
 type rule_type = Vanilla | Enforceable | Transparent
 
+type rule_constr_kind =
+  | CConditions
+  | CCondition of int
+  | CEffects
+  | CEvent of string
+
 type rule_constr =
-  | Suppressing of ident list
-  | Causing     of ident list
+  | Suppressing of rule_constr_kind list
+  | Causing     of rule_constr_kind list
 
 type rule =
   | Obligation   of (Lexing.position * Formula.t) list * pattern * (Lexing.position * Formula.t) list * pattern * rule_type * rule_constr list
@@ -152,9 +158,15 @@ let string_of_rule_type = function
   | Enforceable -> "enforceable "
   | Transparent -> "transparently enforceable "
 
+let string_of_rule_constr_kind = function
+  | CConditions -> "conditions"
+  | CCondition i -> "condition[" ^ string_of_int i ^ "]"
+  | CEffects -> "effects"
+  | CEvent s -> s
+
 let string_of_rule_constr = function
-  | Suppressing idents -> "suppressing " ^ String.concat ~sep:", " idents
-  | Causing idents -> "causing " ^ String.concat ~sep:", " idents
+  | Suppressing cs -> "suppressing " ^ String.concat ~sep:", " (List.map cs ~f:string_of_rule_constr_kind)
+  | Causing cs -> "causing " ^ String.concat ~sep:", " (List.map cs ~f:string_of_rule_constr_kind)
     
 let string_of_rule_constrs rule_constrs =
   String.concat ~sep:", " (List.map ~f:string_of_rule_constr rule_constrs)

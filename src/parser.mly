@@ -23,6 +23,8 @@
 %token <Lexing.position> IMPORT
 %token INFINITY
 %token FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE TSTRING TINT TFLOAT TBOOL TTIME TSPAN TMONEY TCAUSABLE TSUPPRESSABLE TOBSERVABLE TINTERNAL TTRANSPARENTLY TENFORCEABLE
+%token CONDITIONS EFFECTS
+%token <int> CONDITION
 %token IWITHIN IBEFORE ISTRICTLY IAFTER IBETWEEN IEXCLUDED IEVENTUALLY IALWAYS IONCE ISINCE IDELAYING IIF IIN ITHE IFUTURE IPAST
 %token IS TTYPE
 %token <string> DOCSTRING
@@ -197,9 +199,15 @@ rule:
 ident:
   | IDENT { snd $1 }
 
+constrainable:
+  | CONDITIONS { CConditions }
+  | CONDITION { CCondition $1 }
+  | EFFECTS { CEffects }
+  | ident { CEvent $1 }
+
 rule_constr:
-  | CAUSING list(ident)     { Causing $2 }
-  | SUPPRESSING list(ident) { Suppressing $2 }
+  | CAUSING list(constrainable)     { Causing $2 }
+  | SUPPRESSING list(constrainable) { Suppressing $2 }
 
 rule_constrs:
   | separated_list(COM, rule_constr) { $1 }

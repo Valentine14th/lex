@@ -146,10 +146,16 @@ let html_of_rule_constr_type = function
   | Lex.Suppressing idents -> "suppressing", idents
   | Causing idents -> "causing", idents
 
+let html_of_rule_constr_kind = function
+  | Lex.CCondition i -> Printf.sprintf "condition[%d]" i |> ident (* TODO (nice-to-have): link to the line of condition[i]*)
+  | Lex.CConditions -> ident "conditions"
+  | Lex.CEffects -> ident "effects"
+  | Lex.CEvent e -> ident e
+
 let html_of_rule_constr constr =
-  let keyword, idents =  html_of_rule_constr_type constr in
+  let keyword, rule_consrt_kinds =  html_of_rule_constr_type constr in
   div "lex-rule-constr" (
-      kw keyword ^ String.concat ~sep:", " (List.map ~f:ident idents)
+      kw keyword ^ String.concat ~sep:", " (List.map ~f:html_of_rule_constr_kind rule_consrt_kinds)
     )
     
 let html_of_rule_constrs rule_constrs =

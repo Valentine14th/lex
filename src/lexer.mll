@@ -65,6 +65,8 @@
        "replace"      , REPLACE ;
        "suppressing"  , SUPPRESSING ;
        "causing"      , CAUSING ;
+       "conditions"   , CONDITIONS ;
+       "effects"      , EFFECTS ;
        "within"       , IWITHIN ;
        "before"       , IBEFORE ;
        "strictly"     , ISTRICTLY ;
@@ -156,6 +158,7 @@ rule read =
   | '`'            { read_time (Buffer.create 17) lexbuf }
   | '"'            { read_string (Buffer.create 17) lexbuf }
   | "\"\"\""       { read_docstring (Buffer.create 17) lexbuf }
+  | "condition[" (int as i) "]" { CONDITION (int_of_string i) }
   | "[" (int as i) "]" { LABEL_LEVEL (int_of_string i) }
   | "FALSE" | "⊥"  { FALSE lexbuf.lex_start_p }
   | "TRUE" | "⊤"   { TRUE lexbuf.lex_start_p }

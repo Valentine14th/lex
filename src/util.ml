@@ -79,3 +79,18 @@ let invert_int_string_multimap (m: (int, string list, _) Map.t) : (string, int l
           | Some l -> Map.set acc ~key:s ~data:(k::l)
           | None -> Map.set acc ~key:s ~data:[k]))
 
+let remove_at idx lst =
+  let rec aux i acc = function
+    | [] -> List.rev acc
+    | _::tl when i = idx -> List.rev_append acc tl
+    | hd::tl -> aux (i + 1) (hd::acc) tl
+  in
+  aux 0 [] lst
+
+let lists_with_one_removed lst =
+  let rec aux i acc =
+    if i >= List.length lst then List.rev acc
+    else aux (i + 1) ((remove_at i lst)::acc)
+  in
+  aux 0 []
+

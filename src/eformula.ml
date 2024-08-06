@@ -280,3 +280,102 @@ and to_string_rec l form =
 let to_string = to_string_rec 0
 
 let to_string_core = to_string_core_rec 0
+
+let rec relative_interval (f: t) =
+  match f.f with
+  | ETT | EFF | EEqConst _ | EPredicate _ -> Zinterval.singleton 0
+  | EAgg (_, _, _, _, f) -> Zinterval.to_zero (relative_interval f)
+  | ENeg f | EExists (_, f) | EForall (_, f) -> relative_interval f
+  | EAnd (_, fs) | EOr (_, fs)
+    -> List.fold_left (List.map fs ~f:relative_interval) ~init:Zinterval.full ~f:Zinterval.lub
+  | EImp (_, f1, f2) | EIff (_, _, f1, f2)
+    -> Zinterval.lub (relative_interval f1) (relative_interval f2)
+  | EPrev (i, f) | EOnce (i, f) | EHistorically (i, f)
+    -> let i' = Zinterval.inv (Zinterval.of_interval i) in
+       Zinterval.lub (Zinterval.to_zero i') (Zinterval.sum i' (relative_interval f))
+  | ENext (i, f) | EEventually (i, _, f) | EAlways (i, _, f)
+    -> let i = Zinterval.of_interval i in
+       Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i (relative_interval f))
+  | ESince (_, i, f1, f2) ->
+     let i' = Zinterval.inv (Zinterval.of_interval i) in
+     (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i') (relative_interval f1))
+        (Zinterval.sum i' (relative_interval f2)))
+  | EUntil (_, i, _, f1, f2) ->
+     let i' = Zinterval.of_interval i in
+     (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i') (relative_interval f1))
+        (Zinterval.sum i' (relative_interval f2)))
+  | EType (f, _) -> relative_interval f
+
+let strict (f: t) =
+  let rec _strict itv fut (f: t) =
+    ((Zinterval.mem 0 itv) && fut)
+    || (match f.f with
+        | ETT | EFF | EEqConst (_, _) | EPredicate _-> false
+        | ENeg f | EExists (_, f) | EForall (_, f) | EAgg (_, _, _, _, f) -> _strict itv fut f
+        | EImp (_, f1, f2) | EIff (_, _, f1, f2)
+          -> (_strict itv fut f1) || (_strict itv fut f2)
+        | EAnd (_, fs) | EOr (_, fs)
+          -> List.exists fs ~f:(_strict itv fut)
+        | EPrev (i, f) | EOnce (i, f) | EHistorically (i, f)
+          -> _strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f
+        | ENext (i, f) | EEventually (i, _, f) | EAlways (i, _, f)
+          -> _strict (Zinterval.sum (Zinterval.of_interval i) itv) true f
+        | ESince (_, i, f1, f2)
+          -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f1)
+             || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f2)
+        | EUntil (_, i, _, f1, f2)
+          -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f1)
+             || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f2)
+        | EType (f, _) -> _strict itv fut f)
+  in not (_strict (Zinterval.singleton 0) false f)
+
+let relative_past (f: t) =
+  Zinterval.is_nonpositive (relative_interval f)
+
+let strictly_relative_past (f: t) =
+  (relative_past f) && (strict f)
+
+let rec is_transparent (f: t) = match f.enftype with
+  | Cau -> begin
+      match f.f with
+      | ETT | EPredicate _ -> true
+      | ENeg f | EExists (_, f) | EForall (_, f)
+        | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
+          | EAlways (_, _, f) -> is_transparent f
+      | EEventually (_, b, f) -> b && is_transparent f
+      | EImp (L, f, g) | EIff (L, L, f, g)
+        -> is_transparent f && strictly_relative_past g
+      | EOr (L, f :: fs)
+        -> is_transparent f && List.for_all fs ~f:strictly_relative_past
+      | EImp (R, f, g) | EIff (R, R, f, g)
+          -> is_transparent g && strictly_relative_past f
+      | EOr (R, fs)
+        -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
+      | EAnd (_, fs) -> List.for_all fs ~f:is_transparent
+      | EIff (_, _, f, g) -> is_transparent f && is_transparent g
+      | ESince (_, _, f, g) -> is_transparent f && strictly_relative_past g
+      | EUntil (R, _, b, f, g) -> b && is_transparent f && strictly_relative_past g
+      | EUntil (LR, _, b, f, g) -> b && is_transparent f && is_transparent g
+      | _ -> false
+    end
+  | Sup -> begin
+      match f.f with
+      | EFF | EPredicate _ -> true
+      | ENeg f | EExists (_, f) | EForall (_, f)
+        | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
+        | EEventually (_, _, f) -> is_transparent f
+      | EAlways (_, b, f) -> b && is_transparent f
+      | EAnd (L, f :: fs) -> is_transparent f  && List.for_all fs ~f:strictly_relative_past
+      | EIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
+      | EIff (R, R, f, g)
+        -> is_transparent g && strictly_relative_past f
+      | EAnd (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
+      | EIff (_, _, f, g) -> is_transparent f && is_transparent g
+      | EOr (_, fs) -> List.for_all fs ~f:is_transparent
+      | ESince (L, _, f, g) -> is_transparent f && strictly_relative_past g
+      | ESince (R, _, f, g) -> is_transparent f && is_transparent g
+      | EUntil (R, _, _, f, g) -> is_transparent f && strictly_relative_past g
+      | EUntil (_, _, _, f, g) -> is_transparent g && strictly_relative_past f
+      | _ -> false
+    end
+  | _ -> assert false

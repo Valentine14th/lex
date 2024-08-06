@@ -96,8 +96,11 @@ rule
         lawfulness(ep)
         fairness(ep)
         transparency(ep)
-    enforce by suppressing condition 0
-    enforce by causing effect
+    enforceable suppressing PersonalDataProcessing condition[0]
+    enforceable suppressing PersonalDataProcessing, suppressing conditions
+    enforceable suppressing PersonalDataProcessing, causing effect
+    # enforceable suppressing condition 0
+    # enforceable causing effect
     # enforceable suppressing PersonalDataProcessing 
 
 article "6"

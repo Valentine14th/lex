@@ -373,3 +373,67 @@ let rec collect_tpredicates l = function
 
 let to_string = to_string_rec 0
 
+let rec relative_interval ?(itl_itvs=Map.empty (module String)) (f: t): Zinterval.t =
+  let relative_interval = relative_interval ~itl_itvs:itl_itvs in
+  match f with
+  | TTT | TFF | TEqConst _ -> Zinterval.singleton 0
+  | TPredicate (n, _, _) ->
+    begin match Map.find itl_itvs n with
+      | Some i -> i
+      | None -> Zinterval.singleton 0
+    end
+  | TAgg (_, _, _, _, f) -> Zinterval.to_zero (relative_interval f)
+  | TNeg f | TExists (_, f) | TForall (_, f) -> relative_interval f
+  | TAnd (_, fs) | TOr (_, fs)
+    -> List.fold_left (List.map fs ~f:relative_interval) ~init:Zinterval.full ~f:Zinterval.lub
+  | TImp (_, f1, f2) | TIff (_, _, f1, f2)
+    -> Zinterval.lub (relative_interval f1) (relative_interval f2)
+  | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
+    -> let i' = Zinterval.inv (Zinterval.of_interval i) in
+       Zinterval.lub (Zinterval.to_zero i') (Zinterval.sum i' (relative_interval f))
+  | TNext (i, f) | TEventually (i, f) | TAlways (i, f)
+    -> let i = Zinterval.of_interval i in
+       Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i (relative_interval f))
+  | TSince (_, i, f1, f2) ->
+     let i' = Zinterval.inv (Zinterval.of_interval i) in
+     (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i') (relative_interval f1))
+        (Zinterval.sum i' (relative_interval f2)))
+  | TUntil (_, i, f1, f2) ->
+     let i' = Zinterval.of_interval i in
+     (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i') (relative_interval f1))
+        (Zinterval.sum i' (relative_interval f2)))
+  | TType (f, _) -> relative_interval f
+
+let strict ?(itl_strict=Map.empty (module String)) (f: t) =
+  let rec _strict itv fut (f: t) =
+    ((Zinterval.mem 0 itv) && fut)
+    || (match f with
+        | TTT | TFF | TEqConst (_, _) -> false
+        | TPredicate (name, _, _) ->
+          begin match Map.find itl_strict name with
+            | Some b -> not b
+            | None -> false
+          end
+        | TNeg f | TExists (_, f) | TForall (_, f) | TAgg (_, _, _, _, f) -> _strict itv fut f
+        | TImp (_, f1, f2) | TIff (_, _, f1, f2)
+          -> (_strict itv fut f1) || (_strict itv fut f2)
+        | TAnd (_, fs) | TOr (_, fs)
+          -> List.exists fs ~f:(_strict itv fut)
+        | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
+          -> _strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f
+        | TNext (i, f) | TEventually (i, f) | TAlways (i, f)
+          -> _strict (Zinterval.sum (Zinterval.of_interval i) itv) true f
+        | TSince (_, i, f1, f2)
+          -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f1)
+             || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f2)
+        | TUntil (_, i, f1, f2)
+          -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f1)
+             || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f2)
+        | TType (f, _) -> _strict itv fut f)
+  in not (_strict (Zinterval.singleton 0) false f)
+
+let relative_past ?(itl_itvs=Map.empty (module String)) (f: t): bool =
+  Zinterval.is_nonpositive (relative_interval ~itl_itvs:itl_itvs f)
+
+let strictly_relative_past ?(itl_itvs_and_strict=Map.empty (module String), Map.empty (module String)) (f: t): bool =
+  (relative_past ~itl_itvs:(fst itl_itvs_and_strict) f) && (strict ~itl_strict:(snd itl_itvs_and_strict) f)
