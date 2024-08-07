@@ -78,6 +78,8 @@ type rule_constr_kind =
   | CConditions
   | CCondition of int
   | CEffects
+  | CExceptions
+  | CScopes
   | CEvent of string
 
 type rule_constr =
@@ -162,6 +164,8 @@ let string_of_rule_constr_kind = function
   | CConditions -> "conditions"
   | CCondition i -> "condition[" ^ string_of_int i ^ "]"
   | CEffects -> "effects"
+  | CExceptions -> "exceptions"
+  | CScopes -> "scopes"
   | CEvent s -> s
 
 let string_of_rule_constr = function

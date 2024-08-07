@@ -343,14 +343,10 @@ let rec is_transparent (f: t) = match f.enftype with
         | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
           | EAlways (_, _, f) -> is_transparent f
       | EEventually (_, b, f) -> b && is_transparent f
-      | EImp (L, f, g) | EIff (L, L, f, g)
-        -> is_transparent f && strictly_relative_past g
-      | EOr (L, f :: fs)
-        -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | EImp (R, f, g) | EIff (R, R, f, g)
-          -> is_transparent g && strictly_relative_past f
-      | EOr (R, fs)
-        -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
+      | EImp (L, f, g) | EIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
+      | EOr (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
+      | EImp (R, f, g) | EIff (R, R, f, g) -> is_transparent g && strictly_relative_past f
+      | EOr (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
       | EAnd (_, fs) -> List.for_all fs ~f:is_transparent
       | EIff (_, _, f, g) -> is_transparent f && is_transparent g
       | ESince (_, _, f, g) -> is_transparent f && strictly_relative_past g
@@ -365,10 +361,9 @@ let rec is_transparent (f: t) = match f.enftype with
         | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
         | EEventually (_, _, f) -> is_transparent f
       | EAlways (_, b, f) -> b && is_transparent f
-      | EAnd (L, f :: fs) -> is_transparent f  && List.for_all fs ~f:strictly_relative_past
+      | EAnd (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
       | EIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
-      | EIff (R, R, f, g)
-        -> is_transparent g && strictly_relative_past f
+      | EIff (R, R, f, g) -> is_transparent g && strictly_relative_past f
       | EAnd (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
       | EIff (_, _, f, g) -> is_transparent f && is_transparent g
       | EOr (_, fs) -> List.for_all fs ~f:is_transparent

@@ -150,6 +150,8 @@ let html_of_rule_constr_kind = function
   | Lex.CCondition i -> Printf.sprintf "condition[%d]" i |> ident (* TODO (nice-to-have): link to the line of condition[i]*)
   | Lex.CConditions -> ident "conditions"
   | Lex.CEffects -> ident "effects"
+  | Lex.CExceptions -> ident "exceptions"
+  | Lex.CScopes -> ident "scopes"
   | Lex.CEvent e -> ident e
 
 let html_of_rule_constr constr =

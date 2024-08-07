@@ -67,6 +67,8 @@
        "causing"      , CAUSING ;
        "conditions"   , CONDITIONS ;
        "effects"      , EFFECTS ;
+       "exceptions"   , EXCEPTIONS ;
+       "scopes"       , SCOPES ;
        "within"       , IWITHIN ;
        "before"       , IBEFORE ;
        "strictly"     , ISTRICTLY ;
