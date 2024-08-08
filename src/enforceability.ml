@@ -246,7 +246,7 @@ let rec types s pols (t: EnfType.t) ((pos, f): (Lexing.position * Tformula.t)) =
       | TSince (_, _, f, g) -> conj (types Sup (pos, f)) (types Sup (pos, g))
       | TEventually (_, f) | TAlways (_, f) -> types Sup (pos, f)
       | TUntil (L, i, f, _) when not (Interval.has_zero i) -> types Sup (pos, f)
-      | TUntil (R, i, _, g) when not (Interval.has_zero i) -> types Sup (pos, g)
+      | TUntil (R, _, _, g) -> types Sup (pos, g)
       | TUntil (_, i, f, g) when not (Interval.has_zero i) -> disj (types Sup (pos, f)) (types Sup (pos, g))
       | TUntil (_, _, _, g) -> types Sup (pos, g)
       | TPrev _ -> error pos "● is never Sup"
@@ -388,16 +388,13 @@ let rec types_transparent itvls stricts s pols (t: EnfType.t) ((pos, f): (Lexing
       | TSince (_, _, f, g) when srp f && srp g -> conj (types_transparent Sup (pos, f)) (types_transparent Sup (pos, g))
       | TSince (_, _, f, _) when srp f -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but g is not"
       | TSince (_, _, _, g) when srp g -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but f is not"
-      | TSince (_, _, _, _) when srp g -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but both are not"
+      | TSince (_, _, _, _) -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but both are not"
       | TEventually (_, f) when srp f -> types_transparent Sup (pos, f)
       | TEventually (_, _) -> error_tr pos "◇f (Sup) requires f to be SRP"
       | TAlways (B _, f) -> types_transparent Sup (pos, f)
       | TAlways _ -> error_tr pos "□[a,b) f (Sup) requires b≠∞"
-      (* TODO: implement the updated Sup rule for Until *)
-      | TUntil (L, i, f, _) when not (Interval.has_zero i) -> types_transparent Sup (pos, f)
-      | TUntil (R, i, _, g) when not (Interval.has_zero i) -> types_transparent Sup (pos, g)
-      | TUntil (_, i, f, g) when not (Interval.has_zero i) -> disj (types_transparent Sup (pos, f)) (types_transparent Sup (pos, g))
-      | TUntil (_, _, _, g) -> types_transparent Sup (pos, g)
+      | TUntil (_, _, f, g) when srp f -> types_transparent Sup (pos, g)
+      | TUntil (_, _, _, _) -> error_tr pos "f U[a,b) g (Sup) requires f to be SRP"
       | TPrev _ -> error pos "● is never Sup"
       | _ -> Impossible (EFormula (pos, None, f, t))
     end
