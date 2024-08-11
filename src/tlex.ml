@@ -21,10 +21,10 @@ type trule =
 type trule_type = TRTObligation | TRTPermission | TRTConstitutive | TRTException | TRTExceptionC | TRTScope
 
 type trule_compilation =
-  | TCImplication   of int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
-  | TCDefinition    of int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
-  | TCDefinitionDis of (int, (int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * Tformula.t list * tpattern), Int.comparator_witness) Map.t * Tformula.t
-                             (* rule_id, trule_type, rule pos,     f1,                                   exceptions,                           scopes,                               term conditions,   pattern *)
+  | TCImplication   of int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
+  | TCDefinition    of int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+  | TCDefinitionDis of (int, (int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list  * tpattern* (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * Tformula.t list), Int.comparator_witness) Map.t * Tformula.t
+                             (* rule_id, trule_type, rule pos,     f1,                                  , pattern,   exceptions,                           scopes,                           variable renaiming *)
 
 type 'a tannot =
   | TALex of 'a

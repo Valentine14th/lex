@@ -123,7 +123,7 @@ let compile_let_binding f p pred : Eformula.t * Eformula.t =
   | _ -> assert false
 
 let compile_let_rule = function
-  | ECDefinition (_, _, _, f, e, s, p, _, g) ->
+  | ECDefinition (_, _, _, f, p, e, s, _, g) ->
     let f = List.map f ~f:snd in
     let e = List.map e ~f:snd in
     let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0) in
@@ -146,7 +146,7 @@ let compile_imp f p g q =
     Non 0
 
 let compile_imp_rule = function
-  | ECImplication (_, _, _, f, e, s, p, g, q, _, _) ->
+  | ECImplication (_, _, _, f, p, e, s, g, q, _, _) ->
     let f = List.map f ~f:snd in
     let e = List.map e ~f:snd in
     let s = List.map s ~f:snd in

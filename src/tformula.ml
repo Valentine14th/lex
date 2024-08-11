@@ -404,7 +404,7 @@ let rec relative_interval ?(itl_itvs=Map.empty (module String)) (f: t): Zinterva
         (Zinterval.sum i' (relative_interval f2)))
   | TType (f, _) -> relative_interval f
 
-let strict ?(itl_strict=Map.empty (module String)) (f: t) =
+let strict ?(itl_strict=Map.empty (module String)) ?(itv=Zinterval.singleton 0) ?(fut=false) (f: t) =
   let rec _strict itv fut (f: t) =
     ((Zinterval.mem 0 itv) && fut)
     || (match f with
@@ -430,7 +430,7 @@ let strict ?(itl_strict=Map.empty (module String)) (f: t) =
           -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f1)
              || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f2)
         | TType (f, _) -> _strict itv fut f)
-  in not (_strict (Zinterval.singleton 0) false f)
+  in not (_strict itv fut f)
 
 let relative_past ?(itl_itvs=Map.empty (module String)) (f: t): bool =
   Zinterval.is_nonpositive (relative_interval ~itl_itvs:itl_itvs f)

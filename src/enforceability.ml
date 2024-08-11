@@ -53,6 +53,7 @@ module Errors = struct
     | ECast of string * EnfType.t * bool * EnfType.t * bool
     | EFormula of Lexing.position * string option * t * EnfType.t
     | EFormulaTransparent of Lexing.position * string option * t * EnfType.t
+    | EFormulasTransparent of Lexing.position * (string * string) option * t list * EnfType.t
     | EConj of error * error
     | EDisj of error * error
     | EInit of Lexing.position option
@@ -77,6 +78,10 @@ module Errors = struct
                                     (Tformula.to_string f) (EnfType.to_string t) (Util.string_of_pos pos)
       | EFormulaTransparent (pos, Some s, f, t) -> Printf.sprintf "make %s %s, but this is impossible (%s) at %s"
                                       (Tformula.to_string f) (EnfType.to_string t) s (Util.string_of_pos pos)
+      | EFormulasTransparent (pos, None, fs, t) -> Printf.sprintf "make %s %s, but this is impossible at %s"
+                                    (List.map ~f:Tformula.to_string fs |> Util.string_of_string_list) (EnfType.to_string t) (Util.string_of_pos pos)
+      | EFormulasTransparent (pos, Some (op, s), fs, t) -> Printf.sprintf "make %s (%s) %s, but this is impossible (%s) at %s"
+                                      (List.map ~f:Tformula.to_string fs |> Util.string_of_string_list) op (EnfType.to_string t) s (Util.string_of_pos pos)
       | EConj (f, g) -> Printf.sprintf "both%s* %s%sand%s* %s"
                           lb (to_string ~n:(n+1) f) lb lb (to_string ~n:(n+1) g)
       | EDisj (f, g) -> Printf.sprintf "either%s* %s%sor%s* %s"
@@ -654,13 +659,13 @@ let use_sets (rules: (int, trule_compilation, Int.comparator_witness) Map.t) (ev
     | TPUntil (_, f)
     | TPSince (_, f) -> use_formula f
   in
-  let use_disjunct (_, _, _, f, exceptions, scopes, term_conditions, p) = ((List.map ~f:snd (f@exceptions@scopes) @ term_conditions) |> use_formulas) @ use_pattern p in
+  let use_disjunct (_, _, _, f, p, exceptions, scopes, term_conditions) = ((List.map ~f:snd (f@exceptions@scopes) @ term_conditions) |> use_formulas) @ use_pattern p in
   let use_disjuncts disjuncts = Map.map disjuncts ~f:use_disjunct |> Map.data |> List.concat in
   let snd_map l = List.map l ~f:snd in
   let aux = function
-    | TCImplication (_, _, _, f1, exceptions, scopes, p, f2, q, _, _) ->
+    | TCImplication (_, _, _, f1, p, exceptions, scopes, f2, q, _, _) ->
       use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p @ use_formulas (snd_map f2) @ use_pattern q |> List.dedup_and_sort ~compare:String.compare
-    | TCDefinition (_, _, _, f1, exceptions, scopes, p, _, _) ->
+    | TCDefinition (_, _, _, f1, p, exceptions, scopes, _, _) ->
       use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p |> List.dedup_and_sort ~compare:String.compare
     | TCDefinitionDis (disjuncts, _) ->
       use_disjuncts disjuncts |> List.dedup_and_sort ~compare:String.compare
@@ -712,9 +717,25 @@ let type_pattern_with_formulas itl_srp (s:Tlex.tprog) (pos:Lexing.position) pols
     List.map fs ~f:(types s pols t)
     |> List.fold ~f:conj ~init:(Possible CTT)
   in
-  let type_for_at_least_one_formula fs t =
-    List.map fs ~f:(types s pols t)
-    |> List.fold ~f:disj ~init:(Impossible (EPattern (pos, "none of the provided formulas can be made Sup", p, fs, enftype)))
+  let type_for_at_least_one_formula fs t = match itl_srp with
+    | Some (itvls, stricts) -> (* transparency requires that other formulas are SRP *)
+      let fs' = List.map fs ~f:snd in
+      let srp = strictly_relative_past ~itl_itvs_and_strict:(itvls, stricts) in
+      let are_others_srp = Util.lists_with_one_removed fs' |> List.map ~f:(List.for_all ~f:srp) in
+      let is_srp_to_verdict (pos, f) = function
+        | true -> Possible CTT
+        | false ->
+          let msg = Printf.sprintf "the conjunction of exception predicates is transparently enforceable when all predicates besides the one used for enforcement (%s) are SRP, but at least one of them is not SRP" (Tformula.to_string f) in
+          Impossible (EFormulasTransparent (pos, Some ("AND", msg), fs', t))
+      in
+      let types_and_srp f srp = conj (types s pols t f) (is_srp_to_verdict f srp) in
+      List.fold_left (List.map2_exn fs are_others_srp ~f:types_and_srp) ~init:(Possible CTT) ~f:disj
+    | None ->
+      let init =
+        let msg =  "none of the provided formulas can be made Sup" in
+        Impossible (EPattern (pos, msg, p, fs, enftype))
+      in
+      List.map fs ~f:(types s pols t) |> List.fold ~f:disj ~init:init
   in
   match enftype with
   | Cau ->
@@ -756,23 +777,6 @@ let get_scope_predicates (s: Tlex.tprog) rule_idx =
   let scope_predicates = List.map scope_idxs ~f:(try Map.find_exn s.scope_predicates with _ -> assert false) in
   let scope_positions = List.map scope_idxs ~f:(fun x -> try snd (Map.find_exn s.rule_tree.label_of_rule x) with _ -> assert false) in
   List.zip_exn scope_positions scope_predicates
-
-let fv_pattern pos1 fs = function
-  | TPPresent
-  | TPEventually _
-  | TPAlways _
-  | TPOnce _
-  | TPHistorically _ ->
-    let fvs = List.map fs ~f:(fun (pos2, f) -> pos2, f, Tformula.fv f) in
-    let filter_fun (_,_,v) = if Set.is_empty v then false else true in
-    let non_empty = List.filter fvs ~f:filter_fun in
-    non_empty
-  | TPUntil (_,f)
-  | TPSince (_,f) ->
-    let fvs = List.map ((pos1,f)::fs) ~f:(fun (pos2, f) -> pos2, f, Tformula.fv f) in
-    let filter_fun (_,_,v) = if Set.is_empty v then false else true in
-    let non_empty = List.filter fvs ~f:filter_fun in
-    non_empty
 
 let pols_from_rule_constraints pos rcs =
   let add_policy_constraint enftype pols = function
@@ -1020,6 +1024,54 @@ let update_pols_with_transparency_conditions pols pols_tr =
     | `Both (enftype, (_, tr)) -> Some (enftype, tr)
   )
 
+let strict_of_pattern_with_formulas stricts fs p =
+  let strict_of_formulas itv fut fs = List.map fs ~f:snd
+                              |> List.for_all ~f:(strict ~itl_strict:stricts ~itv:itv ~fut:fut)
+  in
+  match p with
+  | TPPresent -> strict_of_formulas (Zinterval.singleton 0) false fs
+  | TPEventually i
+    | TPAlways i -> strict_of_formulas (Zinterval.of_interval i) true fs
+  | TPOnce i
+    | TPHistorically i -> strict_of_formulas (Zinterval.inv (Zinterval.of_interval i)) false fs
+  | TPUntil (i, g) -> (strict_of_formulas (Zinterval.inv (Zinterval.of_interval i)) true fs)
+                      || (strict ~itl_strict:stricts ~itv:(Zinterval.inv (Zinterval.of_interval i)) ~fut:true g)
+  | TPSince (i, g) -> (strict_of_formulas (Zinterval.inv (Zinterval.of_interval i)) false fs)
+                      || (strict ~itl_strict:stricts ~itv:(Zinterval.inv (Zinterval.of_interval i)) ~fut:false g)
+
+let relative_interval_of_pattern_with_formulas itvls fs p =
+  let j =
+    let aux (_, f) = relative_interval ~itl_itvs:itvls f in
+    List.fold_left (List.map fs ~f:aux) ~init:Zinterval.full ~f:Zinterval.lub
+  in
+  match p with
+  | TPPresent -> j
+  | TPEventually i
+  | TPAlways i ->
+    let i = Zinterval.of_interval i in
+    Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
+  | TPOnce i
+  | TPHistorically i ->
+    let i = Zinterval.of_interval i |> Zinterval.inv in
+    Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
+  | TPUntil (i, g) ->
+    let i = Zinterval.of_interval i in
+    let k = relative_interval ~itl_itvs:itvls g in
+    (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i) k)
+      (Zinterval.sum i j))
+  | TPSince (i, g) ->
+    let i = Zinterval.of_interval i in
+    let k = relative_interval ~itl_itvs:itvls g in
+    (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i) j)
+      (Zinterval.sum i k))
+
+let strictly_relative_past_of_pattern_with_formulas (itvls, stricts) fs p =
+  (Zinterval.is_nonpositive (relative_interval_of_pattern_with_formulas itvls fs p))
+  && (strict_of_pattern_with_formulas stricts fs p)
+
+let srp_of_pattern_with_formulas (itvls, stricts) fs p =
+  strictly_relative_past_of_pattern_with_formulas (itvls, stricts) fs p
+
 let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict) rule =
   let pols = Tlex.pol_map s
              |> Map.map ~f:Lex.pol_to_enftype
@@ -1031,7 +1083,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
       Util.enf_error err_msg None
   in
   match rule with
-    | TCImplication (_, _, pos, f1, exceptions, scopes, p, f2, q, rt, rcs) ->
+    | TCImplication (_, _, pos, f1, p, exceptions, scopes, f2, q, rt, rcs) ->
       begin match rt with
         | Vanilla ->
           vanilla_rule_constraints_warning pos rcs;
@@ -1077,29 +1129,117 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
           let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
             parse_rule_constraints pos pols (List.length f1) rcs
           in
+          let srp = strictly_relative_past ~itl_itvs_and_strict:itl_itvs_and_stricts in
+          let srp_exceptions = List.for_all exceptions ~f:(fun (_, f) -> srp f) in
+          let srp_scopes = List.for_all scopes ~f:(fun (_, f) -> srp f) in
+          let srp_conditions = srp_of_pattern_with_formulas itl_itvs_and_stricts f1 p in
+          let srp_effects = srp_of_pattern_with_formulas itl_itvs_and_stricts f2 p in
           let verdict_exceptions =
-            if cause_exceptions then type_exceptions None s pos pols exceptions
+            if cause_exceptions then
+              if srp_scopes && srp_conditions && srp_effects then
+                type_exceptions None s pos pols exceptions
+              else
+                let not_srp = match srp_scopes, srp_conditions, srp_effects with
+                  (* TODO: maybe write a function to simplify the construction of such strings *)
+                  | true, true, true -> assert false
+                  | false, true, true -> "scopes"
+                  | true, false, true -> "conditions"
+                  | true, true, false -> "effects"
+                  | false, false, true -> "scopes and conditions"
+                  | false, true, false -> "scopes and effects"
+                  | true, false, false -> "conditions and effects"
+                  | false, false, false -> "scopes, conditions, and effects"
+                in
+                Impossible (ERule (pos, "can't make exceptions Cau, because " ^ not_srp ^ " are not SRP"))
             else Impossible (ERule (pos, "exceptions are not marked as causing"))
           in
           let verdict_scopes =
-            if suppress_scopes then type_scopes None s pos pols scopes
+            if suppress_scopes then
+              if srp_exceptions && srp_conditions && srp_effects then
+                type_scopes None s pos pols scopes
+              else
+                let not_srp = match srp_exceptions, srp_conditions, srp_effects with
+                  (* TODO: maybe write a function to simplify the construction of such strings *)
+                  | true, true, true -> assert false
+                  | false, true, true -> "exceptions"
+                  | true, false, true -> "conditions"
+                  | true, true, false -> "effects"
+                  | false, false, true -> "exceptions and conditions"
+                  | false, true, false -> "exceptions and effects"
+                  | true, false, false -> "conditions and effects"
+                  | false, false, false -> "exceptions, conditions, and effects"
+                in
+                Impossible (ERule (pos, "can't make scopes Sup, because " ^ not_srp ^ " are not SRP"))
             else Impossible (ERule (pos, "scopes are not marked as suppressing"))
           in
           let verdict_references = disj verdict_exceptions verdict_scopes in
           let verdict_conditions =
             if suppress_conditions then
-              type_pattern_with_formulas tr s pos pols Sup f1 p
-              |> disj verdict_references
+              if srp_exceptions && srp_scopes && srp_effects then
+                type_pattern_with_formulas tr s pos pols Sup f1 p
+                |> disj verdict_references
+              else
+                let not_srp = match srp_exceptions, srp_scopes, srp_effects with
+                  (* TODO: maybe write a function to simplify the construction of such strings *)
+                  | true, true, true -> assert false
+                  | false, true, true -> "exceptions"
+                  | true, false, true -> "scopes"
+                  | true, true, false -> "effects"
+                  | false, false, true -> "exceptions and scopes"
+                  | false, true, false -> "exceptions and effects"
+                  | true, false, false -> "scopes and effects"
+                  | false, false, false -> "exceptions, scopes, and effects"
+                in
+                Impossible (ERule (pos, "can't make conditions Sup, because " ^ not_srp ^ " are not SRP"))
             else
               match suppress_indices with
                 | Some indices ->
-                  let f1_filtered = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
-                  type_pattern_with_formulas tr s pos pols Sup f1_filtered p
+                  let used = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
+                  let unused = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:(fun x y -> Int.equal x y |> not)) in
+                  let srp_conditions_unused = srp_of_pattern_with_formulas itl_itvs_and_stricts unused p in
+                  if srp_conditions_unused && srp_exceptions && srp_scopes && srp_effects then
+                    type_pattern_with_formulas tr s pos pols Sup used p
+                  else
+                    let not_srp = match srp_conditions_unused, srp_exceptions, srp_scopes, srp_effects with
+                    (* TODO: maybe write a function to simplify the construction of such strings *)
+                      | true, true, true, true -> assert false
+                      | false, true, true, true -> "unused conditions"
+                      | true, false, true, true -> "exceptions"
+                      | true, true, false, true -> "scopes"
+                      | true, true, true, false -> "effects"
+                      | false, false, true, true -> "unused conditions and exceptions"
+                      | false, true, false, true -> "unused conditions and scopes"
+                      | false, true, true, false -> "unused conditions and effects"
+                      | true, false, false, true -> "exceptions and scopes"
+                      | true, false, true, false -> "exceptions and effects"
+                      | true, true, false, false -> "scopes and effects"
+                      | true, false, false, false -> "exceptions, scopes, and effects"
+                      | false, false, false, true -> "unused conditions, exceptions and scopes"
+                      | false, false, true, false -> "unused conditions, exceptions and effects"
+                      | false, true, false, false -> "unused conditions, scopes and effects"
+                      | false, false, false, false -> "unused conditions, exceptions, scopes, and effects"
+                    in
+                    Impossible (ERule (pos, "can't make selected conditions Sup, because " ^ not_srp ^ " are not SRP"))
                 | None ->
                   Impossible (ERule (pos, "no conditions are marked as suppressing"))
           in
           let verdict_effects =
-            if cause_effects then type_pattern_with_formulas tr s pos pols Cau f2 q
+            if cause_effects then
+              if srp_exceptions && srp_scopes && srp_conditions then
+                type_pattern_with_formulas tr s pos pols Cau f2 q
+              else
+                let not_srp = match srp_exceptions, srp_scopes, srp_conditions with
+                  (* TODO: maybe write a function to simplify the construction of such strings *)
+                  | true, true, true -> assert false
+                  | false, true, true -> "exceptions"
+                  | true, false, true -> "scopes"
+                  | true, true, false -> "conditions"
+                  | false, false, true -> "exceptions and scopes"
+                  | false, true, false -> "exceptions and conditions"
+                  | true, false, false -> "scopes and conditions"
+                  | false, false, false -> "exceptions, scopes, and conditions"
+                in
+                Impossible (ERule (pos, "can't make effects Cau, because " ^ not_srp ^ " are not SRP"))
             else Impossible (ERule (pos, "effects are not marked as causing"))
           in
           let verdict_rule_implication = conj verdict_conditions verdict_effects |> conj verdict in
@@ -1110,7 +1250,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
               Util.enf_error err_msg (Some pos)
           end
       end
-    | TCDefinition (idx, _, _, f1, exceptions, scopes, p, _, f2) ->
+    | TCDefinition (idx, _, _, f1, p, exceptions, scopes, _, f2) ->
       let e = get_predicate_name f2 in
       let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
       let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
@@ -1153,7 +1293,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
           | None -> Obs, None (* TODO: is Obs desired here, or should it be something else like Non? *)
         end in
         let pols_tr = update_pols_with_transparency_conditions pols v_pols in
-        let type_disjunct (_, _, pos, f, exceptions, scopes, cs, p) =
+        let type_disjunct (_, _, pos, f, p, exceptions, scopes, cs) =
           let f = f @ (add_pos pos cs) in (* combine renaming conditions with the actual conditions of the constitutive rule *)
           let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
           let verdict_exceptions = type_pattern_with_formulas itl_srp s pos pols_tr t ex_neg TPPresent in
@@ -1245,7 +1385,7 @@ let strict_of_pattern_with_formulas itl_strict f: tpattern -> bool = function
     strict_of_formula_conjunct itl_strict f
     && strict ~itl_strict:itl_strict g
 
-let relative_interval_of_disjunct itl_itvs (_, _, _, f, e, s, _, p) =
+let relative_interval_of_disjunct itl_itvs (_, _, _, f, p, e, s, _) =
   (* The relative interval of the "variable renaming conditions" will always be 0 and is thus ignored *)
   let conditions_itv = relative_interval_of_pattern_with_formulas itl_itvs f p in
   let exceptions_itv = relative_interval_of_pattern_with_formulas itl_itvs e TPPresent in
@@ -1254,22 +1394,22 @@ let relative_interval_of_disjunct itl_itvs (_, _, _, f, e, s, _, p) =
 
 let relative_interval_itl itl_itvs = function
   (* requires that all relative intervals of events used in the given rule have already been computed *)
-  | TCDefinition (_, _, _, f, e, s, p, _, Tformula.TPredicate (name, _, _)) ->
+  | TCDefinition (_, _, _, f, p, e, s, _, Tformula.TPredicate (name, _, _)) ->
     let conditions_itv = relative_interval_of_pattern_with_formulas itl_itvs f p in
     let exceptions_itv = relative_interval_of_pattern_with_formulas itl_itvs e TPPresent in
     let scopes_itv = relative_interval_of_pattern_with_formulas itl_itvs s TPPresent in
     let itv = Zinterval.lub conditions_itv exceptions_itv |> Zinterval.lub scopes_itv in
     Map.add_exn itl_itvs ~key:name ~data:itv
-  | TCDefinition _ -> assert false
+  | TCDefinition _ -> assert false (* final formula must be a predicate *)
   | TCDefinitionDis (disjuncts, Tformula.TPredicate (name, _, _)) ->
     let relative_itvs_disjuncts = List.map (Map.data disjuncts) ~f:(relative_interval_of_disjunct itl_itvs) in
     let itv = List.fold relative_itvs_disjuncts ~init:Zinterval.full ~f:Zinterval.lub in
     Map.add_exn itl_itvs ~key:name ~data:itv
-  | TCDefinitionDis _ -> assert false
+  | TCDefinitionDis _ -> assert false (* final formula must be a predicate *)
   | _ -> itl_itvs
 
 
-let strict_of_disjunct itl_strict (_, _, _, f, e, s, _, p) =
+let strict_of_disjunct itl_strict (_, _, _, f, p, e, s, _) =
   (* The "variable renaming conditions" will always be strict and are thus ignored *)
   let conditions_strict = strict_of_pattern_with_formulas itl_strict f p in
   let exceptions_strict = strict_of_pattern_with_formulas itl_strict e TPPresent in
@@ -1278,7 +1418,7 @@ let strict_of_disjunct itl_strict (_, _, _, f, e, s, _, p) =
 
 let strict_itl itl_strict = function
   (* requires that all "strictness"-constraints of events used in the given rule have already been computed *)
-  | TCDefinition (_, _, _, f, e, s, p, _, Tformula.TPredicate (name, _, _)) ->
+  | TCDefinition (_, _, _, f, p, e, s, _, Tformula.TPredicate (name, _, _)) ->
     let conditions_strict = strict_of_pattern_with_formulas itl_strict f p in
     let exceptions_strict = strict_of_pattern_with_formulas itl_strict e TPPresent in
     let scopes_itv = strict_of_pattern_with_formulas itl_strict s TPPresent in
@@ -1359,7 +1499,7 @@ let combine_constitutive_rules (rules: (Lexing.position * int * trule * (Lexing.
   let extract_terms (_,_,_,_,_,_,_,_,terms) : Tformula.Term.t list = terms in
   let to_tr_def_dis ((name,definitions): (string * 'z)) =
     let add_disjunct_to_map ((m, k): (int, 'x, 'y) Map.t * int) (idx, trt, pos, f, exceptions, scopes, cs, p, _) =
-      let data = (idx, trt, pos, f, exceptions, scopes, cs, p) in
+      let data = (idx, trt, pos, f, p, exceptions, scopes, cs) in
       Map.add_exn m ~key:k ~data:data, k+1
     in
     let disjunction = List.fold definitions
@@ -1385,11 +1525,11 @@ let create_def_rules tprog =
       let scopes = get_scope_predicates tprog idx in
       begin match trule with
         | TScope (f1, p, r, f2)
-          -> Some (TCDefinition (idx, TRTScope, pos, f1, exceptions, scopes, p, r, f2))
+          -> Some (TCDefinition (idx, TRTScope, pos, f1, p, exceptions, scopes, r, f2))
         | TException (f1, p, r, f2)
-          -> Some (TCDefinition (idx, TRTException, pos, f1, exceptions, scopes, p, r, f2))
+          -> Some (TCDefinition (idx, TRTException, pos, f1, p, exceptions, scopes, r, f2))
         | TExceptionC (f1, p, r, f2, _)
-          -> Some (TCDefinition (idx, TRTExceptionC, pos, f1, exceptions, scopes, p, r, f2))
+          -> Some (TCDefinition (idx, TRTExceptionC, pos, f1, p, exceptions, scopes, r, f2))
         | _ -> None
       end
     | _ -> None)
@@ -1401,9 +1541,9 @@ let create_imp_rules tprog =
       let scopes = get_scope_predicates tprog idx in
       begin match trule with
         | TObligation (f1, p, f2, q, rt, rcs)
-          -> Some (TCImplication (idx, TRTObligation, pos, f1, exceptions, scopes, p, f2, q, rt, rcs))
+          -> Some (TCImplication (idx, TRTObligation, pos, f1, p, exceptions, scopes, f2, q, rt, rcs))
         | TPermission (f1, p, f2, q, rt, rcs)
-          -> Some (TCImplication (idx, TRTPermission, pos, f1, exceptions, scopes, p, f2, q, rt, rcs))
+          -> Some (TCImplication (idx, TRTPermission, pos, f1, p, exceptions, scopes, f2, q, rt, rcs))
         | _ -> None
       end
     | _ -> None)
@@ -1462,7 +1602,7 @@ let convert_pattern_with_formulas (s: tprog) (enftype: EnfType.t) pols (fs: (Lex
   | _ -> assert false
 
 let convert_compilation_rule (s: tprog) pols = function
-  | TCImplication (idx, trt, pos, f1, exceptions, scopes, p, f2, q, rt, rcs) ->
+  | TCImplication (idx, trt, pos, f1, p, exceptions, scopes, f2, q, rt, rcs) ->
     let f1s, p_e = convert_pattern_with_formulas s Sup pols [f1;exceptions;scopes] p in
     let f2s, q_e = convert_pattern_with_formulas s Cau pols [f2] q in
     let f1_e, e_e, s_e = match f1s with
@@ -1474,8 +1614,8 @@ let convert_compilation_rule (s: tprog) pols = function
       | _ -> assert false
     in
     let ert = erule_type_from_trule_type trt in
-    ECImplication (idx, ert, pos, f1_e, e_e, s_e, p_e, f2_e, q_e, rt, rcs)
-  | TCDefinition (idx, trt, pos, f1, exceptions, scopes, p, refs, f2) ->
+    ECImplication (idx, ert, pos, f1_e, p_e, e_e, s_e, f2_e, q_e, rt, rcs)
+  | TCDefinition (idx, trt, pos, f1, p, exceptions, scopes, refs, f2) ->
     let pred_name = match f2 with
       | Tformula.TPredicate (name, _, _) -> name
       | _ -> assert false
@@ -1494,7 +1634,7 @@ let convert_compilation_rule (s: tprog) pols = function
       | None -> Util.enf_error ("Internal predicate \"" ^ Tformula.to_string f2 ^ "\" cannot be converted.") None (* TODO, should this be replaced with assert false/ why might this happen, could it even happen after enforcement checking? *)
     in
     let ert = erule_type_from_trule_type trt in
-    ECDefinition (idx, ert, pos, f1_e, e_e, s_e, p_e, refs, f2_e) 
+    ECDefinition (idx, ert, pos, f1_e, p_e, e_e, s_e, refs, f2_e) 
   | TCDefinitionDis (disjuncts, g) ->
     let pred_name = match g with
       | Tformula.TPredicate (name, _, _) -> name
@@ -1508,7 +1648,7 @@ let convert_compilation_rule (s: tprog) pols = function
       | Some g_e -> g_e
       | None -> Util.enf_error ("Internal predicate \"" ^ Tformula.to_string g ^ "\" cannot be converted.") None (* TODO, should this be replaced with assert false/ why might this happen, could it even happen after enforcement checking? *)
     in
-    let convert_disjunct ((idx, trt, pos, f1, exceptions, scopes, cs, p): (int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * Tformula.t list * tpattern)) =
+    let convert_disjunct (idx, trt, pos, f1, p, exceptions, scopes, cs) =
       let cs = List.map cs ~f:(fun c -> Lexing.dummy_pos, c) in
       let f1s, p_e = convert_pattern_with_formulas s enftype pols [f1;exceptions;scopes;cs] p in
       let f1_e, e_e, s_e, cs_e = match f1s with
@@ -1516,7 +1656,7 @@ let convert_compilation_rule (s: tprog) pols = function
         | _ -> assert false
       in
       let ert = erule_type_from_trule_type trt in
-      idx, ert, pos, f1_e, e_e, s_e, cs_e, p_e
+      idx, ert, pos, f1_e, p_e, e_e, s_e, cs_e
     in
     let disjuncts_e = Map.map disjuncts ~f:convert_disjunct in
     ECDefinitionDis (disjuncts_e, g_e)
