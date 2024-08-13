@@ -1,14 +1,15 @@
 open Core
 open Lex_lib
 
-let loop filename mode f o () =
+(* TODO: introduce the upper bound `b` as a command line paramter - analogous to WhyEnf *)
+let loop ?(b=Interval.C Lextime.Span.zero) filename mode f o () =
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
   let filepath = Filename.dirname filename
   and basename = Filename.basename filename in
 
   match mode with
   | None | Some "mfotl" -> begin
-      let eprog = Modules.do_type [lexpath] filepath basename in
+      let eprog = Modules.do_type [lexpath] b filepath basename in
       print_endline "Parsed and typed:\n";
       Elex.print_eprog eprog;
       print_endline "Compiled:\n";
@@ -17,7 +18,7 @@ let loop filename mode f o () =
       (* compile correctly typed program *)
     end
   | Some "doc" -> begin
-      let eprog = Modules.do_type [lexpath] filepath basename in
+      let eprog = Modules.do_type [lexpath] b filepath basename in
       let outname = Option.fold o ~init:(filename ^ "_doc.html") ~f:(fun _ x -> x) in
       Doc.to_file basename outname eprog
     end

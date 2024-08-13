@@ -5,7 +5,7 @@ open Eformula
 
 
 let rec html_of_trm ?(l=0) = function
-  | Tformula.Term.TVar x -> ident x
+  | Tformula.TTerm.TVar x -> ident x
   | TConst d -> const (Dom.to_string d)
   | TApp (f, trms) -> Printf.sprintf "%s(%s)" (ident f) (html_of_trms trms)
   | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
@@ -18,7 +18,7 @@ let rec html_of_trm ?(l=0) = function
                            (html_of_trm ~l:l' t'.trm)
   | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
   | TRecord kvs ->
-     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.Term.(v.trm) in
+     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.TTerm.(v.trm) in
      Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
 
@@ -38,8 +38,8 @@ let rec html_of_formula_ formula_id l f =
     match f.f with
     | ETT -> const "true"
     | EFF -> const "false"
-    | EEqConst (x, Dom.Bool true) -> Printf.sprintf "%s" (html_of_trm x.trm)
-    | EEqConst (x, c) -> Printf.sprintf "%s = %s" (html_of_trm x.trm) (const (Dom.to_string c))
+    | EEqConst (x, (Dom.Bool true, _)) -> Printf.sprintf "%s" (html_of_trm x.trm)
+    | EEqConst (x, (c, _)) -> Printf.sprintf "%s = %s" (html_of_trm x.trm) (const (Dom.to_string c))
     | EPredicate (r, trms, Event (_, Functional)) ->
        let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
        Printf.sprintf "%s(%s) = %s"
@@ -124,7 +124,10 @@ let html_of_pattern formula_id = function
 
 let section_id l = "lex-section-" ^ Label.doc_id l 
 
-let html_of_reference (l, (rs, rule)) =
+let html_of_reference (eref: eref_expr) =
+  let l = eref.label in
+  let rs = eref.ref.sks in
+  let rule = eref.ref.rule in
   let rule_id = match rule with
     | Some r -> " " ^ span "lex-section-kind" "rule" ^ r
     | None ->  ""
@@ -222,22 +225,22 @@ let html_of_erule compilation_rules rule_id erule =
   match erule with
   | EObligation _ ->
     let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
-    string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+    string_of_imp_rule (verb_of_erule erule) f p g q rcs rt
   | EPermission _ ->
     let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
-    string_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+    string_of_imp_rule (verb_of_erule erule) f p g q rcs rt
   | EConstitutive _ ->
     let f, p, g = get_constitutive_params compilation_rules erule in
-    string_of_cons_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g)
+    string_of_cons_rule (verb_of_erule erule) f p g
   | EException _ ->
     let f, p, refs = get_exception_params compilation_rules erule in
-    string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs)
+    string_of_ref_rule (verb_of_erule erule) f p refs
   | EExceptionC _ ->
     let f, p, refs, g = get_exceptionc_params compilation_rules erule in
-    string_of_refc_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs) (List.map ~f:snd g)
+    string_of_refc_rule (verb_of_erule erule) f p refs g
   | EScope _ ->
     let f, p, refs = get_exception_params compilation_rules erule in
-    string_of_ref_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l, x)) refs)
+    string_of_ref_rule (verb_of_erule erule) f p refs
 
 let html_of_tannot = function
   | Tlex.TALex s -> s
@@ -307,12 +310,12 @@ let html_of_type_fixes rule_id = function
        )
 
 let html_of_label label =
-  let html_of_label_reference rs =
-    let html_of_section_kind_and_name rs' (s, n) =
-      let rs' = rs' @ [(s, n)] in
-      rs', a ("#lex-section-" ^ Label.id_of_reference rs') "lex-section-link" (Lex.string_of_section_kind s ^ " " ^ n) in
-    String.concat ~sep:" / " (snd (List.fold_map ~init:[] ~f:html_of_section_kind_and_name rs)) in
-  let reference = Util.butlast (fst (Label.reference_of_label label)) in
+  let html_of_label_reference sks =
+    let html_of_section_kind_and_name sks' (s, n) =
+      let sks' = sks' @ [(s, n)] in
+      sks', a ("#lex-section-" ^ Label.id_of_sks sks') "lex-section-link" (Lex.string_of_section_kind s ^ " " ^ n) in
+    String.concat ~sep:" / " (snd (List.fold_map ~init:[] ~f:html_of_section_kind_and_name sks)) in
+  let reference = Util.butlast (Label.reference_of_label label).sks in
   if List.is_empty reference then "" else span "lex-section-links" (html_of_label_reference reference)
 
 let html_of_estmt eprog =

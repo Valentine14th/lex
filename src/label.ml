@@ -156,7 +156,7 @@ let reference_of_label label =
   let point = aux (Point 0) label.point in
   let subpoint = aux (Subpoint 0) label.subpoint in
   let levels = List.rev (List.concat (List.map ~f:List.rev [subpoint; point; paragraph; article; section; chapter; title; law])) in
-  levels, label.rule_id
+  {sks=levels; rule=label.rule_id}
 
 let string_of_label l = string_of_reference (reference_of_label l)
 
@@ -217,14 +217,13 @@ let qualified_id l =
     (Etc.sanitize_string (qualified_name_of_level_simple l.subpoint))
     (Etc.sanitize_string (string_of_rule_id2 l.rule_id))
 
-let id_of_reference reference =
+let id_of_sks sks =
   let f (s, n) = Etc.sanitize_string (Lex.string_of_section_kind s ^ "-" ^ n) in
-  String.concat ~sep:"-" (List.map reference ~f)
+  String.concat ~sep:"-" (List.map sks ~f)
   
 let reference_id l =
-  let reference, rule_id_opt = reference_of_label l in
-  let suffix = string_of_rule_id3 rule_id_opt in
-  id_of_reference reference ^ suffix
+  let ref = reference_of_label l in
+  id_of_sks ref.sks ^ string_of_rule_id3 ref.rule
 
 let doc_id l =
   match l.rule_id with
@@ -285,6 +284,10 @@ module RuleTree = struct
   type level_tree =
     | Intermediate of ((level_tree * rule_map) LocationMap.t)
     | Leaf
+
+  type rtref_expr = { label: t;
+                      ref: Lex.reference;
+                      pos: Lexing.position }
 
   type s = 
     {
@@ -487,13 +490,13 @@ module RuleTree = struct
 
   let string_of_rule_idx s i = string_of_reference (reference_of_label (fst (Map.find_exn s.label_of_rule i)))
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
-  let add_exception idx refs s =
-    let rule_idxs = List.concat_map refs ~f:(fun (pos, l, _) -> find_rules_in_tree pos l s.tree) in
+  let add_exception idx (refs: rtref_expr list) s =
+    let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
     if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
     { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
-  let add_scope idx refs s =
-    let rule_idxs = List.concat_map refs ~f:(fun (pos, l, _) -> find_rules_in_tree pos l s.tree) in
+  let add_scope idx (refs: rtref_expr list) s =
+    let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
     if List.is_empty rule_idxs then Util.warning ("No rules found for scope " ^ string_of_rule_idx s idx) None;
     { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 

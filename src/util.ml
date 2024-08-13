@@ -6,11 +6,17 @@ let string_of_pos pos =
   sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
   (* pos.pos_cnum *)
 
+let string_of_positions positions =
+  List.map positions ~f:string_of_pos |> String.concat ~sep:"\n"
+
 let import_error (msg: string) (pos: Lexing.position) =
   eprintf "Import error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
 
-let type_error (msg: string) (pos: Lexing.position) =
-  eprintf "Type error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+let type_error (msg: string) (pos: Lexing.position list) =
+  match pos with
+  | [] -> eprintf "Type error: %s\n" msg; exit (-1)
+  | [pos] -> eprintf "Type error at %s: %s\n" (string_of_pos pos) msg; exit (-1)
+  | positions -> eprintf "Type error: %s\nat locations:\n%s\n" msg (string_of_positions positions); exit (-1)
 
 let label_error (msg: string) (pos: Lexing.position) =
   eprintf "Label error at %s: %s\n" (string_of_pos pos) msg; exit (-1)

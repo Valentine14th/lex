@@ -56,7 +56,6 @@
        "enforceable"  , TENFORCEABLE ;
        "internal"     , TINTERNAL ;
        "fix"          , FIX ;
-       "whenever"     , WHENEVER ;
        "oblige"       , OBLIGE ;
        "permit"       , PERMIT ;
        "constitute"   , CONSTITUTE ;
@@ -154,6 +153,7 @@ rule read =
   | "point"        { POINT lexbuf.lex_start_p }
   | "subpoint"     { SUBPOINT lexbuf.lex_start_p }
   | "rule"         { RULE lexbuf.lex_start_p }
+  | "whenever"     { WHENEVER lexbuf.lex_start_p }
   | "note"         { NOTE lexbuf.lex_start_p }
   | "false"        { CFALSE lexbuf.lex_start_p }
   | "true"         { CTRUE lexbuf.lex_start_p }
@@ -191,7 +191,7 @@ rule read =
       }
   | float1 | float2 { FLOAT (lexbuf.lex_start_p, float_of_string (Lexing.lexeme lexbuf)) }
   | int            { INT (lexbuf.lex_start_p, int_of_string (Lexing.lexeme lexbuf)) }
-  | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s) { SPAN (lexbuf.lex_start_p, Lextime.Span.of_value_with_unit (int_of_string i) lexbuf.lex_start_p s) }
+  | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s) { SPAN (lexbuf.lex_start_p, Lextime.Span.of_value_with_unit (int_of_string i) [lexbuf.lex_start_p] s) }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | comment? (newline|white)* eof   { EOF }
 

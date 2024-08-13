@@ -17,10 +17,10 @@ open Elex
 
 let rec is_past_guarded s x p f =
   let r =
-  match f with
+  match f.f with
   | TTT | TFF -> false
-  | TEqConst (x', y) -> p && Term.equal_core (Term.TVar x) x'.trm && Term.is_const y.trm
-  | TPredicate (_, ts, _) -> List.exists ~f:(fun t -> Term.equal_core (Term.TVar x) t.trm) ts
+  | TEqConst (x', y) -> p && TTerm.equal_core (TTerm.TVar x) x'.trm && TTerm.is_const y.trm
+  | TPredicate (_, ts, _) -> List.exists ~f:(fun t -> TTerm.equal_core (TTerm.TVar x) t.trm) ts
   | TAgg (_, _, _, y, f) -> List.mem y x ~equal:String.equal && is_past_guarded s x p f
   | TNeg f -> is_past_guarded s x (not p) f
   | TAnd (_, fs) when p -> List.exists fs ~f:(is_past_guarded s x p)
@@ -51,46 +51,105 @@ module Errors = struct
 
   type error =
     | ECast of string * EnfType.t * bool * EnfType.t * bool
-    | EFormula of Lexing.position * string option * t * EnfType.t
-    | EFormulaTransparent of Lexing.position * string option * t * EnfType.t
-    | EFormulasTransparent of Lexing.position * (string * string) option * t list * EnfType.t
+    | EFormula of string option * t * EnfType.t
+    | EFormulaTransparent of string option * t * EnfType.t
+    | EFormulasTransparent of (string * string) option * t list * EnfType.t
     | EConj of error * error
     | EDisj of error * error
-    | EInit of Lexing.position option
-    | EPattern of Lexing.position * string * tpattern * (Lexing.position * Tformula.t) list * EnfType.t
+    (* | EInit of Lexing.position option *)
+    | EPattern of Lexing.position * string * tpattern * Tformula.t list * EnfType.t
     | ERule of Lexing.position * string
 
   let rec to_string ?(n=0) e =
     let sp = Util.spaces (2*n) in
     let lb = "\n" ^ sp in
     begin match e with
-      | ECast (e, t', _, t, false) -> Printf.sprintf "make %s %s (currently, it has type %s)"
-                              e (EnfType.to_string t) (EnfType.to_string t')
-      | ECast (e, t', false, t, true) -> Printf.sprintf "make %s %s:Transparent (currently, it has type %s, transparency is not the issue as it gets assumed)"
-                              e (EnfType.to_string t) (EnfType.to_string t')
-      | ECast (e, t', true, t, true) -> Printf.sprintf "make %s %s:Transparent (currently, it has type %s:Transparent)"
-                              e (EnfType.to_string t) (EnfType.to_string t')
-      | EFormula (pos, None, f, t) -> Printf.sprintf "make %s %s, but this is impossible at %s"
-                                    (Tformula.to_string f) (EnfType.to_string t) (Util.string_of_pos pos)
-      | EFormula (pos, Some s, f, t) -> Printf.sprintf "make %s %s, but this is impossible (%s) at %s"
-                                      (Tformula.to_string f) (EnfType.to_string t) s (Util.string_of_pos pos)
-      | EFormulaTransparent (pos, None, f, t) -> Printf.sprintf "make %s %s, but this is impossible at %s"
-                                    (Tformula.to_string f) (EnfType.to_string t) (Util.string_of_pos pos)
-      | EFormulaTransparent (pos, Some s, f, t) -> Printf.sprintf "make %s %s, but this is impossible (%s) at %s"
-                                      (Tformula.to_string f) (EnfType.to_string t) s (Util.string_of_pos pos)
-      | EFormulasTransparent (pos, None, fs, t) -> Printf.sprintf "make %s %s, but this is impossible at %s"
-                                    (List.map ~f:Tformula.to_string fs |> Util.string_of_string_list) (EnfType.to_string t) (Util.string_of_pos pos)
-      | EFormulasTransparent (pos, Some (op, s), fs, t) -> Printf.sprintf "make %s (%s) %s, but this is impossible (%s) at %s"
-                                      (List.map ~f:Tformula.to_string fs |> Util.string_of_string_list) op (EnfType.to_string t) s (Util.string_of_pos pos)
-      | EConj (f, g) -> Printf.sprintf "both%s* %s%sand%s* %s"
-                          lb (to_string ~n:(n+1) f) lb lb (to_string ~n:(n+1) g)
-      | EDisj (f, g) -> Printf.sprintf "either%s* %s%sor%s* %s"
-                          lb (to_string ~n:(n+1) f) lb lb (to_string ~n:(n+1) g)
-      | EInit (Some pos) -> Util.string_of_pos pos
-      | EInit None -> ""
-      | EPattern (pos, msg, p, _, t) -> Printf.sprintf "make %s %s, but this is impossible at %s because of %s" (* TODO: incorporate formual list in error message *)
-                                  (string_of_tpattern p) (EnfType.to_string t) (Util.string_of_pos pos) msg
-      | ERule (pos, msg) -> Printf.sprintf "%s at %s" msg (Util.string_of_pos pos)
+      | ECast (e, t', _, t, false) ->
+        Printf.sprintf
+          "make %s %s (currently, it has type %s)"
+          e
+          (EnfType.to_string t)
+          (EnfType.to_string t')
+      | ECast (e, t', false, t, true) ->
+        Printf.sprintf
+          "make %s %s:Transparent (currently, it has type %s, transparency is not the issue as it gets assumed)"
+          e
+          (EnfType.to_string t)
+          (EnfType.to_string t')
+      | ECast (e, t', true, t, true) ->
+        Printf.sprintf
+          "make %s %s:Transparent (currently, it has type %s:Transparent)"
+          e
+          (EnfType.to_string t)
+          (EnfType.to_string t')
+      | EFormula (None, f, t) ->
+        Printf.sprintf
+          "make %s %s, but this is impossible at\n %s\n"
+          (Tformula.to_string f)
+          (EnfType.to_string t)
+          (Util.string_of_positions f.positions)
+      | EFormula (Some s, f, t) ->
+        Printf.sprintf
+          "make %s %s, but this is impossible (%s) at:\n%s\n"
+          (Tformula.to_string f)
+          (EnfType.to_string t)
+          s
+          (Util.string_of_positions f.positions)
+      | EFormulaTransparent (None, f, t) ->
+        Printf.sprintf
+          "make %s %s, but this is impossible at:\n%s\n"
+            (Tformula.to_string f)
+            (EnfType.to_string t)
+            (Util.string_of_positions f.positions)
+      | EFormulaTransparent (Some s, f, t) ->
+          Printf.sprintf
+            "make %s %s (transparent), but this is impossible (%s) at:\n%s\n"
+            (Tformula.to_string f)
+            (EnfType.to_string t)
+            s
+            (Util.string_of_positions f.positions)
+      | EFormulasTransparent (None, fs, t) ->
+        Printf.sprintf
+          "make %s %s (transparent), but this is impossible at:\n%s\n"
+          (List.map ~f:Tformula.to_string fs |> Util.string_of_string_list)
+          (EnfType.to_string t)
+          (List.concat_map fs ~f:(fun f -> f.positions) |> Util.string_of_positions)
+      | EFormulasTransparent (Some (op, s), fs, t) ->
+          Printf.sprintf
+            "make the formulas %s under opreation %s %s (transparent), but this is impossible (%s) at:\n%s\n"
+            (List.map ~f:Tformula.to_string fs |> Util.string_of_string_list)
+            op
+            (EnfType.to_string t)
+            s
+            (List.concat_map fs ~f:(fun f -> f.positions) |> Util.string_of_positions)
+      | EConj (f, g) ->
+        Printf.sprintf
+          "both%s* %s%sand%s* %s"
+          lb
+          (to_string ~n:(n+1) f)
+          lb
+          lb
+          (to_string ~n:(n+1) g)
+      | EDisj (f, g) ->
+        Printf.sprintf
+          "either%s* %s%sor%s* %s"
+          lb
+          (to_string ~n:(n+1) f)
+          lb
+          lb
+          (to_string ~n:(n+1) g)
+      | EPattern (pos, msg, p, _, t) ->
+        Printf.sprintf
+          "make %s %s, but this is impossible at %s because of %s" (* TODO: incorporate formual list in error message *)
+          (string_of_tpattern p)
+          (EnfType.to_string t)
+          (Util.string_of_pos pos)
+          msg
+      | ERule (pos, msg) ->
+        Printf.sprintf
+          "%s at %s"
+          msg
+          (Util.string_of_pos pos)
     end
 end
 
@@ -130,6 +189,14 @@ module Constraints = struct
     | _, Impossible _ -> c
     | Possible CTT, _ | _, Possible CTT -> Possible CTT
     | Possible c, Possible d -> Possible (CDisj (c, d))
+
+  let conj' = function
+    | [] -> Possible CTT
+    | c::cs -> List.fold cs ~init:c ~f:conj
+
+  let disj' = function
+    | [] -> Possible CFF
+    | c::cs -> List.fold cs ~init:c ~f:disj
 
   let rec cartesian a = function
       [] -> []
@@ -187,224 +254,222 @@ let types_predicate tr pols t e =
     | Some (t', tr') -> Impossible (ECast (e, t', tr', t, tr))
     | None -> Impossible (ECast (e, Non, false, t, tr))
 
-let add_pos pos fs =
-  List.map fs ~f:(fun f -> (pos, f))
-
-let rec types s pols (t: EnfType.t) ((pos, f): (Lexing.position * Tformula.t)) =
-  let error pos s = Impossible (EFormula (pos, Some s, f, t)) in
+let rec types s pols (t: EnfType.t) (f: Tformula.t) =
+  let error s = Impossible (EFormula (Some s, f, t)) in
   let types_predicate = types_predicate false in (* set transparency requirement to false *)
   let types = types s pols in (* fix `types` function with invariant parameters *)
   match t with
   | Cau -> begin
-      match f with
+      match f.f with
       | TTT -> Possible CTT
       | TPredicate (e, _, _) -> types_predicate pols Cau e
-      | TNeg f -> types Sup (pos, f)
-      | TAnd (_, fs) -> List.fold_left (List.map (add_pos pos fs) ~f:(types Cau)) ~init:(Possible CTT) ~f:conj
-      | TOr (L, fs) -> types Cau (pos, List.hd_exn fs)
-      | TOr (R, fs) -> types Cau (pos, List.last_exn fs)
-      | TOr (_, fs) -> List.fold_left (List.map (add_pos pos fs) ~f:(types Cau)) ~init:(Possible CTT) ~f:disj
-      | TImp (L, f, _) -> types Sup (pos, f)
-      | TImp (R, _, g) -> types Cau (pos, g)
-      | TImp (_, f, g) -> disj (types Sup (pos, f)) (types Cau (pos, g))
-      | TIff (L, L, f, _) -> conj (types Sup (pos, f)) (types Cau (pos, f))
-      | TIff (L, R, f, g) -> conj (types Sup (pos, f)) (types Sup (pos, g))
-      | TIff (R, L, f, g) -> conj (types Cau (pos, g)) (types Cau (pos, f))
-      | TIff (R, R, _, g) -> conj (types Cau (pos, g)) (types Sup (pos, g))
-      | TIff (_, _, f, g) -> conj (disj (types Sup (pos, f)) (types Cau (pos, g)))
-                                  (disj (types Cau (pos, f)) (types Sup (pos, g)))
-      | TExists (_, f) -> types Cau (pos, f)
-      | TForall (x, f) when is_past_guarded s x false f -> types Cau (pos, f)
-      | TForall (x, _) -> error pos ("for causability " ^ x ^ " must be past-guarded")
-      | TNext (i, f) when Interval.equal i Interval.full -> types Cau (pos, f)
-      | TNext _ -> error pos "○ with non-[0,∞) interval is never Cau"
-      | TOnce (i, g) | TSince (_, i, _, g) when Interval.has_zero i -> types Cau (pos, g)
-      | TOnce _ | TSince _ -> error pos "⧫[a,b) or S[a,b) with a > 0 is never Cau"
-      | TEventually (_, f) | TAlways (_, f) -> types Cau (pos, f)
-      | TUntil (LR, B _, f, g) -> conj (types Cau (pos, f)) (types Cau (pos, g))
-      | TUntil (_, i, _, g) when Interval.has_zero i -> types Cau (pos, g) (* in the non-transparent case when i is unbounded, an artificial bound will be added during conversion *)
-      | TUntil (_, _, f, g) -> conj (types Cau (pos, f)) (types Cau (pos, g)) (* in the non-transparent case when i is unbounded, an artificial bound will be added during conversion *)
-      | TPrev _ -> error pos "● is never Cau"
-      | _ -> Impossible (EFormula (pos, None, f, t))
+      | TNeg f -> types Sup f
+      | TAnd (_, fs) -> Constraints.conj' (List.map fs ~f:(types Cau))
+      | TOr (L, fs) -> types Cau (List.hd_exn fs)
+      | TOr (R, fs) -> types Cau (List.last_exn fs)
+      | TOr (_, fs) -> Constraints.disj' (List.map fs ~f:(types Cau))
+      | TImp (L, f, _) -> types Sup f
+      | TImp (R, _, g) -> types Cau g
+      | TImp (_, f, g) -> disj (types Sup f) (types Cau g)
+      | TIff (L, L, f, _) -> conj (types Sup f) (types Cau f)
+      | TIff (L, R, f, g) -> conj (types Sup f) (types Sup g)
+      | TIff (R, L, f, g) -> conj (types Cau g) (types Cau f)
+      | TIff (R, R, _, g) -> conj (types Cau g) (types Sup g)
+      | TIff (_, _, f, g) -> conj (disj (types Sup f) (types Cau g))
+                                  (disj (types Cau f) (types Sup g))
+      | TExists (_, f) -> types Cau f
+      | TForall (x, f) when is_past_guarded s x false f -> types Cau f
+      | TForall (x, _) -> error ("for causability " ^ x ^ " must be past-guarded")
+      | TNext (i, f) when Interval.equal i Interval.full -> types Cau f
+      | TNext _ -> error "○ with non-[0,∞) interval is never Cau"
+      | TOnce (i, g) | TSince (_, i, _, g) when Interval.has_zero i -> types Cau g
+      | TOnce _ | TSince _ -> error "⧫[a,b) or S[a,b) with a > 0 is never Cau"
+      | TEventually (_, f) | TAlways (_, f) -> types Cau f
+      | TUntil (LR, B _, f, g) -> conj (types Cau f) (types Cau g)
+      | TUntil (_, i, _, g) when Interval.has_zero i -> types Cau g (* in the non-transparent case when i is unbounded, an artificial bound will be added during conversion *)
+      | TUntil (_, _, f, g) -> conj (types Cau f) (types Cau g) (* in the non-transparent case when i is unbounded, an artificial bound will be added during conversion *)
+      | TPrev _ -> error "● is never Cau"
+      | _ -> Impossible (EFormula (None, f, t))
     end
   | Sup -> begin
-      match f with
+      match f.f with
       | TFF -> Possible CTT
       | TPredicate (e, _, _) -> types_predicate pols Sup e
-      | TNeg f -> types Cau (pos, f)
-      | TAnd (L, fs) -> types Sup (pos, List.hd_exn fs)
-      | TAnd (R, fs) -> types Sup (pos, List.last_exn fs)
-      | TAnd (_, fs) -> List.fold_left (List.map (add_pos pos fs) ~f:(types Sup)) ~init:(Possible CTT) ~f:disj
-      | TOr (_, fs) -> List.fold_left (List.map (add_pos pos fs) ~f:(types Sup)) ~init:(Possible CTT) ~f:conj
-      | TImp (_, f, g) -> conj (types Cau (pos, f)) (types Sup (pos, g))
-      | TIff (L, _, f, g) -> conj (types Cau (pos, f)) (types Sup (pos, g))
-      | TIff (R, _, f, g) -> conj (types Sup (pos, f)) (types Cau (pos, g))
-      | TIff (_, _, f, g) -> disj (conj (types Cau (pos, f)) (types Sup (pos, g)))
-                                  (conj (types Sup (pos, f)) (types Cau (pos, g)))
-      | TExists (x, f) when is_past_guarded s x true f -> types Sup (pos, f)
-      | TExists (x, _) -> error pos ("for suppressability " ^ x ^ " must be past-guarded")
-      | TForall (_, f) -> types Sup (pos, f)
-      | TNext (_, f) -> types Sup (pos, f)
-      | THistorically (i, f) when Interval.has_zero i -> types Sup (pos, f)
-      | THistorically _ -> error pos "■[a,b) with a > 0 is never Sup"
-      | TSince (_, i, f, _) when not (Interval.has_zero i) -> types Sup (pos, f)
-      | TSince (_, _, f, g) -> conj (types Sup (pos, f)) (types Sup (pos, g))
-      | TEventually (_, f) | TAlways (_, f) -> types Sup (pos, f)
-      | TUntil (L, i, f, _) when not (Interval.has_zero i) -> types Sup (pos, f)
-      | TUntil (R, _, _, g) -> types Sup (pos, g)
-      | TUntil (_, i, f, g) when not (Interval.has_zero i) -> disj (types Sup (pos, f)) (types Sup (pos, g))
-      | TUntil (_, _, _, g) -> types Sup (pos, g)
-      | TPrev _ -> error pos "● is never Sup"
-      | _ -> Impossible (EFormula (pos, None, f, t))
+      | TNeg f -> types Cau f
+      | TAnd (L, fs) -> types Sup (List.hd_exn fs)
+      | TAnd (R, fs) -> types Sup (List.last_exn fs)
+      | TAnd (_, fs) -> Constraints.disj' (List.map fs ~f:(types Sup))
+      | TOr (_, fs) -> Constraints.conj' (List.map fs ~f:(types Sup))
+      | TImp (_, f, g) -> conj (types Cau f) (types Sup g)
+      | TIff (L, _, f, g) -> conj (types Cau f) (types Sup g)
+      | TIff (R, _, f, g) -> conj (types Sup f) (types Cau g)
+      | TIff (_, _, f, g) -> disj (conj (types Cau f) (types Sup g))
+                                  (conj (types Sup f) (types Cau g))
+      | TExists (x, f) when is_past_guarded s x true f -> types Sup f
+      | TExists (x, _) -> error ("for suppressability " ^ x ^ " must be past-guarded")
+      | TForall (_, f) -> types Sup f
+      | TNext (_, f) -> types Sup f
+      | THistorically (i, f) when Interval.has_zero i -> types Sup f
+      | THistorically _ -> error "■[a,b) with a > 0 is never Sup"
+      | TSince (_, i, f, _) when not (Interval.has_zero i) -> types Sup f
+      | TSince (_, _, f, g) -> conj (types Sup f) (types Sup g)
+      | TEventually (_, f) | TAlways (_, f) -> types Sup f
+      | TUntil (L, i, f, _) when not (Interval.has_zero i) -> types Sup f
+      | TUntil (R, _, _, g) -> types Sup g
+      | TUntil (_, i, f, g) when not (Interval.has_zero i) -> disj (types Sup f) (types Sup g)
+      | TUntil (_, _, _, g) -> types Sup g
+      | TPrev _ -> error "● is never Sup"
+      | _ -> Impossible (EFormula (None, f, t))
     end
   | Obs -> Possible CTT
-  | _ -> Impossible (EFormula (pos, None, f, t))
+  | _ -> Impossible (EFormula (None, f, t))
 
-let rec types_transparent itvls stricts s pols (t: EnfType.t) ((pos, f): (Lexing.position * Tformula.t)): verdict =
-  let error_tr pos s = Impossible (EFormulaTransparent (pos, Some s, f, t)) in
-  let error pos s = Impossible (EFormula (pos, Some s, f, t)) in
+let rec types_transparent itvls stricts s pols (t: EnfType.t) (f: Tformula.t) : verdict =
+  let error_tr s = Impossible (EFormulaTransparent (Some s, f, t)) in
+  let error s = Impossible (EFormula (Some s, f, t)) in
   let types_transparent = types_transparent itvls stricts s pols in
   let srp = strictly_relative_past ~itl_itvs_and_strict:(itvls, stricts) in
   let types_predicate = types_predicate true in (* Set transparency requirement to true *)
   match t with
   | Cau -> begin
-      match f with
+      match f.f with
       | TTT -> Possible CTT
       | TPredicate (e, _, _) -> types_predicate pols Cau e
-      | TNeg f -> types_transparent Sup (pos, f)
-      | TAnd (_, fs) -> List.fold_left (List.map (add_pos pos fs) ~f:(types_transparent Cau)) ~init:(Possible CTT) ~f:conj
+      | TNeg f -> types_transparent Sup f
+      | TAnd (_, fs) -> Constraints.conj' (List.map fs ~f:(types_transparent Cau))
       (* OR:Cau is typed analogously to AND:Sup *)
-      | TOr (L, fs) when List.for_all (List.drop fs 1) ~f:srp -> types_transparent Cau (pos, List.hd_exn fs)
-      | TOr (L, _) -> error_tr pos "∨:L (Cau) is only transparently enforceable when all formulas except for the left-most are SRP, but at least one of them is not SRP"
-      | TOr (R, fs) when List.for_all (List.drop_last_exn fs) ~f:srp -> types_transparent Cau (pos, List.last_exn fs)
-      | TOr (R, _) -> error_tr pos "∨:R (Cau) is only transparently enforceable when all formulas except for the right-most are SRP, but at least one of them is not SRP"
+      | TOr (L, fs) when List.for_all (List.drop fs 1) ~f:srp -> types_transparent Cau (List.hd_exn fs)
+      | TOr (L, _) -> error_tr "∨:L (Cau) is only transparently enforceable when all formulas except for the left-most are SRP, but at least one of them is not SRP"
+      | TOr (R, fs) when List.for_all (List.drop_last_exn fs) ~f:srp -> types_transparent Cau (List.last_exn fs)
+      | TOr (R, _) -> error_tr "∨:R (Cau) is only transparently enforceable when all formulas except for the right-most are SRP, but at least one of them is not SRP"
       | TOr (_, fs) ->
         let are_others_srp = Util.lists_with_one_removed fs |> List.map ~f:(List.for_all ~f:srp) in
-        let is_srp_to_verdict (pos, f) = function
+        let is_srp_to_verdict f = function
           | true -> Possible CTT
           | false ->
             let msg = Printf.sprintf "∨ (Cau) is transparently enforceable when all formulas besides the one used for enforcement (%s) are SRP, but at least one of them is not SRP" (Tformula.to_string f) in
-            error_tr pos msg
+            error_tr msg
         in
         let types_and_srp f srp = conj (types_transparent Cau f) (is_srp_to_verdict f srp) in
-        List.fold_left (List.map2_exn (add_pos pos fs) are_others_srp ~f:types_and_srp) ~init:(Possible CTT) ~f:disj
+        let vs = (List.map2_exn fs are_others_srp ~f:types_and_srp) in
+        Constraints.disj' vs
       (* (a IMP b):Cau <==> (not a OR b):Cau -> thus IMP:Cau is typed analogously to AND:Sup *)
-      | TImp (L, f, g) when srp g -> types_transparent Sup (pos, f)
-      | TImp (L, _, _) -> error_tr pos "→:L (Cau) is only transparently enforceable when the RHS is SRP"
-      | TImp (R, f, g) when srp f -> types_transparent Cau (pos, g)
-      | TImp (R, _, _) -> error_tr pos "→:R (Cau) is only transparently enforceable when the LHS is SRP"
+      | TImp (L, f, g) when srp g -> types_transparent Sup f
+      | TImp (L, _, _) -> error_tr "→:L (Cau) is only transparently enforceable when the RHS is SRP"
+      | TImp (R, f, g) when srp f -> types_transparent Cau g
+      | TImp (R, _, _) -> error_tr "→:R (Cau) is only transparently enforceable when the LHS is SRP"
       | TImp (_, f, g) ->
         let srp_of_other_side other =
           if srp other then Possible CTT else
             let msg = Printf.sprintf "→ (Cau) is only transparently enforceable when the side not used for enforcement (%s) is SRP" (Tformula.to_string other) in
-            error_tr pos msg
+            error_tr msg
         in
-        disj (conj (types_transparent Sup (pos, f)) (srp_of_other_side g)) (conj (types_transparent Cau (pos, g)) (srp_of_other_side f))
+        disj (conj (types_transparent Sup f) (srp_of_other_side g)) (conj (types_transparent Cau g) (srp_of_other_side f))
       (* (a IFF b):Cau <==> ((a IMP b) AND (b IMP a)):Cau -> thus IFF is typed analogously to AND:Cau and IMP:Cau *)
-      | TIff (L, L, f, g) when srp g -> conj (types_transparent Sup (pos, f)) (types_transparent Cau (pos, f))
-      | TIff (L, L, _, _) -> error_tr pos "↔:L,L (Cau) is only transparently enforceable when the RHS is SRP" 
-      | TIff (L, R, f, g) when (srp f && srp g) -> conj (types_transparent Sup (pos, f)) (types_transparent Sup (pos, g)) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
-      | TIff (L, R, f, _) when (srp f) -> error_tr pos "↔:L,R (Cau) is only transparently enforceable when both sides are SRP, but the RHS is not SRP"
-      | TIff (L, R, _, g) when (srp g) -> error_tr pos "↔:L,R (Cau) is only transparently enforceable when both sides are SRP, but the LHS is not SRP" 
-      | TIff (L, R, _, _) -> error_tr pos "↔:L,R (Cau) is only transparently enforceable when both sides are SRP, but neither side is SRP"
-      | TIff (R, L, f, g) when (srp f && srp g) -> conj (types_transparent Cau (pos, g)) (types_transparent Cau (pos, f)) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
-      | TIff (R, L, f, _) when (srp f) -> error_tr pos "f ↔:R,L g (Cau) requires that f and g are SRP, but g is not"
-      | TIff (R, L, _, g) when (srp g) -> error_tr pos "f ↔:R,L g (Cau) requires that f and g are SRP, but f is not"
-      | TIff (R, L, _, _) -> error_tr pos "f ↔:R,L g (Cau) requires that f and g are SRP, but neither is SRP"
-      | TIff (R, R, f, g) when srp f -> conj (types_transparent Cau (pos, g)) (types_transparent Sup (pos, g))
-      | TIff (R, R, _, _) -> error_tr pos "↔:R,R (Cau) LHS is not SRP"
+      | TIff (L, L, f, g) when srp g -> conj (types_transparent Sup f) (types_transparent Cau f)
+      | TIff (L, L, _, _) -> error_tr "↔:L,L (Cau) is only transparently enforceable when the RHS is SRP" 
+      | TIff (L, R, f, g) when (srp f && srp g) -> conj (types_transparent Sup f) (types_transparent Sup g) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
+      | TIff (L, R, f, _) when (srp f) -> error_tr "↔:L,R (Cau) is only transparently enforceable when both sides are SRP, but the RHS is not SRP"
+      | TIff (L, R, _, g) when (srp g) -> error_tr "↔:L,R (Cau) is only transparently enforceable when both sides are SRP, but the LHS is not SRP" 
+      | TIff (L, R, _, _) -> error_tr "↔:L,R (Cau) is only transparently enforceable when both sides are SRP, but neither side is SRP"
+      | TIff (R, L, f, g) when (srp f && srp g) -> conj (types_transparent Cau g) (types_transparent Cau f) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
+      | TIff (R, L, f, _) when (srp f) -> error_tr "f ↔:R,L g (Cau) requires that f and g are SRP, but g is not"
+      | TIff (R, L, _, g) when (srp g) -> error_tr "f ↔:R,L g (Cau) requires that f and g are SRP, but f is not"
+      | TIff (R, L, _, _) -> error_tr "f ↔:R,L g (Cau) requires that f and g are SRP, but neither is SRP"
+      | TIff (R, R, f, g) when srp f -> conj (types_transparent Cau g) (types_transparent Sup g)
+      | TIff (R, R, _, _) -> error_tr "↔:R,R (Cau) LHS is not SRP"
       | TIff (_, _, f, g) ->
-        let verdict_tr_f = if srp f then Possible CTT else error_tr pos "↔ (Cau) LHS is not SRP" in
-        let verdict_tr_g = if srp g then Possible CTT else error_tr pos "↔ (Cau) RHS is not SRP" in
+        let verdict_tr_f = if srp f then Possible CTT else error_tr "↔ (Cau) LHS is not SRP" in
+        let verdict_tr_g = if srp g then Possible CTT else error_tr "↔ (Cau) RHS is not SRP" in
         conj
-          (disj (conj (types_transparent Sup (pos, f)) verdict_tr_g) (conj (types_transparent Cau (pos, g)) verdict_tr_f))
-          (disj (conj (types_transparent Cau (pos, f)) verdict_tr_g) (conj (types_transparent Sup (pos, g)) verdict_tr_f))
+          (disj (conj (types_transparent Sup f) verdict_tr_g) (conj (types_transparent Cau f) verdict_tr_f))
+          (disj (conj (types_transparent Cau f) verdict_tr_g) (conj (types_transparent Sup g) verdict_tr_f))
       (* Exists follows the same rule as the non-transparent case *)
-      | TExists (_, f) -> types_transparent Cau (pos, f)
+      | TExists (_, f) -> types_transparent Cau f
       (* Forall follows the same rule(s) as the non-transparent case *)
-      | TForall (x, f) when is_past_guarded s x false f -> types_transparent Cau (pos, f)
-      | TForall (x, _) -> error pos ("for causability " ^ x ^ " must be past-guarded")
+      | TForall (x, f) when is_past_guarded s x false f -> types_transparent Cau f
+      | TForall (x, _) -> error ("for causability " ^ x ^ " must be past-guarded")
       (* Next follows the same rule(s) as the non-transparent case *)
-      | TNext (i, f) when Interval.equal i Interval.full -> types_transparent Cau (pos, f)
-      | TNext _ -> error pos "○ with non-[0,∞) interval is never Cau"
-      | TSince (_, i, f, g) when Interval.has_zero i && srp f && srp g -> types_transparent Cau (pos, g)
-      | TSince (_, i, f, _) when Interval.has_zero i && srp f -> error_tr pos "f S[a,b) g requires that f and g are SRP, but g is not"
-      | TSince (_, i, _, g) when Interval.has_zero i && srp g -> error_tr pos "f S[a,b) g requires that f and g are SRP, but f is not"
-      | TSince (_, i, _, _) when Interval.has_zero i -> error_tr pos "f S[a,b) g requires that f and g are SRP, but neither is SRP"
-      | TOnce (i, g) when Interval.has_zero i && srp g -> types_transparent Cau (pos, g)
-      | TOnce (i, _) when Interval.has_zero i -> error_tr pos "⧫[a,b) g is only transparently enforceable when g is SRP"
-      | TOnce _ | TSince _ -> error pos "⧫[a,b) or S[a,b) with a > 0 is never Cau"
+      | TNext (i, f) when Interval.equal i Interval.full -> types_transparent Cau f
+      | TNext _ -> error "○ with non-[0,∞) interval is never Cau"
+      | TSince (_, i, f, g) when Interval.has_zero i && srp f && srp g -> types_transparent Cau g
+      | TSince (_, i, f, _) when Interval.has_zero i && srp f -> error_tr "f S[a,b) g requires that f and g are SRP, but g is not"
+      | TSince (_, i, _, g) when Interval.has_zero i && srp g -> error_tr "f S[a,b) g requires that f and g are SRP, but f is not"
+      | TSince (_, i, _, _) when Interval.has_zero i -> error_tr "f S[a,b) g requires that f and g are SRP, but neither is SRP"
+      | TOnce (i, g) when Interval.has_zero i && srp g -> types_transparent Cau g
+      | TOnce (i, _) when Interval.has_zero i -> error_tr "⧫[a,b) g is only transparently enforceable when g is SRP"
+      | TOnce _ | TSince _ -> error "⧫[a,b) or S[a,b) with a > 0 is never Cau"
       (* Eventually:Cau and Always:Cau should be unaffected by the transparency requirements *)
-      | TEventually (_, f) | TAlways (_, f) -> types_transparent Cau (pos, f)
+      | TEventually (_, f) | TAlways (_, f) -> types_transparent Cau f
       (* Until:LR (Cau) stays the same *)
-      | TUntil (_, U _, _, _) -> error_tr pos "U[a,b):LR is only transparently enforceable when b≠∞"
-      | TUntil (LR, _, f, g) -> conj (types_transparent Cau (pos, f)) (types_transparent Cau (pos, g))
-      | TUntil (_, i, f, g) when Interval.has_zero i && srp f -> types_transparent Cau (pos, g)
-      | TUntil (R, i, _, _) when Interval.has_zero i -> error_tr pos "f U[a,b):R g requires that f is SRP"
-      | TUntil (_, _, f, g) -> conj (types_transparent Cau (pos, f)) (types_transparent Cau (pos, g))
-      | TPrev _ -> error pos "● is never Cau"
-      | _ -> Impossible (EFormula (pos, None, f, t))
+      | TUntil (_, U _, _, _) -> error_tr "U[a,b):LR is only transparently enforceable when b≠∞"
+      | TUntil (LR, _, f, g) -> conj (types_transparent Cau f) (types_transparent Cau g)
+      | TUntil (_, i, f, g) when Interval.has_zero i && srp f -> types_transparent Cau g
+      | TUntil (R, i, _, _) when Interval.has_zero i -> error_tr "f U[a,b):R g requires that f is SRP"
+      | TUntil (_, _, f, g) -> conj (types_transparent Cau f) (types_transparent Cau g)
+      | TPrev _ -> error "● is never Cau"
+      | _ -> Impossible (EFormula (None, f, t))
     end
   | Sup -> 
     begin
-      match f with
+      match f.f with
       | TFF -> Possible CTT
       | TPredicate (e, _, _) -> types_predicate pols Sup e
-      | TNeg f -> types_transparent Cau (pos, f)
-      | TAnd (L, fs) when List.for_all (List.drop fs 1) ~f:srp -> types_transparent Sup (pos, List.hd_exn fs)
-      | TAnd (L, _) -> error_tr pos "∧:L (f::fs) (Sup) is only transparently enforceable when all formulas fs are SRP, but at least one of them is not"
-      | TAnd (R, fs) when List.for_all (List.drop_last_exn fs) ~f:srp -> types_transparent Sup (pos, List.last_exn fs)
-      | TAnd (R, _) -> error_tr pos "∧:R [f1,...,fn-1,fn] (Sup) requires that all formulas [f1,...,fn-1] are SRP, but at least one of them is not"
+      | TNeg f -> types_transparent Cau f
+      | TAnd (L, fs) when List.for_all (List.drop fs 1) ~f:srp -> types_transparent Sup (List.hd_exn fs)
+      | TAnd (L, _) -> error_tr "∧:L (f::fs) (Sup) is only transparently enforceable when all formulas fs are SRP, but at least one of them is not"
+      | TAnd (R, fs) when List.for_all (List.drop_last_exn fs) ~f:srp -> types_transparent Sup (List.last_exn fs)
+      | TAnd (R, _) -> error_tr "∧:R [f1,...,fn-1,fn] (Sup) requires that all formulas [f1,...,fn-1] are SRP, but at least one of them is not"
       | TAnd (_, fs) ->
         let are_others_srp = Util.lists_with_one_removed fs |> List.map ~f:(List.for_all ~f:srp) in
-        let is_srp_to_verdict (pos, f) = function
+        let is_srp_to_verdict  f = function
           | true -> Possible CTT
           | false ->
-            let msg = Printf.sprintf "∧ [f0,...,fn] (Sup) requires all formulas besides the one used for enforcement (%s) are SRP, but at least one of them is not" (Tformula.to_string f)
-            in
-            error_tr pos msg
+            let msg = Printf.sprintf "∧ [f0,...,fn] (Sup) requires all formulas besides the one used for enforcement (%s) are SRP, but at least one of them is not" (Tformula.to_string f) in
+            error_tr msg
         in
         let types_and_srp f is_srp = conj (types_transparent Sup f) (is_srp_to_verdict f is_srp) in
-        List.fold_left (List.map2_exn (add_pos pos fs) are_others_srp ~f:types_and_srp) ~init:(Possible CTT) ~f:disj
-      | TOr (_, fs) -> List.fold_left (List.map (add_pos pos fs) ~f:(types_transparent Cau)) ~init:(Possible CTT) ~f:conj
-      | TImp (_, f, g) -> conj (types_transparent Cau (pos, f)) (types_transparent Sup (pos, g))
-      | TIff (L, _, f, g) when srp f && srp g -> conj (types_transparent Cau (pos, f)) (types_transparent Sup (pos, g)) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
-      | TIff (L, _, f, _) when (srp f) -> error_tr pos "f ↔:L,_ g (Sup) requires both f and g to be SRP, but the g is not" 
-      | TIff (L, _, _, g) when (srp g) -> error_tr pos "f ↔:L,_ g (Sup) requires both f and g to be SRP, but the f is not" 
-      | TIff (L, _, _, _) -> error_tr pos "f ↔:L,_ g (Sup) requires f and g to be SRP, but neither is SRP"
-      | TIff (R, _, f, g) when srp f && srp g -> conj (types_transparent Sup (pos, f)) (types_transparent Cau (pos, g)) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
-      | TIff (R, _, f, _) when (srp f) -> error_tr pos "f ↔:R,_ g (Sup) requires both f and g to be SRP, but g is not"
-      | TIff (R, _, _, g) when (srp g) -> error_tr pos "f ↔:R,_ g (Sup) requires both f and g to be SRP, but f is not"
-      | TIff (R, _, _, _) -> error_tr pos "f ↔:R,_ g (Sup) requires both f and g to be SRP, but neither is SRP"
+        let vs = (List.map2_exn fs are_others_srp ~f:types_and_srp) in
+        Constraints.disj' vs
+      | TOr (_, fs) -> Constraints.conj' (List.map fs ~f:(types_transparent Sup))
+      | TImp (_, f, g) -> conj (types_transparent Cau f) (types_transparent Sup g)
+      | TIff (L, _, f, g) when srp f && srp g -> conj (types_transparent Cau f) (types_transparent Sup g) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
+      | TIff (L, _, f, _) when (srp f) -> error_tr "f ↔:L,_ g (Sup) requires both f and g to be SRP, but the g is not" 
+      | TIff (L, _, _, g) when (srp g) -> error_tr "f ↔:L,_ g (Sup) requires both f and g to be SRP, but the f is not" 
+      | TIff (L, _, _, _) -> error_tr "f ↔:L,_ g (Sup) requires f and g to be SRP, but neither is SRP"
+      | TIff (R, _, f, g) when srp f && srp g -> conj (types_transparent Sup f) (types_transparent Cau g) (* TODO: would a Possible verdict for types_transparent already imply SRP? *)
+      | TIff (R, _, f, _) when (srp f) -> error_tr "f ↔:R,_ g (Sup) requires both f and g to be SRP, but g is not"
+      | TIff (R, _, _, g) when (srp g) -> error_tr "f ↔:R,_ g (Sup) requires both f and g to be SRP, but f is not"
+      | TIff (R, _, _, _) -> error_tr "f ↔:R,_ g (Sup) requires both f and g to be SRP, but neither is SRP"
       | TIff (_, _, f, g) ->
-        let verdict_tr_f = if srp f then Possible CTT else error_tr pos "↔ (Cau) LHS is not SRP" in
-        let verdict_tr_g = if srp g then Possible CTT else error_tr pos "↔ (Cau) RHS is not SRP" in
+        let verdict_tr_f = if srp f then Possible CTT else error_tr "↔ (Cau) LHS is not SRP" in
+        let verdict_tr_g = if srp g then Possible CTT else error_tr "↔ (Cau) RHS is not SRP" in
         disj
-          (conj (conj (types_transparent Cau (pos, f)) verdict_tr_g) (conj (types_transparent Sup (pos, g)) verdict_tr_f))
-          (conj (conj (types_transparent Sup (pos, f)) verdict_tr_g) (conj (types_transparent Cau (pos, g)) verdict_tr_f))
-      | TExists (x, f) when is_past_guarded s x true f -> types_transparent Sup (pos, f)
-      | TExists (x, _) -> error pos ("for suppressability " ^ x ^ " must be past-guarded")
-      | TForall (_, f) -> types_transparent Sup (pos, f)
-      | TNext (_, f) -> types_transparent Sup (pos, f)
-      | THistorically (i, f) when Interval.has_zero i && srp f -> types_transparent Sup (pos, f)
-      | THistorically (i, _) when Interval.has_zero i -> error_tr pos "■[a,b) f (Sup) requires f to be SRP"
-      | THistorically _ -> error pos "■[a,b) with a > 0 is never Sup"
-      | TSince (_, i, f, g) when not (Interval.has_zero i) && srp f && srp g -> types_transparent Sup (pos, f)
-      | TSince (_, _, f, g) when srp f && srp g -> conj (types_transparent Sup (pos, f)) (types_transparent Sup (pos, g))
-      | TSince (_, _, f, _) when srp f -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but g is not"
-      | TSince (_, _, _, g) when srp g -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but f is not"
-      | TSince (_, _, _, _) -> error_tr pos "f S[a,b) g (Sup) requires both f and g to be SRP, but both are not"
-      | TEventually (_, f) when srp f -> types_transparent Sup (pos, f)
-      | TEventually (_, _) -> error_tr pos "◇f (Sup) requires f to be SRP"
-      | TAlways (B _, f) -> types_transparent Sup (pos, f)
-      | TAlways _ -> error_tr pos "□[a,b) f (Sup) requires b≠∞"
-      | TUntil (_, _, f, g) when srp f -> types_transparent Sup (pos, g)
-      | TUntil (_, _, _, _) -> error_tr pos "f U[a,b) g (Sup) requires f to be SRP"
-      | TPrev _ -> error pos "● is never Sup"
-      | _ -> Impossible (EFormula (pos, None, f, t))
+          (conj (conj (types_transparent Cau f) verdict_tr_g) (conj (types_transparent Sup g) verdict_tr_f))
+          (conj (conj (types_transparent Sup f) verdict_tr_g) (conj (types_transparent Cau g) verdict_tr_f))
+      | TExists (x, f) when is_past_guarded s x true f -> types_transparent Sup f
+      | TExists (x, _) -> error ("for suppressability " ^ x ^ " must be past-guarded")
+      | TForall (_, f) -> types_transparent Sup f
+      | TNext (_, f) -> types_transparent Sup f
+      | THistorically (i, f) when Interval.has_zero i && srp f -> types_transparent Sup f
+      | THistorically (i, _) when Interval.has_zero i -> error_tr "■[a,b) f (Sup) requires f to be SRP"
+      | THistorically _ -> error "■[a,b) with a > 0 is never Sup"
+      | TSince (_, i, f, g) when not (Interval.has_zero i) && srp f && srp g -> types_transparent Sup f
+      | TSince (_, _, f, g) when srp f && srp g -> conj (types_transparent Sup f) (types_transparent Sup g)
+      | TSince (_, _, f, _) when srp f -> error_tr "f S[a,b) g (Sup) requires both f and g to be SRP, but g is not"
+      | TSince (_, _, _, g) when srp g -> error_tr "f S[a,b) g (Sup) requires both f and g to be SRP, but f is not"
+      | TSince (_, _, _, _) -> error_tr "f S[a,b) g (Sup) requires both f and g to be SRP, but both are not"
+      | TEventually (_, f) when srp f -> types_transparent Sup f
+      | TEventually (_, _) -> error_tr "◇f (Sup) requires f to be SRP"
+      | TAlways (B _, f) -> types_transparent Sup f
+      | TAlways _ -> error_tr "□[a,b) f (Sup) requires b≠∞"
+      | TUntil (_, _, f, g) when srp f -> types_transparent Sup g
+      | TUntil (_, _, _, _) -> error_tr "f U[a,b) g (Sup) requires f to be SRP"
+      | TPrev _ -> error "● is never Sup"
+      | _ -> Impossible (EFormula (None, f, t))
     end
   | Obs -> Possible CTT
-  | _ -> Impossible (EFormula (pos, None, f, t))
+  | _ -> Impossible (EFormula (None, f, t))
 
 (* todo [FH]: Extend to set ids *)
 let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) : Eformula.t option =
@@ -416,7 +481,7 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) :
   let f =
     match enftype with
       Cau -> begin
-        match form with
+        match form.f with
         | Tformula.TTT -> Some (Eformula.ETT)
         | TPredicate (e, t, et) when EnfType.equal (Map.find_exn pols e) Cau -> Some (Eformula.EPredicate (e, t, et))
         | TNeg f -> (convert Sup f) >>| (fun f' -> Eformula.ENeg f')
@@ -485,7 +550,7 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) :
         | _ -> None
       end
     | Sup -> begin
-        match form with
+        match form.f with
         | TFF -> Some (Eformula.EFF)
         | TPredicate (e, t, et) when EnfType.equal (Map.find_exn pols e) Sup -> Some (Eformula.EPredicate (e, t, et))
         | TNeg f -> (convert Cau f) >>| (fun f' -> Eformula.ENeg f')
@@ -547,15 +612,15 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) :
     | _ -> assert false
   in
   (*Stdio.print_string (EnfType.to_string enftype ^ " " ^ Formula.to_string form ^ " -> ");*)
-  match f with Some f -> Some Eformula.{ f; enftype; id = 0 } | None -> None
+  match f with Some f -> Some Eformula.{ f ; enftype; id = 0; positions = form.positions } | None -> None
 
-let convert_enforceable s pols (f: Tformula.t) b pos =
-  if not (Set.is_empty (Tformula.fv f)) then
+let convert_enforceable s pols (f: Tformula.t) b pos: Eformula.t =
+  if not (Map.is_empty (Tformula.fv (Map.empty (module String)) f)) then
     let err_msg =
       Printf.sprintf "formula %s is not closed" (Tformula.to_string f) in
     Util.enf_error err_msg (Some pos)
   else ();
-  match types s pols Cau (pos, f) with (* TODO: check if policy constraints are necessary (and how to get them) *)
+  match types s pols Cau f with (* TODO: check if policy constraints are necessary (and how to get them) *)
   | Possible c ->
      begin
        match Constraints.solve c with
@@ -578,14 +643,14 @@ let convert_enforceable s pols (f: Tformula.t) b pos =
                      (Tformula.to_string f) (Errors.to_string e) in
      Util.enf_error err_msg (Some pos)
 
-(* let convert_transparently_enforceable s pols (f: Tformula.t) b pos =
+let convert_transparently_enforceable s pols (f: Tformula.t) b pos =
   let f' = convert_enforceable s pols f b pos in
-  if is_transparent f' then
+  if Eformula.is_transparent f' then
     f'
   else
     let err_msg = Printf.sprintf "The formula\n %s\nis not transparently enforceable."
                      (Tformula.to_string f) in
-    Util.enf_error err_msg (Some pos) *)
+    Util.enf_error err_msg (Some pos)
 
 let epattern_of_tpattern s = function
   | TPPresent -> EPPresent
@@ -624,10 +689,10 @@ let type_scope s f = Eformula.of_tformula s.tevents f
 let def_sets (rules: (int, trule_compilation, 'a) Map.t) (events: (string, tevent, 'b) Map.t) : (int, string list, 'a) Map.t =
   let aux = function
     | TCImplication _ -> []
-    | TCDefinition (_, _, _, _, _, _, _, _, Tformula.TPredicate (name, _, _)) -> [name]
+    | TCDefinition (_, _, _, _, _, _, _, _, {f=Tformula.TPredicate (name, _, _); _}) -> [name]
     | TCDefinition _ -> assert false
-    | TCDefinitionDis (disjuncts, Tformula.TPredicate (name, _, _)) ->
-      let positions = Map.map disjuncts ~f:(fun (_, _, pos, _, _, _, _, _) -> pos) |> Map.data in
+    | TCDefinitionDis (disjuncts, {f=Tformula.TPredicate (name, _, _); _}) ->
+      let positions = Map.map disjuncts ~f:(fun d -> d.rule_pos) |> Map.data in
       (match Map.find events name with
         | Some (_, _, Lex.TItl, _) -> ()
         | Some (_, _, pol, _) ->
@@ -643,7 +708,7 @@ let def_sets (rules: (int, trule_compilation, 'a) Map.t) (events: (string, teven
   Map.map rules ~f:aux
 
 let use_sets (rules: (int, trule_compilation, Int.comparator_witness) Map.t) (events: (string, tevent, Base.String.comparator_witness) Map.t) : (int, string list, 'a) Map.t =
-  let use_formula = function
+  let use_formula f = match f.f with
     | TPredicate (name, _, _) -> (match Map.find events name with
       | Some (_, _, Lex.TItl, _) -> [name]
       | _ -> [])
@@ -659,14 +724,13 @@ let use_sets (rules: (int, trule_compilation, Int.comparator_witness) Map.t) (ev
     | TPUntil (_, f)
     | TPSince (_, f) -> use_formula f
   in
-  let use_disjunct (_, _, _, f, p, exceptions, scopes, term_conditions) = ((List.map ~f:snd (f@exceptions@scopes) @ term_conditions) |> use_formulas) @ use_pattern p in
+  let use_disjunct (d: tdisjunct) = use_formulas (d.f1@d.exceptions@d.scopes@d.var_renaming) @ use_pattern d.f1_patt in
   let use_disjuncts disjuncts = Map.map disjuncts ~f:use_disjunct |> Map.data |> List.concat in
-  let snd_map l = List.map l ~f:snd in
   let aux = function
     | TCImplication (_, _, _, f1, p, exceptions, scopes, f2, q, _, _) ->
-      use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p @ use_formulas (snd_map f2) @ use_pattern q |> List.dedup_and_sort ~compare:String.compare
+      use_formulas (f1@exceptions@scopes) @ use_pattern p @ use_formulas f2 @ use_pattern q |> List.dedup_and_sort ~compare:String.compare
     | TCDefinition (_, _, _, f1, p, exceptions, scopes, _, _) ->
-      use_formulas (snd_map (f1@exceptions@scopes)) @ use_pattern p |> List.dedup_and_sort ~compare:String.compare
+      use_formulas (f1@exceptions@scopes) @ use_pattern p |> List.dedup_and_sort ~compare:String.compare
     | TCDefinitionDis (disjuncts, _) ->
       use_disjuncts disjuncts |> List.dedup_and_sort ~compare:String.compare
   in
@@ -708,28 +772,28 @@ let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t
     in
   aux init rest |> List.rev
 
-let type_pattern_with_formulas itl_srp (s:Tlex.tprog) (pos:Lexing.position) pols enftype fs (p: Tlex.tpattern) : verdict =
+let type_pattern_with_formulas itl_srp (s:Tlex.tprog) (pos: Lexing.position) pols enftype fs (p: Tlex.tpattern) : verdict =
   let types = match itl_srp with
     | Some (itvs, stricts) -> types_transparent itvs stricts
     | None -> types
   in
-  let type_for_all_formulas fs t =
+  let type_for_all_formulas (fs: Tformula.t list) t =
     List.map fs ~f:(types s pols t)
     |> List.fold ~f:conj ~init:(Possible CTT)
   in
-  let type_for_at_least_one_formula fs t = match itl_srp with
+  let type_for_at_least_one_formula (fs: Tformula.t list) t = match itl_srp with
     | Some (itvls, stricts) -> (* transparency requires that other formulas are SRP *)
-      let fs' = List.map fs ~f:snd in
       let srp = strictly_relative_past ~itl_itvs_and_strict:(itvls, stricts) in
-      let are_others_srp = Util.lists_with_one_removed fs' |> List.map ~f:(List.for_all ~f:srp) in
-      let is_srp_to_verdict (pos, f) = function
+      let are_others_srp = Util.lists_with_one_removed fs |> List.map ~f:(List.for_all ~f:srp) in
+      let is_srp_to_verdict f = function
         | true -> Possible CTT
         | false ->
           let msg = Printf.sprintf "the conjunction of exception predicates is transparently enforceable when all predicates besides the one used for enforcement (%s) are SRP, but at least one of them is not SRP" (Tformula.to_string f) in
-          Impossible (EFormulasTransparent (pos, Some ("AND", msg), fs', t))
+          Impossible (EFormulasTransparent (Some ("AND", msg), fs, t))
       in
       let types_and_srp f srp = conj (types s pols t f) (is_srp_to_verdict f srp) in
-      List.fold_left (List.map2_exn fs are_others_srp ~f:types_and_srp) ~init:(Possible CTT) ~f:disj
+      let vs = List.map2_exn fs are_others_srp ~f:types_and_srp in
+      Constraints.disj' vs
     | None ->
       let init =
         let msg =  "none of the provided formulas can be made Sup" in
@@ -748,7 +812,7 @@ let type_pattern_with_formulas itl_srp (s:Tlex.tprog) (pos:Lexing.position) pols
     | TPOnce i when Interval.has_zero i -> type_for_all_formulas fs Cau
     | TPOnce _ -> Impossible (EPattern (pos, "can only be made \"Cau\" if zero is in the interval", p, fs, enftype))
     | TPHistorically _ -> Impossible (EPattern (pos, "can never be made \"Cau\"", p, fs, enftype))
-    | TPSince (i, g) when Interval.has_zero i -> types s pols Cau (pos, g)
+    | TPSince (i, g) when Interval.has_zero i -> types s pols Cau g
     | TPSince _ -> Impossible (EPattern (pos, "can only be made \"Cau\" if zero is in the interval", p, fs, enftype))
     end
   | Sup ->
@@ -759,7 +823,7 @@ let type_pattern_with_formulas itl_srp (s:Tlex.tprog) (pos:Lexing.position) pols
     | TPUntil _ -> type_for_at_least_one_formula fs Sup
     | TPOnce _ -> Impossible (EPattern (pos, "can never be made \"Sup\"", p, fs, enftype))
     | TPHistorically _ -> type_for_at_least_one_formula fs Sup
-    | TPSince (i, g) when Interval.has_zero i -> type_for_at_least_one_formula fs Sup |> conj (types s pols Cau (pos, g))
+    | TPSince (i, g) when Interval.has_zero i -> type_for_at_least_one_formula fs Sup |> conj (types s pols Cau g)
     | TPSince _ -> type_for_at_least_one_formula fs Sup (* when not (Interval.has_zero i) *)
     end
   | Obs -> Possible CTT
@@ -768,15 +832,13 @@ let type_pattern_with_formulas itl_srp (s:Tlex.tprog) (pos:Lexing.position) pols
 let get_exception_predicates ?(negated=false) (s: Tlex.tprog) rule_idx =
   let exception_idxs = Map.find_multi s.rule_tree.exceptions rule_idx in
   let exception_predicates = List.map exception_idxs ~f:(try Map.find_exn s.exception_predicates with _ -> assert false) in
-  let exception_predicates = if negated then List.map exception_predicates ~f:Tformula.tneg else exception_predicates in
-  let exception_positions = List.map exception_idxs ~f:(fun x -> try snd (Map.find_exn s.rule_tree.label_of_rule x) with _ -> assert false) in
-  List.zip_exn exception_positions exception_predicates
+  if negated then
+    List.map exception_predicates ~f:(fun x -> Tformula.tneg x.positions x)
+  else exception_predicates
 
 let get_scope_predicates (s: Tlex.tprog) rule_idx = 
   let scope_idxs = Map.find_multi s.rule_tree.scopes rule_idx in
-  let scope_predicates = List.map scope_idxs ~f:(try Map.find_exn s.scope_predicates with _ -> assert false) in
-  let scope_positions = List.map scope_idxs ~f:(fun x -> try snd (Map.find_exn s.rule_tree.label_of_rule x) with _ -> assert false) in
-  List.zip_exn scope_positions scope_predicates
+  List.map scope_idxs ~f:(try Map.find_exn s.scope_predicates with _ -> assert false)
 
 let pols_from_rule_constraints pos rcs =
   let add_policy_constraint enftype pols = function
@@ -983,7 +1045,7 @@ let check_pol_constrs pos pol_constrs pols =
 
 (* let type_exceptions ?(tr=false, (Map.empty (module String), Map.empty (module String))) s pos pols exceptions = *)
 let type_exceptions itl_srp s pos pols exceptions =
-  let exceptions_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
+  let exceptions_neg = List.map exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
   type_pattern_with_formulas itl_srp s pos pols Sup exceptions_neg TPPresent
 
 let type_scopes itl_srp s pos pols scopes =
@@ -1024,9 +1086,9 @@ let update_pols_with_transparency_conditions pols pols_tr =
     | `Both (enftype, (_, tr)) -> Some (enftype, tr)
   )
 
-let strict_of_pattern_with_formulas stricts fs p =
-  let strict_of_formulas itv fut fs = List.map fs ~f:snd
-                              |> List.for_all ~f:(strict ~itl_strict:stricts ~itv:itv ~fut:fut)
+let strict_of_pattern_with_formulas stricts (fs: Tformula.t list) p =
+  let strict_of_formulas itv fut fs =
+    List.for_all fs ~f:(strict ~itl_strict:stricts ~itv:itv ~fut:fut)
   in
   match p with
   | TPPresent -> strict_of_formulas (Zinterval.singleton 0) false fs
@@ -1039,9 +1101,9 @@ let strict_of_pattern_with_formulas stricts fs p =
   | TPSince (i, g) -> (strict_of_formulas (Zinterval.inv (Zinterval.of_interval i)) false fs)
                       || (strict ~itl_strict:stricts ~itv:(Zinterval.inv (Zinterval.of_interval i)) ~fut:false g)
 
-let relative_interval_of_pattern_with_formulas itvls fs p =
+let relative_interval_of_pattern_with_formulas itvls (fs: Tformula.t list) p =
   let j =
-    let aux (_, f) = relative_interval ~itl_itvs:itvls f in
+    let aux f = relative_interval ~itl_itvs:itvls f in
     List.fold_left (List.map fs ~f:aux) ~init:Zinterval.full ~f:Zinterval.lub
   in
   match p with
@@ -1130,8 +1192,8 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
             parse_rule_constraints pos pols (List.length f1) rcs
           in
           let srp = strictly_relative_past ~itl_itvs_and_strict:itl_itvs_and_stricts in
-          let srp_exceptions = List.for_all exceptions ~f:(fun (_, f) -> srp f) in
-          let srp_scopes = List.for_all scopes ~f:(fun (_, f) -> srp f) in
+          let srp_exceptions = List.for_all exceptions ~f:srp in
+          let srp_scopes = List.for_all scopes ~f:srp in
           let srp_conditions = srp_of_pattern_with_formulas itl_itvs_and_stricts f1 p in
           let srp_effects = srp_of_pattern_with_formulas itl_itvs_and_stricts f2 p in
           let verdict_exceptions =
@@ -1253,7 +1315,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
     | TCDefinition (idx, _, _, f1, p, exceptions, scopes, _, f2) ->
       let e = get_predicate_name f2 in
       let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
-      let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
+      let ex_neg = List.map exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
       let aux d =
         let v_pols = solve d in
         (* TODO: test enforcability checking and remove assertion after successful testing *)
@@ -1279,7 +1341,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
         | _ -> assert false
       in
       let verdicts = List.map dnf_of_v ~f:aux in
-      List.fold ~f:disj ~init:(Impossible (EInit (Some pos))) verdicts
+      Constraints.disj' verdicts
     | TCDefinitionDis (disjuncts, g) ->
       let e = get_predicate_name g in
       let aux d =
@@ -1293,12 +1355,12 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
           | None -> Obs, None (* TODO: is Obs desired here, or should it be something else like Non? *)
         end in
         let pols_tr = update_pols_with_transparency_conditions pols v_pols in
-        let type_disjunct (_, _, pos, f, p, exceptions, scopes, cs) =
-          let f = f @ (add_pos pos cs) in (* combine renaming conditions with the actual conditions of the constitutive rule *)
-          let ex_neg = List.map exceptions ~f:(fun (p, f) -> (p, Tformula.tneg f)) in
-          let verdict_exceptions = type_pattern_with_formulas itl_srp s pos pols_tr t ex_neg TPPresent in
-          let verdict_scopes = type_pattern_with_formulas itl_srp s pos pols_tr t scopes TPPresent in
-          let verdict_conditions = type_pattern_with_formulas itl_srp s pos pols_tr t f p in
+        let type_disjunct (d: tdisjunct) =
+          let f = d.f1 @ d.var_renaming in (* combine renaming conditions with the actual conditions of the constitutive rule *)
+          let ex_neg = List.map d.exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
+          let verdict_exceptions = type_pattern_with_formulas itl_srp s d.rule_pos pols_tr t ex_neg TPPresent in
+          let verdict_scopes = type_pattern_with_formulas itl_srp s d.rule_pos pols_tr t d.scopes TPPresent in
+          let verdict_conditions = type_pattern_with_formulas itl_srp s d.rule_pos pols_tr t f d.f1_patt in
           begin match t with
             | Cau -> (* all parts of the definition must be Cau *)
               let verdict_references = conj verdict_exceptions verdict_scopes in
@@ -1312,11 +1374,11 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) (verdict:verdict)
         in
         Map.map disjuncts ~f:type_disjunct
         |> Map.data
-        |> List.fold ~f:disj ~init:(Impossible (EInit None))
+        |> Constraints.disj'
         |> conj verdict
       in
       let verdicts = List.map dnf_of_v ~f:aux in
-      List.fold ~f:disj ~init:(Impossible (EInit None)) verdicts
+      Constraints.disj' verdicts
 
 let check_used_events_are_defined (tprog: Tlex.tprog) def use =
   let all_defined_events = List.concat (Map.data def)
@@ -1333,41 +1395,39 @@ let check_used_events_are_defined (tprog: Tlex.tprog) def use =
         Util.enf_error err_msg (Some pos)) in
   Map.iter_keys use ~f:check_used_are_defined
 
-let relative_interval_of_formula_conjunct itl_itvs f =
-  let fs = List.map f ~f:snd in
+let relative_interval_of_formula_conjunct itl_itvs fs =
   let itvs = (List.map fs ~f:(relative_interval ~itl_itvs:itl_itvs)) in
   List.fold itvs ~init:Zinterval.full ~f:Zinterval.lub
 
-let relative_interval_of_pattern_with_formulas itl_itvs f: tpattern -> Zinterval.t = function
-  | TPPresent -> relative_interval_of_formula_conjunct itl_itvs f
+let relative_interval_of_pattern_with_formulas itl_itvs (fs: Tformula.t list): tpattern -> Zinterval.t = function
+  | TPPresent -> relative_interval_of_formula_conjunct itl_itvs fs
   | TPEventually i
   | TPAlways i ->
     let i = Zinterval.of_interval i in
-    let j = relative_interval_of_formula_conjunct itl_itvs f in
+    let j = relative_interval_of_formula_conjunct itl_itvs fs in
     Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
   | TPUntil (i, g) ->
     let i = Zinterval.of_interval i in
-    let j = relative_interval_of_formula_conjunct itl_itvs f in
+    let j = relative_interval_of_formula_conjunct itl_itvs fs in
     Zinterval.lub 
       (Zinterval.sum (Zinterval.to_zero i) (relative_interval ~itl_itvs:itl_itvs g))
       (Zinterval.sum i j)
   | TPOnce i
   | TPHistorically i ->
     let i = Zinterval.of_interval i in
-    let j = relative_interval_of_formula_conjunct itl_itvs f in
+    let j = relative_interval_of_formula_conjunct itl_itvs fs in
     Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
   | TPSince (i, g) ->
     let i = Zinterval.of_interval i in
-    let j = relative_interval_of_formula_conjunct itl_itvs f in
+    let j = relative_interval_of_formula_conjunct itl_itvs fs in
     Zinterval.lub
       (Zinterval.sum (Zinterval.to_zero i) j)
       (Zinterval.sum i (relative_interval ~itl_itvs:itl_itvs g))
 
-let strict_of_formula_conjunct itl_strict f =
-  let fs = List.map f ~f:snd in
+let strict_of_formula_conjunct itl_strict (fs: Tformula.t list) =
   List.for_all fs ~f:(strict ~itl_strict:itl_strict)
 
-let strict_of_pattern_with_formulas itl_strict f: tpattern -> bool = function
+let strict_of_pattern_with_formulas itl_strict (f: Tformula.t list): tpattern -> bool = function
   | TPPresent -> strict_of_formula_conjunct itl_strict f
   | TPEventually i
   | TPAlways i ->
@@ -1385,23 +1445,24 @@ let strict_of_pattern_with_formulas itl_strict f: tpattern -> bool = function
     strict_of_formula_conjunct itl_strict f
     && strict ~itl_strict:itl_strict g
 
-let relative_interval_of_disjunct itl_itvs (_, _, _, f, p, e, s, _) =
+(* let relative_interval_of_disjunct itl_itvs (_, _, _, f, p, e, s, _) = *)
+let relative_interval_of_disjunct itl_itvs (d: tdisjunct) =
   (* The relative interval of the "variable renaming conditions" will always be 0 and is thus ignored *)
-  let conditions_itv = relative_interval_of_pattern_with_formulas itl_itvs f p in
-  let exceptions_itv = relative_interval_of_pattern_with_formulas itl_itvs e TPPresent in
-  let scopes_itv = relative_interval_of_pattern_with_formulas itl_itvs s TPPresent in
+  let conditions_itv = relative_interval_of_pattern_with_formulas itl_itvs d.f1 d.f1_patt in
+  let exceptions_itv = relative_interval_of_pattern_with_formulas itl_itvs d.exceptions TPPresent in
+  let scopes_itv = relative_interval_of_pattern_with_formulas itl_itvs d.scopes TPPresent in
   Zinterval.lub conditions_itv exceptions_itv |> Zinterval.lub scopes_itv
 
 let relative_interval_itl itl_itvs = function
   (* requires that all relative intervals of events used in the given rule have already been computed *)
-  | TCDefinition (_, _, _, f, p, e, s, _, Tformula.TPredicate (name, _, _)) ->
+  | TCDefinition (_, _, _, f, p, e, s, _, {f=Tformula.TPredicate (name, _, _); _}) ->
     let conditions_itv = relative_interval_of_pattern_with_formulas itl_itvs f p in
     let exceptions_itv = relative_interval_of_pattern_with_formulas itl_itvs e TPPresent in
     let scopes_itv = relative_interval_of_pattern_with_formulas itl_itvs s TPPresent in
     let itv = Zinterval.lub conditions_itv exceptions_itv |> Zinterval.lub scopes_itv in
     Map.add_exn itl_itvs ~key:name ~data:itv
   | TCDefinition _ -> assert false (* final formula must be a predicate *)
-  | TCDefinitionDis (disjuncts, Tformula.TPredicate (name, _, _)) ->
+  | TCDefinitionDis (disjuncts, {f=Tformula.TPredicate (name, _, _); _}) ->
     let relative_itvs_disjuncts = List.map (Map.data disjuncts) ~f:(relative_interval_of_disjunct itl_itvs) in
     let itv = List.fold relative_itvs_disjuncts ~init:Zinterval.full ~f:Zinterval.lub in
     Map.add_exn itl_itvs ~key:name ~data:itv
@@ -1409,27 +1470,45 @@ let relative_interval_itl itl_itvs = function
   | _ -> itl_itvs
 
 
-let strict_of_disjunct itl_strict (_, _, _, f, p, e, s, _) =
+(* let strict_of_disjunct itl_strict (_, _, _, f, p, e, s, _) = *)
+let strict_of_disjunct itl_strict (d: tdisjunct) =
   (* The "variable renaming conditions" will always be strict and are thus ignored *)
-  let conditions_strict = strict_of_pattern_with_formulas itl_strict f p in
-  let exceptions_strict = strict_of_pattern_with_formulas itl_strict e TPPresent in
-  let scopes_itv = strict_of_pattern_with_formulas itl_strict s TPPresent in
+  let conditions_strict = strict_of_pattern_with_formulas itl_strict d.f1 d.f1_patt in
+  let exceptions_strict = strict_of_pattern_with_formulas itl_strict d.exceptions TPPresent in
+  let scopes_itv = strict_of_pattern_with_formulas itl_strict d.scopes TPPresent in
   conditions_strict && exceptions_strict && scopes_itv
 
 let strict_itl itl_strict = function
   (* requires that all "strictness"-constraints of events used in the given rule have already been computed *)
-  | TCDefinition (_, _, _, f, p, e, s, _, Tformula.TPredicate (name, _, _)) ->
+  | TCDefinition (_, _, _, f, p, e, s, _, {f=Tformula.TPredicate (name, _, _); _}) ->
     let conditions_strict = strict_of_pattern_with_formulas itl_strict f p in
     let exceptions_strict = strict_of_pattern_with_formulas itl_strict e TPPresent in
     let scopes_itv = strict_of_pattern_with_formulas itl_strict s TPPresent in
     let is_strict = conditions_strict && exceptions_strict && scopes_itv in
     Map.add_exn itl_strict ~key:name ~data:is_strict
   | TCDefinition _ -> assert false
-  | TCDefinitionDis (disjuncts, Tformula.TPredicate (name, _, _)) ->
+  | TCDefinitionDis (disjuncts, {f=Tformula.TPredicate (name, _, _); _}) ->
     let is_strict = List.for_all (Map.data disjuncts) ~f:(strict_of_disjunct itl_strict) in
     Map.add_exn itl_strict ~key:name ~data:is_strict
   | TCDefinitionDis _ -> assert false
   | _ -> itl_strict
+
+(* TODO: implement past guardedness check *)
+(* let rule_is_past_guarded (pg, itl_pg) = function *)
+let rule_is_past_guarded _ = function
+  | _ ->
+  (* | TCImplication (_, _, pos, f1, p, ex, sc, f2, q, rt, rcs) ->
+    let pf = formulas_from_tpattern p in
+    let qf = formulas_from_tpattern q in
+    let fvs = List.fold (f1@ex@sc@f2@pf@qf) ~init:(Map.empty (module String)) ~f:Tformula.fv
+    in *)
+    assert false
+  (* | TCDefinition _ -> assert false
+  | TCDefinitionDis _ -> assert false *)
+
+let rules_are_past_guarded rules =
+  List.fold rules ~init:(true, Map.empty (module String)) ~f:rule_is_past_guarded
+  |> ignore
 
 let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_compilation, 'a) Map.t) : ((string, EnfType.t * bool, 'b) Map.t * int list) =
   let def_internal = def_sets compilation_rules tprog.tevents in
@@ -1437,6 +1516,8 @@ let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_c
   check_used_events_are_defined tprog def_internal use_internal;
   let sorted_rule_indices = topological_sort (Map.keys compilation_rules) def_internal use_internal in
   let compilation_rules_sorted = List.map sorted_rule_indices ~f:(fun idx -> Map.find_exn compilation_rules idx) in
+  (* TODO: check past-guardedness of rules *)
+  rules_are_past_guarded compilation_rules_sorted;
   let itl_itvs = List.fold (List.rev compilation_rules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
   let itl_strict = List.fold (List.rev compilation_rules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
   let verdict = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT) in
@@ -1453,7 +1534,8 @@ let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_c
   in
   found_pol_constraints, sorted_rule_indices
 
-let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * trule * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list) list =
+let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * trule * Tformula.t list * Tformula.t list) list =
+(* let collect_constitutive_rules (tprog: Tlex.tprog) = *)
   List.filter_map tprog.tstmts ~f:(function
     | TSRule (pos, idx, _, _, trule, _) ->
       let exceptions = get_exception_predicates ~negated:false tprog idx in
@@ -1466,41 +1548,60 @@ let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * tr
       end
     | _ -> None)
 
-let combine_constitutive_rules (rules: (Lexing.position * int * trule * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list) list) : trule_compilation list =
+(* let combine_constitutive_rules (rules: (Lexing.position * int * trule * Tformula.t list * Tformula.t list) list) : trule_compilation list = *)
+let combine_constitutive_rules rules: trule_compilation list =
   let collect_and_separate_event_definitions m (pos, idx, rule, exceptions, scopes) =
     let trule_type = match rule with
       | TConstitutive _ -> TRTConstitutive
       | TExceptionC _ -> TRTExceptionC
       | _ -> assert false
     in
-    let separate_event_definitions f1 p (m': (string, 'a, 'b) Map.t) (_, f) = match f with
+    let separate_event_definitions f1 p (m': (string, 'a, 'b) Map.t) f = match f.f with
       | Tformula.TPredicate (name, terms, _) ->
-        let d = (idx, trule_type, pos, f1, exceptions, scopes, p, terms) in
-        Map.add_multi m' ~key:name ~data:d
+        let disjunct: tdisjunct =
+          { rule_id = idx;
+            tt = trule_type;
+            rule_pos = pos;
+            def_positions = f.positions;
+            f1 = f1;
+            f1_patt = p;
+            exceptions = exceptions;
+            scopes = scopes;
+            var_original = terms;
+            var_renaming = [] (* dummy value, computed in a next step *)
+          }
+        in
+        Map.add_multi m' ~key:name ~data:disjunct
       | _ -> assert false
     in
     match rule with
-    | TConstitutive (f1, p, f2)
-    | TExceptionC (f1, p, _, _, f2) ->
+    | TConstitutive (_, f1, p, f2)
+    | TExceptionC (_, f1, p, _, _, f2) ->
       List.fold f2 ~init:m ~f:(separate_event_definitions f1 p)
     | _ -> assert false
   in
   let event_def_map = List.fold rules ~init:(Map.empty (module String)) ~f:collect_and_separate_event_definitions in
-  let replace_variables (idx, trule_type, pos, f1, exceptions, scopes, p, terms) =
-    let terms' = List.fold terms
-                    ~init:([],0)
-                    ~f:(fun (ts,i) t
-                        -> Term.{trm=TVar ("__t" ^ string_of_int i); tt=t.tt}::ts, i+1)
-                 |> fst in
-    let term_conditions = List.map2_exn terms terms' ~f:(fun t1 t2 -> Tformula.TEqConst (t1, t2)) in
-    (idx, trule_type, pos, f1, exceptions, scopes, term_conditions, p, terms')
+  (* let replace_variables (idx, trule_type, pos, f1, exceptions, scopes, p, terms) = *)
+  let replace_variables (d: tdisjunct): tdisjunct =
+    let rename_fun (ts,i) t =
+      let t = TTerm.
+        { trm=TVar ("__t" ^ string_of_int i); (* TODO: reserve variable names starting with '__t' as internal *)
+          tt=t.tt;
+          positions=[] (* don't attribute any physical locations with these internal 'renamed' paremeters *)
+        }
+      in
+      t::ts, i+1
+    in
+    let var_renamed = List.fold d.var_original ~init:([],0) ~f:rename_fun
+                      |> fst in
+    let term_conditions = List.map2_exn d.var_original var_renamed ~f:(fun t1 t2 -> Tformula.teqconst [] t1 t2) in
+    { d with var_renaming = term_conditions }
   in
   let event_map_renamed = Map.map event_def_map ~f:(List.map ~f:replace_variables) in
-  let extract_terms (_,_,_,_,_,_,_,_,terms) : Tformula.Term.t list = terms in
-  let to_tr_def_dis ((name,definitions): (string * 'z)) =
-    let add_disjunct_to_map ((m, k): (int, 'x, 'y) Map.t * int) (idx, trt, pos, f, exceptions, scopes, cs, p, _) =
-      let data = (idx, trt, pos, f, p, exceptions, scopes, cs) in
-      Map.add_exn m ~key:k ~data:data, k+1
+  let extract_terms (d: tdisjunct) : Tformula.TTerm.t list = d.var_original in
+  let to_tr_def_dis ((name, definitions): (string * 'defs)) =
+    let add_disjunct_to_map (m, k) (d: tdisjunct) =
+      Map.add_exn m ~key:k ~data:d, k+1
     in
     let disjunction = List.fold definitions
                         ~init:(Map.empty (module Int), 0)
@@ -1510,7 +1611,11 @@ let combine_constitutive_rules (rules: (Lexing.position * int * trule * (Lexing.
     let terms = Map.find_exn event_map_renamed name
                 |> List.hd_exn
                 |> extract_terms in
-    TCDefinitionDis (disjunction, Tformula.TPredicate (name, terms, Lex.Predicate))
+    let positions: (string, Lexing.position list, 'string_comp) Map.t =
+      let aux (d: tdisjunct) = d.def_positions in
+      Map.map event_map_renamed ~f:(List.concat_map ~f:aux)
+    in
+    TCDefinitionDis (disjunction, Tformula.tpredicate (Map.find_exn positions name) name terms Lex.Predicate)
   in
   Map.to_alist event_map_renamed |> List.map ~f:to_tr_def_dis
 
@@ -1524,11 +1629,11 @@ let create_def_rules tprog =
       let exceptions = get_exception_predicates ~negated:false tprog idx in
       let scopes = get_scope_predicates tprog idx in
       begin match trule with
-        | TScope (f1, p, r, f2)
+        | TScope (_, f1, p, r, f2)
           -> Some (TCDefinition (idx, TRTScope, pos, f1, p, exceptions, scopes, r, f2))
-        | TException (f1, p, r, f2)
+        | TException (_, f1, p, r, f2)
           -> Some (TCDefinition (idx, TRTException, pos, f1, p, exceptions, scopes, r, f2))
-        | TExceptionC (f1, p, r, f2, _)
+        | TExceptionC (_, f1, p, r, f2, _)
           -> Some (TCDefinition (idx, TRTExceptionC, pos, f1, p, exceptions, scopes, r, f2))
         | _ -> None
       end
@@ -1540,9 +1645,9 @@ let create_imp_rules tprog =
       let exceptions = get_exception_predicates ~negated:true tprog idx in
       let scopes = get_scope_predicates tprog idx in
       begin match trule with
-        | TObligation (f1, p, f2, q, rt, rcs)
+        | TObligation (_, f1, p, f2, q, rt, rcs)
           -> Some (TCImplication (idx, TRTObligation, pos, f1, p, exceptions, scopes, f2, q, rt, rcs))
-        | TPermission (f1, p, f2, q, rt, rcs)
+        | TPermission (_, f1, p, f2, q, rt, rcs)
           -> Some (TCImplication (idx, TRTPermission, pos, f1, p, exceptions, scopes, f2, q, rt, rcs))
         | _ -> None
       end
@@ -1557,17 +1662,27 @@ let create_compilation_rules (tprog: Tlex.tprog) : (int, trule_compilation, Int.
             ~f:(fun (m,i) r -> (Map.add_exn m ~key:i ~data:r, i+1))
   |> fst
 
-let convert_pattern_with_formulas (s: tprog) (enftype: EnfType.t) pols (fs: (Lexing.position * Tformula.t) list list) (p: tpattern) : ((Lexing.position * Eformula.t) list list * epattern) =
+let convert_pattern_with_formulas (s: tprog) (enftype: EnfType.t) pols b fs p : (Eformula.t list * epattern) =
+  let pols' = Map.map pols ~f:fst in
+  let convert enftype f =
+    convert s pols' b enftype f
+    |> Option.value_exn (* If conversion fails, then the enforcement type checking is wrong *)
+  in
+  let convert_all t fs = List.map fs ~f:(convert t) in
+  let convert_one t fs =
+    let find_first_possible _ f =
+      match types s pols t f with
+      | Possible _ -> true
+      | Impossible _ -> false
+    in
+    let idx = List.findi_exn ~f:find_first_possible fs |> fst in (* there must exist at least one formula which types correctly, otherwise the enforcement checking is wrong *)
+    let aux i f = if i = idx then convert t f else Eformula.of_tformula pols f in
+    List.mapi fs ~f:aux
+  in
   match enftype with
   | Cau ->
-    let convert_ b enftype (pos, f) = match convert s pols b enftype f with
-      | Some f -> (pos, f)
-      | None -> let err_msg = "The formula\n" ^ Tformula.to_string f ^ "\ncannot be converted under policy " ^ EnfType.to_string enftype ^ "." in
-                Util.enf_error err_msg (Some pos)
-    in
-    let convert_formulas f = List.map f ~f:(fun f -> List.map f ~f:(convert_ (C Lextime.Span.zero) enftype)) in (* TODO: what is the correct bound value? is zero correct?*)
     begin match p with
-      | TPPresent -> convert_formulas fs, EPPresent
+      | TPPresent -> convert_all Cau fs, EPPresent
       (* | TPEventually i -> assert false *)
       (* | TPAlways i -> assert false *)
       (* | TPUntil (i, g) -> assert false *)
@@ -1578,8 +1693,7 @@ let convert_pattern_with_formulas (s: tprog) (enftype: EnfType.t) pols (fs: (Lex
     end
   | Sup ->
     begin match p with
-      | TPPresent ->
-        assert false
+      | TPPresent -> convert_one Sup fs, EPPresent
       (* | TPEventually i -> assert false *)
       (* | TPAlways i -> assert false *)
       (* | TPUntil (i, g) -> assert false *)
@@ -1601,10 +1715,138 @@ let convert_pattern_with_formulas (s: tprog) (enftype: EnfType.t) pols (fs: (Lex
     end
   | _ -> assert false
 
-let convert_compilation_rule (s: tprog) pols = function
-  | TCImplication (idx, trt, pos, f1, p, exceptions, scopes, f2, q, rt, rcs) ->
-    let f1s, p_e = convert_pattern_with_formulas s Sup pols [f1;exceptions;scopes] p in
-    let f2s, q_e = convert_pattern_with_formulas s Cau pols [f2] q in
+
+let  merge_used_and_unused indices_used used unused =
+  let n = List.length used + List.length unused in
+  let all_indices = List.init n ~f:(fun i -> i) in
+  let unused_indices = List.filter all_indices ~f:(fun i -> not (List.mem indices_used i ~equal:Int.equal)) in
+  let merge i = 
+    let aux j _ = i=j in
+    match List.findi indices_used ~f:aux with
+      | Some (_, idx) -> List.nth_exn used idx
+      | None ->
+        let idx = List.findi_exn unused_indices ~f:aux |> snd in
+        List.nth_exn unused idx
+    in
+  List.init n ~f:merge
+
+let convert_compilation_rule (s: tprog) pols b = function
+  | TCImplication (idx, trt, pos, f1, p, ex, sc, f2, q, rt, rcs) ->
+    begin match rt with
+      | Vanilla ->
+        let ert = erule_type_from_trule_type trt in
+        let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
+        let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+        let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+        let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
+        let p' = epattern_of_tpattern s p in
+        let q' = epattern_of_tpattern s q in
+        ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+      | Enforceable ->
+        (* TODO: interpret rule constraints (again)
+            -> find first applicable way of making the implication Cau
+            -> convert based on that
+        *)
+        let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
+          parse_rule_constraints pos pols (List.length f1) rcs
+        in
+        begin match cause_exceptions, type_exceptions None s pos pols ex with
+          | true, Possible constraints ->
+            let pols' = solve constraints |> List.hd_exn in (* TODO: iterate through found policies *)
+            let ert = erule_type_from_trule_type trt in
+            let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
+            let ex' =
+              convert_pattern_with_formulas s Cau pols' b ex TPPresent
+              |> fst
+            in
+            let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+            let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
+            let p' = epattern_of_tpattern s p in
+            let q' = epattern_of_tpattern s q in
+            ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+          | _ ->
+            begin match suppress_scopes, type_scopes None s pos pols sc with
+            | true, Possible constraints ->
+              let pols' = solve constraints |> List.hd_exn in (* TODO: handle multiple/no options *)
+              let ert = erule_type_from_trule_type trt in
+              let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
+              let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+              let sc' =
+                convert_pattern_with_formulas s Cau pols' b sc TPPresent
+                |> fst
+              in
+              let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
+              let p' = epattern_of_tpattern s p in
+              let q' = epattern_of_tpattern s q in
+              ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+            | _ ->
+              begin match suppress_conditions, type_pattern_with_formulas None s pos pols Sup f1 p with
+              | true, Possible constraints ->
+                let pols' = solve constraints |> List.hd_exn in (* TODO: handle empty/multiple *)
+                let ert = erule_type_from_trule_type trt in
+                let f1', p' =
+                  convert_pattern_with_formulas s Cau pols' b f1 p
+                in
+                let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+                let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+                let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
+                let q' = epattern_of_tpattern s q in
+                ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+              | _ ->
+                let v = begin match suppress_indices with
+                    | Some indices ->
+                      let f1_filtered = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
+                      type_pattern_with_formulas None s pos pols Sup f1_filtered p
+                    | None -> 
+                      Impossible (ERule (pos, "no conditions are marked as suppressing"))
+                  end in
+                begin match v with
+                | Possible constraints ->
+                  let indices = Option.value_exn suppress_indices in
+                  let pols' = solve constraints |> List.hd_exn in (*TODO*)
+                  let ert = erule_type_from_trule_type trt in
+                  let f1_used = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
+                  let f1_unused = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:(fun x y -> Int.equal x y |> not)) in
+                  let f1_used', p' =
+                    convert_pattern_with_formulas s Cau pols' b f1_used p
+                  in
+                  let f1_unused' = List.map f1_unused ~f:(Eformula.of_tformula pols) in
+                  let f1' = merge_used_and_unused indices f1_used' f1_unused' in
+                  let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+                  let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+                  let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
+                  let q' = epattern_of_tpattern s q in
+                  ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+                | _ ->
+                  begin match cause_effects, type_pattern_with_formulas None s pos pols Cau f2 q with
+                    | true, Possible constraints ->
+                      let pols' = solve constraints |> List.hd_exn in (* TODO *)
+                      let ert = erule_type_from_trule_type trt in
+                      let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
+                      let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+                      let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+                      let f2', q' =
+                        convert_pattern_with_formulas s Cau pols' b f2 q
+                      in
+                      let p' = epattern_of_tpattern s p in
+                      ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+                    | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
+                  end
+                end
+              end
+            end
+          end
+
+      | Transparent ->
+        (* TODO: interpret rule constraints (again)
+            -> find first applicable way of making the implication Cau
+            -> analogous to non-transparent, but requires SRP checks
+            -> convert based on that
+        *)
+        assert false
+    end
+    (* let f1s, p_e = convert_pattern_with_formulas s Sup pols b [f1;exceptions;scopes] p in
+    let f2s, q_e = convert_pattern_with_formulas s Cau pols b [f2] q in
     let f1_e, e_e, s_e = match f1s with
       | [f1;exceptions;scopes] -> f1, exceptions, scopes
       | _ -> assert false
@@ -1614,9 +1856,11 @@ let convert_compilation_rule (s: tprog) pols = function
       | _ -> assert false
     in
     let ert = erule_type_from_trule_type trt in
-    ECImplication (idx, ert, pos, f1_e, p_e, e_e, s_e, f2_e, q_e, rt, rcs)
-  | TCDefinition (idx, trt, pos, f1, p, exceptions, scopes, refs, f2) ->
-    let pred_name = match f2 with
+    ECImplication (idx, ert, pos, f1_e, p_e, e_e, s_e, f2_e, q_e, rt, rcs) *)
+  | TCDefinition _ ->
+  (* | TCDefinition (idx, trt, pos, f1, p, exceptions, scopes, refs, f2) -> *)
+    assert false
+    (* let pred_name = match f2 with
       | Tformula.TPredicate (name, _, _) -> name
       | _ -> assert false
     in
@@ -1624,7 +1868,7 @@ let convert_compilation_rule (s: tprog) pols = function
       | Some t -> t
       | None -> Obs
     in
-    let f1s, p_e = convert_pattern_with_formulas s enftype pols [f1;exceptions;scopes] p in
+    let f1s, p_e = convert_pattern_with_formulas s enftype pols b [f1;exceptions;scopes] p in
     let f1_e, e_e, s_e = match f1s with
       | [f1;exceptions;scopes] -> f1, exceptions, scopes
       | _ -> assert false
@@ -1634,9 +1878,11 @@ let convert_compilation_rule (s: tprog) pols = function
       | None -> Util.enf_error ("Internal predicate \"" ^ Tformula.to_string f2 ^ "\" cannot be converted.") None (* TODO, should this be replaced with assert false/ why might this happen, could it even happen after enforcement checking? *)
     in
     let ert = erule_type_from_trule_type trt in
-    ECDefinition (idx, ert, pos, f1_e, p_e, e_e, s_e, refs, f2_e) 
-  | TCDefinitionDis (disjuncts, g) ->
-    let pred_name = match g with
+    ECDefinition (idx, ert, pos, f1_e, p_e, e_e, s_e, refs, f2_e)  *)
+  | TCDefinitionDis _ ->
+  (* | TCDefinitionDis (disjuncts, g) -> *)
+    assert false
+    (* let pred_name = match g with
       | Tformula.TPredicate (name, _, _) -> name
       | _ -> assert false
     in
@@ -1650,7 +1896,7 @@ let convert_compilation_rule (s: tprog) pols = function
     in
     let convert_disjunct (idx, trt, pos, f1, p, exceptions, scopes, cs) =
       let cs = List.map cs ~f:(fun c -> Lexing.dummy_pos, c) in
-      let f1s, p_e = convert_pattern_with_formulas s enftype pols [f1;exceptions;scopes;cs] p in
+      let f1s, p_e = convert_pattern_with_formulas s enftype pols b [f1;exceptions;scopes;cs] p in
       let f1_e, e_e, s_e, cs_e = match f1s with
         | [f1;exceptions;scopes;cs] -> f1, exceptions, scopes, List.map cs ~f:snd
         | _ -> assert false
@@ -1659,43 +1905,47 @@ let convert_compilation_rule (s: tprog) pols = function
       idx, ert, pos, f1_e, p_e, e_e, s_e, cs_e
     in
     let disjuncts_e = Map.map disjuncts ~f:convert_disjunct in
-    ECDefinitionDis (disjuncts_e, g_e)
+    ECDefinitionDis (disjuncts_e, g_e) *)
 
-let convert_compilation_rules tprog pols rules =
-  Map.map rules ~f:(convert_compilation_rule tprog pols)
+let convert_compilation_rules tprog pols b rules =
+  Map.map rules ~f:(convert_compilation_rule tprog pols b)
 
 let erules_from_compilation_rules (compilation_rules: (int, trule_compilation, Int.comparator_witness) Map.t) : (int, erule, Int.comparator_witness) Map.t =
   let c_rules = Map.to_alist compilation_rules in
   let aux erules (c_idx, c_rule) = match c_rule with
-    | TCImplication (r_idx, trt, _, _, _, _, _, _, _, _, _) ->
+    | TCImplication (r_idx, trt, pos, _, _, _, _, _, _, _, _) ->
       begin match trt with
-        | TRTObligation -> Map.add_exn erules ~key:r_idx ~data:(EObligation c_idx)
-        | TRTPermission -> Map.add_exn erules ~key:r_idx ~data:(EPermission c_idx)
+        | TRTObligation -> Map.add_exn erules ~key:r_idx ~data:(EObligation (pos, c_idx))
+        | TRTPermission -> Map.add_exn erules ~key:r_idx ~data:(EPermission (pos, c_idx))
         | _ -> assert false
     end
-    | TCDefinition (r_idx, trt, _, _, _, _, _, _, _) ->
+    | TCDefinition (r_idx, trt, pos, _, _, _, _, _, _) ->
       begin match trt with
-        | TRTException -> Map.add_exn erules ~key:r_idx ~data:(EException c_idx)
+        | TRTException -> Map.add_exn erules ~key:r_idx ~data:(EException (pos, c_idx))
         | TRTExceptionC -> Map.update erules r_idx ~f:(function
-            | Some (EExceptionC (-1, constitutives)) -> EExceptionC (c_idx, constitutives)
+            | Some (EExceptionC (pos, -1, constitutives)) -> EExceptionC (pos, c_idx, constitutives)
             | Some _ -> assert false (* not -1: exception cannot be defined already *)
-            | None -> EExceptionC (c_idx, []))
-        | TRTScope -> Map.add_exn erules ~key:r_idx ~data:(EScope c_idx)
+            | None -> EExceptionC (pos, c_idx, []))
+        | TRTScope -> Map.add_exn erules ~key:r_idx ~data:(EScope (pos, c_idx))
         | _ -> assert false
       end
     | TCDefinitionDis (disjunct_map, _) ->
-      let add_disjuncts_to_map m (d_idx, (r_idx, trt, _, _, _, _, _, _)) =
+      (* let add_disjuncts_to_map m (d_idx, (r_idx, trt, _, _, _, _, _, _)) = *)
+      let add_disjuncts_to_map m (d_idx, disjunct) =
+        let trt = disjunct.tt in
+        let r_idx = disjunct.rule_id in
+        let pos = disjunct.rule_pos in
         begin match trt with
           | TRTConstitutive ->
             Map.update m r_idx ~f:(function
-              | Some (EConstitutive ds) -> EConstitutive ((c_idx, d_idx)::ds)
+              | Some (EConstitutive (pos, ds)) -> EConstitutive (pos, (c_idx, d_idx)::ds)
               | Some _ -> assert false
-              | None -> EConstitutive [(c_idx, d_idx)])
+              | None -> EConstitutive (pos, [(c_idx, d_idx)]))
           | TRTExceptionC ->
             Map.update m r_idx ~f:(function
-              | Some (EExceptionC (c_idx_ex, constitutives)) -> EExceptionC (c_idx_ex, (c_idx, d_idx)::constitutives)
+              | Some (EExceptionC (pos, c_idx_ex, constitutives)) -> EExceptionC (pos, c_idx_ex, (c_idx, d_idx)::constitutives)
               | Some _ -> assert false
-              | None -> EExceptionC (-1, [(c_idx, d_idx)]))
+              | None -> EExceptionC (pos, -1, [(c_idx, d_idx)]))
           | _ -> assert false
         end
       in
@@ -1703,12 +1953,12 @@ let erules_from_compilation_rules (compilation_rules: (int, trule_compilation, I
   in
   List.fold c_rules ~f:aux ~init:(Map.empty (module Int))
 
-let do_type _ (tprog: Tlex.tprog) : Elex.eprog =
+let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
   let compilation_rules  = create_compilation_rules tprog in
   let pols, rule_order = type_trules_compilation tprog compilation_rules in
-  let pols = Map.map pols ~f:fst in
+  let pols = Map.map pols ~f:fst in (* remove transparency information from pols *)
   let erules = erules_from_compilation_rules compilation_rules in
-  let e_compilation_rules = convert_compilation_rules tprog pols compilation_rules in
+  let e_compilation_rules = convert_compilation_rules tprog pols b compilation_rules in
   {
     estmts     = List.map tprog.tstmts ~f:(type_tstmt erules);
     ealiases   = tprog.taliases;

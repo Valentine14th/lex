@@ -10,21 +10,39 @@ type tpattern =
   | TPHistorically of Interval.t
   | TPSince of Interval.t * Tformula.t
 
+type tref_expr = { label: Label.t;
+                   ref: Lex.reference;
+                   pos: Lexing.position }
+let to_rtref_expr (tref: tref_expr) = Label.RuleTree.{label = tref.label; ref = tref.ref; pos = tref.pos}
+
+let make_tref_expr pos label sks rule = { label; ref = Lex.make_reference sks rule; pos }
+
 type trule =
-  | TObligation   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
-  | TPermission   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
-  | TConstitutive of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list
-  | TException    of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
-  | TExceptionC   of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t * (Lexing.position * Tformula.t) list
-  | TScope        of (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
+  | TObligation   of Lexing.position * Tformula.t list * tpattern * Tformula.t list * tpattern * rule_type * rule_constr list
+  | TPermission   of Lexing.position * Tformula.t list * tpattern * Tformula.t list * tpattern * rule_type * rule_constr list
+  | TConstitutive of Lexing.position * Tformula.t list * tpattern * Tformula.t list
+  | TException    of Lexing.position * Tformula.t list * tpattern * tref_expr list * Tformula.t
+  | TExceptionC   of Lexing.position * Tformula.t list * tpattern * tref_expr list * Tformula.t * Tformula.t list
+  | TScope        of Lexing.position * Tformula.t list * tpattern * tref_expr list * Tformula.t
 
 type trule_type = TRTObligation | TRTPermission | TRTConstitutive | TRTException | TRTExceptionC | TRTScope
 
+type tdisjunct = { rule_id: int;
+                   tt: trule_type;
+                   rule_pos: Lexing.position;
+                   def_positions: Lexing.position list;
+                   f1: Tformula.t list;
+                   f1_patt: tpattern;
+                   exceptions: Tformula.t list; (* list of predicate *)
+                   scopes: Tformula.t list; (* list of predicate *)
+                   var_original: Tformula.TTerm.t list; (* list of the original terms*)
+                   var_renaming: Tformula.t list (* list of equalities: _vi = <expr> *)
+                  }
+
 type trule_compilation =
-  | TCImplication   of int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * tpattern * rule_type * rule_constr list
-  | TCDefinition    of int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list * tpattern * (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * (Lexing.position * Label.t * Lex.reference) list * Tformula.t
-  | TCDefinitionDis of (int, (int * trule_type * Lexing.position * (Lexing.position * Tformula.t) list  * tpattern* (Lexing.position * Tformula.t) list * (Lexing.position * Tformula.t) list * Tformula.t list), Int.comparator_witness) Map.t * Tformula.t
-                             (* rule_id, trule_type, rule pos,     f1,                                  , pattern,   exceptions,                           scopes,                           variable renaiming *)
+  | TCImplication   of int * trule_type * Lexing.position * Tformula.t list * tpattern * Tformula.t list * Tformula.t list * Tformula.t list * tpattern * rule_type * rule_constr list
+  | TCDefinition    of int * trule_type * Lexing.position * Tformula.t list * tpattern * Tformula.t list * Tformula.t list * tref_expr list * Tformula.t
+  | TCDefinitionDis of (int, tdisjunct, Int.comparator_witness) Map.t * Tformula.t
 
 type 'a tannot =
   | TALex of 'a
@@ -76,6 +94,15 @@ let tempty =
     scope_predicates = Map.empty (module Int);
   }
 
+let formulas_from_tpattern = function
+  | TPPresent
+  | TPEventually _
+  | TPAlways _
+  | TPOnce _
+  | TPHistorically _ -> []
+  | TPUntil (_, f) 
+  | TPSince (_, f) -> [f]
+
 let trule_map tprog =
   List.fold tprog.tstmts ~init:(Map.empty (module Int))
     ~f:(fun acc -> function
@@ -91,7 +118,7 @@ let add_talias name typ doc_string tprog pos =
   (* TODO: (potentially in the future) allow for overwriting/reusing existing type names *)
   let aliases =
     try Map.add_exn tprog.taliases ~key:name ~data:(typ, doc_string)
-    with _ -> Util.type_error (Printf.sprintf "type alias %s already exists" name) pos
+    with _ -> Util.type_error (Printf.sprintf "type alias %s already exists" name) [pos]
   in
   { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
 
@@ -100,7 +127,7 @@ let add_tevent event_type name args pol ds tprog pos =
   (* TODO: (potentially in the future) allow for overwriting/reusing event names *)
   let events =
     try Map.add_exn tprog.tevents ~key:name ~data:event
-    with _ -> Util.type_error (Printf.sprintf "event %s already exists" name) pos
+    with _ -> Util.type_error (Printf.sprintf "event %s already exists" name) [pos]
   in
   { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, pol, ds)::tprog.tstmts}
 
@@ -109,7 +136,7 @@ let add_tfunction name arg_types return_type ds tprog pos =
   (* TODO: allow for overwriting/reusing event names *)
   let functions =
     try Map.add_exn tprog.tfunctions ~key:name ~data:function_
-    with _ -> Util.type_error (Printf.sprintf "function %s already exists" name) pos
+    with _ -> Util.type_error (Printf.sprintf "function %s already exists" name) [pos]
   in
   { tprog with tfunctions = functions; tstmts = TSFunction (name, arg_types, return_type, ds)::tprog.tstmts}
 
@@ -123,13 +150,13 @@ let add_tfunction name arg_types return_type ds tprog pos =
   in
   { tprog with variables = variables }*)
 
-let add_exception i f refs tprog =
+let add_exception i f (trefs: tref_expr list) tprog =
   { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f;
-               rule_tree = Label.RuleTree.add_exception i refs tprog.rule_tree }
+               rule_tree = Label.RuleTree.add_exception i (List.map ~f:to_rtref_expr trefs) tprog.rule_tree }
 
-let add_scope i f refs tprog =
+let add_scope i f (trefs: tref_expr list) tprog =
   { tprog with scope_predicates = Map.add_exn tprog.scope_predicates ~key:i ~data:f;
-               rule_tree = Label.RuleTree.add_scope i refs tprog.rule_tree }
+               rule_tree = Label.RuleTree.add_scope i (List.map ~f:to_rtref_expr trefs) tprog.rule_tree }
 
 let set_labels pos label tprog =
   { tprog with rule_tree = Label.RuleTree.add_label pos tprog.rule_tree label }
@@ -182,7 +209,7 @@ let predicates_of_tpattern = function
 let string_of_trule i trule =
   let to_string f = Etc.tabs (i+1) ^ Tformula.to_string f in
   let string_of_formula_list f =
-    String.concat ~sep:"\n" (List.map ~f:(fun (_,f') -> to_string f') f) ^ "\n" in
+    String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb f p g q rcs rt =
@@ -216,16 +243,16 @@ let string_of_trule i trule =
     ^ string_of_formula_list g
   in
   match trule with
-  | TObligation (f, p, g, q, rt, rcs)
-  | TPermission (f, p, g, q, rt, rcs)
+  | TObligation (_, f, p, g, q, rt, rcs)
+  | TPermission (_, f, p, g, q, rt, rcs)
     -> string_of_imp_rule (verb_of_trule trule) f p g q rcs rt
-  | TConstitutive (f, p, g)
+  | TConstitutive (_, f, p, g)
     -> string_of_cons_rule (verb_of_trule trule) f p g
-  | TException (f, p, trefs, _)
-  | TScope (f, p, trefs, _)
-    -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:(fun (_,_,x) -> x) trefs)
-  | TExceptionC (f, p, trefs, _, g)
-    -> string_of_refc_rule (verb_of_trule trule) f p (List.map ~f:(fun (_,_,x) -> x) trefs) g
+  | TException (_, f, p, trefs, _)
+  | TScope (_, f, p, trefs, _)
+    -> string_of_ref_rule (verb_of_trule trule) f p (List.map ~f:(fun tref -> tref.ref) trefs)
+  | TExceptionC (_, f, p, trefs, _, g)
+    -> string_of_refc_rule (verb_of_trule trule) f p (List.map ~f:(fun tref -> tref.ref) trefs) g
 
 let string_of_tstmt ?(i=0) =
   function
@@ -309,8 +336,8 @@ let print_tprog tprog =
 
 
 let unpack_functional tevents trm' trm =
-  match Tformula.Term.(trm.trm) with
-  | Tformula.Term.TApp (f, trms) ->
+  match Tformula.TTerm.(trm.trm) with
+  | Tformula.TTerm.TApp (f, trms) ->
      (match Map.find tevents f with
       | Some (Event (_, Functional), _, _, _) ->
          Some (f, trms @ [trm'])
@@ -318,8 +345,8 @@ let unpack_functional tevents trm' trm =
   | _ -> None
 
 let unpack_variable tevents trm' trm =
-  match Tformula.Term.(trm.trm) with
-  | Tformula.Term.TVar x ->
+  match Tformula.TTerm.(trm.trm) with
+  | Tformula.TTerm.TVar x ->
      (match Map.find tevents x with
       | Some (Event (_, Variable), _, _, _) ->
          Some (x, [trm'])

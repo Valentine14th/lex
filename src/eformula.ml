@@ -10,14 +10,14 @@
 open Core
 open Formula
 
-module Term = Tformula.Term
+module ETerm = Tformula.TTerm
 
 type core_t =
   | ETT
   | EFF
-  | EEqConst of Term.t * Dom.t
-  | EPredicate of string * Term.t list * Lex.event_type
-  | EAgg of string * Aggregation.op * Term.t * string list * t
+  | EEqConst of ETerm.t * (Dom.t * Lexing.position list)
+  | EPredicate of string * ETerm.t list * Lex.event_type
+  | EAgg of string * Aggregation.op * ETerm.t * string list * t
   | ENeg of t
   | EAnd of Side.t * (t list)
   | EOr of Side.t * (t list)
@@ -35,7 +35,9 @@ type core_t =
   | EUntil of Side.t * Interval.t * bool * t * t
   | EType of t * ty
 
-and t = { f: core_t; enftype: EnfType.t; id: int }
+and t = { f: core_t; enftype: EnfType.t;
+          id: int;
+          positions: Lexing.position list }
 
 let rec max_id_core = function
   | ETT
@@ -66,7 +68,7 @@ let rec max_id_core = function
 
 and max_id f = Int.max f.id (max_id_core f.f)
 
-let make f enftype id = { f; enftype; id }
+let make f enftype id positions = { f; enftype; id; positions }
 
 let ett = ETT
 let eff = EFF
@@ -90,12 +92,12 @@ let euntil s i f g = EUntil (s, i, true, f, g)
 let etype s t = EType (s, t)
 
 let tbigcauconj = function
-  | [] -> make ett Non 0
-  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (econj N f g) Non 0)
+  | [] -> make ett Non 0 []
+  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (econj N f g) Non 0 f.positions)
 (*TODO: assign correct type to formula, not just Non*)
 
 let tbigcauforall vars f =
-  List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non 0)
+  List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non 0 f.positions)
 
 let rec core_of_tformula tevents ?id:(id=1) d = 
   let lof_formula = of_tformula tevents ~id:(d*id)
@@ -105,12 +107,13 @@ let rec core_of_tformula tevents ?id:(id=1) d =
   | Tformula.TTT -> ETT
   | TFF -> EFF
   | TEqConst (x, y) -> 
-     (if Term.equal_core y.trm (Term.TConst (Dom.Bool true)) then
-       EEqConst (x, Dom.Bool true)
+     (if ETerm.equal_core y.trm (ETerm.TConst (Dom.Bool true)) then
+       EEqConst (x, (Dom.Bool true, y.positions))
      else
-       EEqConst ({ trm = Term.TBinop (x, Formula.Term.BEq, y);
-                   tt = TypeTerm.TypeConst (Dom.TBool) },
-                 Dom.Bool true))
+       EEqConst ({ trm = ETerm.TBinop (x, Formula.Term.BEq, y);
+                   tt = TypeTerm.TypeConst (Dom.TBool);
+                   positions = [] },
+                 (Dom.Bool true, y.positions)))
   | TPredicate (e, t, et) -> EPredicate (e, t, et)
   | TAgg (s, op, x, y, f) -> EAgg (s, op, x, y, rof_formula f)
   | TNeg f -> ENeg (lof_formula f)
@@ -130,19 +133,36 @@ let rec core_of_tformula tevents ?id:(id=1) d =
   | TUntil (s, i, f, g) -> EUntil (s, i, true, lof_formula f, rof_formula g)
   | TType (f, ty) -> EType (lof_formula f, ty)
 
-and of_tformula tevents ?id:(id=1) f =
+and of_tformula tevents ?id:(id=1) (f: Tformula.t) : t =
   let d = Tformula.deg f in
-  { f = core_of_tformula tevents ~id d f; enftype = EnfType.Obs; id }
+  { f = core_of_tformula tevents ~id d f.f;
+    enftype = EnfType.Obs;
+    id;
+    positions = f.positions }
 
 let of_tformulas tevents = List.map ~f:(of_tformula tevents)
 
-let rec fv f = match f.f with
-  | ETT | EFF -> Set.empty (module String)
-  | EEqConst (x, _) -> Set.of_list (module String) (Term.fv_list [x])
-  | EPredicate (_, trms, _) -> Set.of_list (module String) (Term.fv_list trms)
-  | EAgg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
-  | EExists (x, f)
-    | EForall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
+let rec fv map f =
+  let aux0 v map p = Map.add_multi map ~key:v ~data:p in
+  let aux1 map (v, ps) = List.fold ps ~init:map ~f:(aux0 v) in
+  let merge_fun ~key:_ = function
+    | `Left x | `Right x -> Some x
+    | `Both (x, y) -> Some (x @ y)
+  in
+  let merge map1 map2 = Map.merge map1 map2  ~f:merge_fun in
+  match f.f with
+  | ETT | EFF -> map
+  | EEqConst (x, _) ->
+    ETerm.fv_list [x] |> List.fold ~init:map ~f:aux1
+  | EPredicate (_, trms, _) ->
+    ETerm.fv_list trms |> List.fold ~init:map ~f:aux1
+  | EAgg (s, _, _, ys, _) ->
+    ((s, f.positions) :: List.map ys ~f:(fun y -> (y, f.positions)))
+    |> List.fold ~init:map ~f:aux1
+  | EExists (x, g)
+    | EForall (x, g) ->
+      Map.filter_keys (fv (Map.empty (module String)) g) ~f:(fun y -> not (String.equal x y))
+      |> merge map (* merge with original map - doing it this way, instead of passing the map as an argument to fv above, we can avoid filtering out variables that are bound inside the quantifier, but free outside of it *)
   | ENeg f
     | EPrev (_, f)
     | EOnce (_, f)
@@ -150,15 +170,14 @@ let rec fv f = match f.f with
     | EEventually (_, _, f)
     | EAlways (_, _, f)
     | ENext (_, f)
-    | EType (f, _) -> fv f
+    | EType (f, _) -> fv map f
     | EImp (_, f1, f2)
     | EIff (_, _, f1, f2)
     | ESince (_, _, f1, f2)
-    | EUntil (_, _, _, f1, f2) -> Set.union (fv f1) (fv f2)
+    | EUntil (_, _, _, f1, f2) -> fv (fv map f2) f1
   | EAnd (_, fs)
     | EOr (_, fs) ->
-     let f x g = Set.union x (fv g) in
-     List.fold_left fs ~init:(Set.empty (module String)) ~f
+      List.fold_left fs ~init:map ~f:fv
 
 let rec rank = function
   | ETT | EFF -> 0
@@ -188,14 +207,15 @@ let fix_side s f g =
                else Side.R
   | _ -> s
 
-let rec to_formula f = to_formula_core f.f
+let rec to_formula (f: t): Formula.t = Formula.make_formula (to_formula_core f.f) f.positions
 
-and to_formula_core = function
+and to_formula_core: core_t -> Formula.core_t = function
   | ETT -> TT
   | EFF -> FF
-  | EEqConst (trm, c) -> Term (Formula.Term.Binop (Term.to_formula_term trm, Formula.Term.BEq, Formula.Term.Const c))
-  | EPredicate (e, trms, _) -> Predicate (e, List.map trms ~f:Term.to_formula_term)
-  | EAgg (s, op, x, y, f) -> Agg (s, op, Term.to_formula_term x, y, to_formula f)
+  | EEqConst (trm, (c, c_pos)) ->
+    Term (Formula.Term.binop trm.positions (ETerm.to_formula_term trm) Formula.Term.BEq (Formula.Term.const c_pos c))
+  | EPredicate (e, trms, _) -> Predicate (e, List.map trms ~f:ETerm.to_formula_term)
+  | EAgg (s, op, x, y, f) -> Agg (s, op, ETerm.to_formula_term x, y, to_formula f)
   | ENeg f -> Neg (to_formula f)
   | EAnd (s, fs) -> And (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
                          List.map fs ~f:to_formula)
@@ -219,8 +239,8 @@ let rec op_to_string_core = function
   | ETT -> Printf.sprintf "⊤"
   | EFF -> Printf.sprintf "⊥"
   | EEqConst _ -> Printf.sprintf "="
-  | EPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
-  | EAgg (_, op, x, y, _) -> Printf.sprintf "%s(%s; %s)" (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y)
+  | EPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (ETerm.list_to_string trms)
+  | EAgg (_, op, x, y, _) -> Printf.sprintf "%s(%s; %s)" (Aggregation.op_to_string op) (ETerm.value_to_string x) (String.concat ~sep:", " y)
   | ENeg _ -> Printf.sprintf "¬"
   | EAnd (_, _) -> Printf.sprintf "∧"
   | EOr (_, _) -> Printf.sprintf "∨"
@@ -243,9 +263,9 @@ and op_to_string f = op_to_string_core f.f
 let rec to_string_core_rec l = function
   | ETT -> Printf.sprintf "⊤"
   | EFF -> Printf.sprintf "⊥"
-  | EEqConst (x, c) -> Printf.sprintf "%s = %s" (Term.to_string x) (Dom.to_string c)
-  | EPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (Term.list_to_string trms)
-  | EAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (Term.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
+  | EEqConst (x, (c, _)) -> Printf.sprintf "%s = %s" (ETerm.to_string x) (Dom.to_string c)
+  | EPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (ETerm.list_to_string trms)
+  | EAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (ETerm.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | ENeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | EAnd (s, fs) ->
      let sep = "∧" ^ Side.to_string s in

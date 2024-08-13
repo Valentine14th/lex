@@ -20,7 +20,7 @@ module Placeholders = struct
 end
 
 let rec html_of_trm ?(l=0) = function
-  | Tformula.Term.TVar x -> ident x
+  | Tformula.TTerm.TVar x -> ident x
   | TConst d -> const (Dom.to_string d)
   | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
   | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
@@ -33,7 +33,7 @@ let rec html_of_trm ?(l=0) = function
                           (html_of_trm ~l:l' t'.trm)
   | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
   | TRecord kvs ->
-     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.Term.(v.trm) in
+     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.TTerm.(v.trm) in
      Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
 and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
@@ -68,7 +68,7 @@ let reading_of_dom = function
   | Money v -> Money.to_string_reading v
 
 let rec reading_of_trm ?(l=0) eprog = function
-  | Tformula.Term.TVar x -> ident x
+  | Tformula.TTerm.TVar x -> ident x
   | TConst d -> const (reading_of_dom d)
   | TApp (f, trms) ->
      (match Map.find Elex.(eprog.efunctions) f with
@@ -88,12 +88,12 @@ let rec reading_of_trm ?(l=0) eprog = function
   | TRecord kvs ->
      let f (k, v) =
        li "lex-reading-record-field"
-         (ident k ^ " is equal to " ^ reading_of_trm eprog Tformula.Term.(v.trm)) in
+         (ident k ^ " is equal to " ^ reading_of_trm eprog Tformula.TTerm.(v.trm)) in
      "a record where" ^ ul "lex-reading-record" (String.concat (List.map kvs ~f))
 
 
 and reading_of_term eprog term =
-  span "" (reading_of_trm eprog Tformula.Term.(term.trm))
+  span "" (reading_of_trm eprog Tformula.TTerm.(term.trm))
 
 let reading_of_span span = const (Lextime.Span.to_string_reading span)
 
@@ -132,15 +132,15 @@ let rec reading_of_formula formula_id eprog f =
     match Eformula.(f.f) with
     | Eformula.ETT -> const "true"
     | EFF -> const "false"
-    | EEqConst (x, Dom.Bool true) -> reading_of_term eprog x
-    | EEqConst (x, d) ->
+    | EEqConst (x, (Dom.Bool true, _)) -> reading_of_term eprog x
+    | EEqConst (x, (d, _)) ->
        Printf.sprintf "%s is equal to %s" (reading_of_term eprog x) (const (reading_of_dom d))
-    | EPredicate (name, trms, event_type) as f ->
+    | EPredicate (name, trms, event_type) as g ->
        (match Map.find Elex.(eprog.eevents) name with
         | Some (_, args, _, doc_string) -> 
            let names = List.map ~f:(fun (_, name, _) -> name) args in
            (match doc_string, event_type with
-            | None, _ -> Formula.to_string (Eformula.to_formula_core f)
+            | None, _ -> Formula.to_string (Eformula.to_formula f)
             | Some s, Event (_, Functional) ->
                Printf.sprintf "%s is equal to %s"
                  (Placeholders.replace_all (List.drop_last_exn names)
@@ -151,7 +151,7 @@ let rec reading_of_formula formula_id eprog f =
                  s
                  (reading_of_term eprog (List.last_exn trms))
             | Some s, _ -> Placeholders.replace_all names (List.map ~f:(reading_of_term eprog) trms) s)
-        | None -> Eformula.to_string_core f)
+        | None -> Eformula.to_string_core g)
     | EAgg (s, op, x, y, f) ->
        let reading_of_groupby =
          if List.is_empty y then
@@ -253,7 +253,7 @@ let rec reading_of_formula formula_id eprog f =
        ^ ", the following happened: "
        ^ (ul "lex-reading-until-right"
             (li "lex-reading-until-right-li" (reading_of_formula formula_id eprog g)))
-    | f -> Formula.to_string (Eformula.to_formula_core f) in
+    | _ -> Formula.to_string (Eformula.to_formula f) in
   let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
   div ~id "lex-subformula-reading" inner_html
 
@@ -308,7 +308,10 @@ let reading_of_rule_then2 prefix_id eprog g =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let reading_of_reference (l, (rs, rule)) =
+let reading_of_reference (eref: eref_expr) =
+  let l = eref.label in
+  let rs = eref.ref.sks in
+  let rule = eref.ref.rule in
   let rule_id = match rule with
     | Some r -> " " ^ span "lex-section-kind" "rule" ^ r
     | None ->  "" in
@@ -317,10 +320,11 @@ let reading_of_reference (l, (rs, rule)) =
   a ("#lex-section-" ^ Label.doc_id l) "lex-section-link"
     (String.concat ~sep:" " (List.map ~f:reading_of_section_kind_and_name rs) ^ rule_id)
 
-let reading_of_ref ref_id (l, r) =
-  span "lex-subformula-reading" ~id:(Some ref_id) (reading_of_reference (l, r))
+(* let reading_of_ref ref_id (l, r) = *)
+let reading_of_ref ref_id (eref: eref_expr) =
+  span "lex-subformula-reading" ~id:(Some ref_id) (reading_of_reference eref)
 
-let reading_of_rule_except prefix_id refs =
+let reading_of_rule_except prefix_id (refs: eref_expr list) =
   let ref_id = Printf.sprintf "%s-%d" prefix_id in
   let f i r =
     li "lex-reading-then-formula" (reading_of_ref (ref_id i) r) in
@@ -407,21 +411,21 @@ let reading_of_erule rule_id eprog type_fixes erule =
   match erule with
   | EObligation _ ->
     let f, p, g, q, rt, rcs = get_obligation_params eprog.compilation_rules erule in
-    reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+    reading_of_imp_rule (verb_of_erule erule) f p g q rcs rt
   | EPermission _ ->
     let f, p, g, q, rt, rcs = get_permission_params eprog.compilation_rules erule in
-    reading_of_imp_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g) q rcs rt
+    reading_of_imp_rule (verb_of_erule erule) f p g q rcs rt
   | EConstitutive _ ->
     let f, p, g = get_constitutive_params eprog.compilation_rules erule in
-    reading_of_cons_rule (verb_of_erule erule) (List.map ~f:snd f) p (List.map ~f:snd g)
+    reading_of_cons_rule (verb_of_erule erule) f p g
   | EException _ ->
     let f, p, refs = get_exception_params eprog.compilation_rules erule in
-    reading_of_exc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
+    reading_of_exc_rule f p refs
   | EExceptionC _ ->
     let f, p, refs, g = get_exceptionc_params eprog.compilation_rules erule in
-    reading_of_excc_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs) (List.map ~f:snd g)
+    reading_of_excc_rule f p refs g
   | EScope _ ->
     let f, p, refs = get_scope_params eprog.compilation_rules erule in
-    reading_of_scope_rule (List.map ~f:snd f) p (List.map ~f:(fun (_,l,x) -> (l,x)) refs)
+    reading_of_scope_rule f p refs
 
 let reading_of_doc_string = Placeholders.mark_all

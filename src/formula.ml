@@ -204,7 +204,7 @@ module Term = struct
     | BMul | BDiv -> 5
     | BPow -> 6
     
-  type t =
+  type core_t =
     | Var of string
     | Const of Dom.t
     | App of string * (t list)
@@ -212,8 +212,19 @@ module Term = struct
     | Binop of t * binop * t
     | Proj of t * string
     | Record of (string * t) list
+  and t = {trm: core_t; positions: Lexing.position list}
 
-  let unvar = function
+  let make_term trm pos = {trm=trm; positions=pos}
+
+  let var pos x = make_term (Var x) pos
+  let const pos d = make_term (Const d) pos
+  let app pos f ts = make_term (App (f, ts)) pos
+  let unop pos o t = make_term (Unop (o, t)) pos
+  let binop pos t1 o t2 = make_term (Binop (t1, o, t2)) pos
+  let proj pos t p = make_term (Proj (t, p)) pos
+  let record pos kvs = make_term (Record kvs) pos
+
+  let unvar t = match t.trm with
     | Var x -> x
     | Const _ -> raise (Invalid_argument "unvar is undefined for Consts")
     | App _ -> raise (Invalid_argument "unvar is undefined for Apps")
@@ -222,11 +233,11 @@ module Term = struct
     | Proj _ -> raise (Invalid_argument "unvar is undefined for Projs")
     | Record _ -> raise (Invalid_argument "unvar is undefined for Records")
 
-  let is_const = function
+  let is_const t = match t.trm with
     | Const _ -> true
     | _ -> false
 
-  let unconst = function
+  let unconst t = match t.trm with
     | Var _ -> raise (Invalid_argument "unconst is undefined for Vars")
     | Const c -> c
     | App _ -> raise (Invalid_argument "unconst is undefined for Apps")
@@ -235,12 +246,13 @@ module Term = struct
     | Proj _ -> raise (Invalid_argument "unconst is undefined for Projs")
     | Record _ -> raise (Invalid_argument "unconst is undefined for Records")
 
-  let rec fv_list = function
-    | [] -> []
-    | Var x :: trms -> x :: fv_list trms
-    | _ :: trms -> fv_list trms
+  let fv t = match t.trm with
+    | Var x -> [x]
+    | _ -> []
 
-  let rec equal t t' = match t, t' with
+  let fv_list ts = List.concat_map ts ~f:fv
+
+  let rec equal t t' = match t.trm, t'.trm with
     | Var x, Var x' -> String.equal x x'
     | Const d, Const d' -> Dom.equal d d'
     | App (f, ts), App (f', ts') ->
@@ -257,7 +269,7 @@ module Term = struct
        List.length kvs = List.length kvs' && List.for_all2_exn kvs kvs' ~f
     | _ -> false
 
-  let rec to_string = function
+  let rec to_string t = match t.trm with
     | Var x -> Printf.sprintf "Var %s" x
     | Const d -> Printf.sprintf "Const %s" (Dom.to_string d)
     | App (f, ts) -> Printf.sprintf "App %s(%s)" f
@@ -270,7 +282,7 @@ module Term = struct
        Printf.sprintf "Record { %s }"
          (String.concat ~sep:", " (List.map kvs ~f:(fun (k, v) -> k ^ " : " ^ to_string v)))
 
-  let rec value_to_string ?(l=0) = function
+  let rec value_to_string ?(l=0) t = match t.trm with
     | Var x -> Printf.sprintf "%s" x
     | Const d -> Printf.sprintf "%s" (Dom.to_string d)
     | App (f, ts) -> Printf.sprintf "%s(%s)" f
@@ -301,7 +313,7 @@ let ty_to_string = function
   | Cau -> "causable"
   | Sup -> "suppressable"
 
-type t =
+type core_t =
   | TT
   | FF
   | Term of Term.t
@@ -324,57 +336,61 @@ type t =
   | Until of Side.t * Interval.t * t * t
   | Type of t * ty
 
-let tt = TT
-let ff = FF
-let term trm = Term trm
-let agg s op x y f = Agg (s, op, x, y, f)
-let predicate p_name trms = Predicate (p_name, trms)
-let neg f = Neg f
-let conj s f g = And (s, [f; g])
-let disj s f g = Or (s, [f; g])
-let conj' s fs = And (s, fs)
-let disj' s fs = Or (s, fs)
-let imp s f g = Imp (s, f, g)
-let iff s t f g = Iff (s, t, f, g)
-let exists x f = Exists (x, f)
-let forall x f = Forall (x, f)
-let prev i f = Prev (i, f)
-let next i f = Next (i, f)
-let once i f = Once (i, f)
-let eventually i f = Eventually (i, f)
-let historically i f = Historically (i, f)
-let always i f = Always (i, f)
-let since s i f g = Since (s, i, f, g)
-let until s i f g = Until (s, i, f, g)
-let type_ s t = Type (s, t)
+and t = {f: core_t; positions: Lexing.position list}
+
+let make_formula f pos = {f=f; positions=pos}
+
+let tt pos = make_formula TT pos
+let ff pos = make_formula FF pos
+let term pos trm = make_formula (Term trm) pos
+let agg pos s op x y f = make_formula (Agg (s, op, x, y, f)) pos
+let predicate pos p_name trms = make_formula (Predicate (p_name, trms)) pos
+let neg pos f = make_formula (Neg f) pos
+let conj pos s f g = make_formula (And (s, [f; g])) pos
+let disj pos s f g = make_formula (Or (s, [f; g])) pos
+let conj' pos s fs = make_formula (And (s, fs)) pos
+let disj' pos s fs = make_formula (Or (s, fs)) pos
+let imp pos s f g = make_formula (Imp (s, f, g)) pos
+let iff pos s t f g = make_formula (Iff (s, t, f, g)) pos
+let exists pos x f = make_formula (Exists (x, f)) pos
+let forall pos x f = make_formula (Forall (x, f)) pos
+let prev pos i f = make_formula (Prev (i, f)) pos
+let next pos i f = make_formula (Next (i, f)) pos
+let once pos i f = make_formula (Once (i, f)) pos
+let eventually pos i f = make_formula (Eventually (i, f)) pos
+let historically pos i f = make_formula (Historically (i, f)) pos
+let always pos i f = make_formula (Always (i, f)) pos
+let since pos s i f g = make_formula (Since (s, i, f, g)) pos
+let until pos s i f g = make_formula (Until (s, i, f, g)) pos
+let type_ pos s t = make_formula (Type (s, t)) pos
 
 (* Rewriting of non-native operators *)
-let trigger s i f g = Neg (Since (s, i, Neg f, Neg g))
-let release s i f g = Neg (Until (s, i, Neg f, Neg g))
+let trigger pos s i f g = neg pos (since f.positions s i (neg f.positions f) (neg g.positions g))
+let release pos s i f g = neg pos (until f.positions s i (neg f.positions f) (neg g.positions g))
 
-let bigconj = function
-  | [] -> tt
-  | h::t -> List.fold_left t ~init:h ~f:(conj N)
+let bigconj pos = function
+  | [] -> tt pos
+  | h::t -> List.fold_left t ~init:h ~f:(conj pos N)
 
-let bigforall vars f =
-  List.fold_right vars ~init:f ~f:forall
+let bigforall pos vars f =
+  List.fold_right vars ~init:f ~f:(forall pos)
 
-let rec fv = function
+let rec fv (f: t) = match f.f with
   | TT | FF -> Set.empty (module String)
   | Term trm -> Set.of_list (module String) (Term.fv_list [trm])
   | Predicate (_, trms) -> Set.of_list (module String) (Term.fv_list trms)
   | Agg (s, _, _, y, _) -> Set.of_list (module String) (s :: y)
   | Exists (x, f)
     | Forall (x, f) -> Set.filter (fv f) ~f:(fun y -> not (String.equal x y))
-  | Neg f
-    | Prev (_, f)
-    | Once (_, f)
-    | Historically (_, f)
-    | Eventually (_, f)
-    | Always (_, f)
-    | Next (_, f)
-    | Type (f, _) -> fv f
-    | Imp (_, f1, f2)
+  | Neg g
+    | Prev (_, g)
+    | Once (_, g)
+    | Historically (_, g)
+    | Eventually (_, g)
+    | Always (_, g)
+    | Next (_, g)
+    | Type (g, _) -> fv g
+  | Imp (_, f1, f2)
     | Iff (_, _, f1, f2)
     | Since (_, _, f1, f2)
     | Until (_, _, f1, f2) -> Set.union (fv f1) (fv f2)
@@ -383,7 +399,7 @@ let rec fv = function
      let f x g = Set.union x (fv g) in
      List.fold_left fs ~init:(Set.empty (module String)) ~f
 
-let rec deg = function
+let rec deg f = match f.f with
   | TT
     | FF
     | Term _ 
@@ -406,7 +422,7 @@ let rec deg = function
     | And (_, fs)
     | Or (_, fs) -> List.fold_left (List.map fs ~f:deg) ~init:1 ~f:max
 
-let rec collect_predicates l = function
+let rec collect_predicates l f = match f.f with
   | TT
     | FF
     | Term _ -> l
@@ -429,31 +445,31 @@ let rec collect_predicates l = function
   | And (_, fs)
     | Or (_, fs) -> List.fold_left fs ~init:l ~f:collect_predicates
 
-let rec flatten_assoc f = match f with
+let rec flatten_assoc f = match f.f with
   | TT | FF | Term _ | Predicate _ -> f
-  | Agg (s, op, x, y, f) -> Agg (s, op, x, y, flatten_assoc f)
-  | Neg f -> Neg (flatten_assoc f)
-  | Exists (x, f) -> Exists (x, flatten_assoc f)
-  | Forall (x, f) -> Forall (x, flatten_assoc f)
-  | Prev (i, f) -> Prev (i, flatten_assoc f)
-  | Next (i, f) -> Next (i, flatten_assoc f)
-  | Once (i, f) -> Once (i, flatten_assoc f)
-  | Eventually (i, f) -> Once (i, flatten_assoc f)
-  | Historically (i, f) -> Historically (i, flatten_assoc f)
-  | Always(i, f) -> Always (i, flatten_assoc f)
-  | Imp (s, f, g) -> Imp (s, flatten_assoc f, flatten_assoc g)
-  | Iff (s, t, f, g) -> Iff (s, t, flatten_assoc f, flatten_assoc g)
-  | Since (s, i, f, g) -> Since (s, i, flatten_assoc f, flatten_assoc g)
-  | Until (s, i, f, g) -> Until (s, i, flatten_assoc f, flatten_assoc g)
-  | Type (f, ty) -> Type (flatten_assoc f, ty)
-  | And (s, fs) when Side.equal s L || Side.equal s N ->
-     And (s, List.concat (List.map fs ~f:(fun f -> match f with And (_, fs) -> fs | _ -> [f])))
-  | And (s, fs) -> And (s, List.map fs ~f:flatten_assoc)
-  | Or (s, fs) when Side.equal s L || Side.equal s N ->
-     Or (s, List.concat (List.map fs ~f:(fun f -> match f with Or (_, fs) -> fs | _ -> [f])))
-  | Or (s, fs) -> Or (s, List.map fs ~f:flatten_assoc)
+  | Agg (s, op, x, y, f) -> agg f.positions s op x y (flatten_assoc f)
+  | Neg f -> neg f.positions (flatten_assoc f)
+  | Exists (x, g) -> exists f.positions x (flatten_assoc g)
+  | Forall (x, g) -> forall f.positions x (flatten_assoc g)
+  | Prev (i, g) -> prev f.positions i (flatten_assoc g)
+  | Next (i, g) -> next f.positions i (flatten_assoc g)
+  | Once (i, g) -> once f.positions i (flatten_assoc g)
+  | Eventually (i, g) -> eventually f.positions i (flatten_assoc g)
+  | Historically (i, g) -> historically f.positions i (flatten_assoc g)
+  | Always(i, g) -> always f.positions i (flatten_assoc g)
+  | Imp (s, g, h) -> imp f.positions s (flatten_assoc g) (flatten_assoc h)
+  | Iff (s, t, g, h) -> iff f.positions s t (flatten_assoc g) (flatten_assoc h)
+  | Since (s, i, g, h) -> since f.positions s i (flatten_assoc g) (flatten_assoc h)
+  | Until (s, i, g, h) -> until f.positions s i (flatten_assoc g) (flatten_assoc h)
+  | Type (g, ty) -> type_ f.positions (flatten_assoc g) ty
+  | And (s, gs) when Side.equal s L || Side.equal s N ->
+    conj' f.positions s (List.concat (List.map gs ~f:(fun g -> match g.f with And (_, gs) -> gs | _ -> [g])))
+  | And (s, gs) -> conj' f.positions s (List.map gs ~f:flatten_assoc)
+  | Or (s, gs) when Side.equal s L || Side.equal s N ->
+    disj' f.positions s (List.concat (List.map gs ~f:(fun g -> match g.f with Or (_, gs) -> gs | _ -> [g])))
+  | Or (s, gs) -> disj' f.positions s (List.map gs ~f:flatten_assoc)
 
-let rec to_string_rec l = function
+let rec to_string_rec l (f: t) = match f.f with
   | TT -> Printf.sprintf "⊤"
   | FF -> Printf.sprintf "⊥"
   | Term trm -> Printf.sprintf "(%s)" (Term.value_to_string trm) 

@@ -123,7 +123,7 @@ let init_tprog_from_modules modules =
     | MLegalXml _ -> tprog in
   Map.fold modules ~init:Tlex.tempty ~f
 
-let rec do_type lexpath ?seq:(seq=[]) filepath filename =
+let rec do_type lexpath ?seq:(seq=[]) b filepath filename =
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
   let prog      = parse_module fullname in
@@ -138,7 +138,7 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
                        (
                          import_string,
                          (match import with
-                          | SILex _    -> MLex (do_type lexpath ~seq:seq' filepath' filename')
+                          | SILex _    -> MLex (do_type lexpath ~seq:seq' b filepath' filename')
                           | SIFormex _ -> MLegalXml (Formex.read_file filepath' filename')
                           | SIAkomaNtoso _ -> MLegalXml (AkomaNtoso.read_file filepath' filename'))
                        )
@@ -148,6 +148,6 @@ let rec do_type lexpath ?seq:(seq=[]) filepath filename =
   let init  = init_tprog_from_modules modules in
   let tprog = Typing.do_type init prog in
   let tprog = link_formex modules tprog in
-  let eprog = Enforceability.do_type modules tprog in
+  let eprog = Enforceability.do_type modules tprog b in
   eprog
 

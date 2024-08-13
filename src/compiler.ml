@@ -98,23 +98,24 @@ let rec compile_term aliases term =
 
 let compile_pattern (f: Eformula.t) = function
   | EPPresent -> f
-  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); enftype = Non; id = 0 }
-  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); enftype = Non; id = 0 }
-  | EPUntil (i, g) -> { f = EUntil (R, i, Interval.is_bounded i, g, f); enftype = Non; id = 0 }
-  | EPOnce i -> { f = EOnce (i, f); enftype = Non; id = 0 }
-  | EPHistorically i -> { f = EHistorically (i, f); enftype = Non; id = 0 }
-  | EPSince (i, g) -> { f = ESince (R, i, f, g); enftype = Non; id = 0 }
+  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); enftype = Non; id = 0; positions = [] }
+  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); enftype = Non; id = 0; positions = [] }
+  | EPUntil (i, g) -> { f = EUntil (R, i, Interval.is_bounded i, g, f); enftype = Non; id = 0; positions = [] }
+  | EPOnce i -> { f = EOnce (i, f); enftype = Non; id = 0; positions = [] }
+  | EPHistorically i -> { f = EHistorically (i, f); enftype = Non; id = 0; positions = [] }
+  | EPSince (i, g) -> { f = ESince (R, i, f, g); enftype = Non; id = 0; positions = [] }
 
 let compile_let_binding f p pred : Eformula.t * Eformula.t =
   match pred with
   | { f = EPredicate (p_name, trms, event_type); _} ->
-     let process_term f (trm: Tformula.Term.t) =
+     let process_term f (trm: Tformula.TTerm.t) =
        match trm.trm with
-       | Term.TVar _ -> f, trm
-       | _ -> let v = Term.{ trm = Term.TVar (fresh_var ()); tt = trm.tt } in
-              let eq = Term.{ trm = Term.TBinop (v, Formula.Term.BEq, trm);
-                              tt = Formula.TypeTerm.TypeConst Dom.TBool } in
-              { f = EEqConst (eq, Dom.Bool true); enftype = Formula.EnfType.Obs; id = 0} :: f, v in
+       | ETerm.TVar _ -> f, trm
+       | _ -> let v = ETerm.{ trm = ETerm.TVar (fresh_var ()); tt = trm.tt; positions = [] } in
+              let eq = ETerm.{ trm = ETerm.TBinop (v, Formula.Term.BEq, trm);
+                               tt = Formula.TypeTerm.TypeConst Dom.TBool;
+                               positions = [] } in
+              { f = EEqConst (eq, (Dom.Bool true, [])); enftype = Formula.EnfType.Obs; id = 0; positions = [] } :: f, v in
      let f', trms = List.fold_map trms ~init:[] ~f:process_term in
      let f = f @ List.rev f' in
      let lhs = { pred with f = EPredicate (p_name, trms, event_type) } in
@@ -124,34 +125,28 @@ let compile_let_binding f p pred : Eformula.t * Eformula.t =
 
 let compile_let_rule = function
   | ECDefinition (_, _, _, f, p, e, s, _, g) ->
-    let f = List.map f ~f:snd in
-    let e = List.map e ~f:snd in
-    let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0) in
-    let s = List.map s ~f:snd in
+    let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
     compile_let_binding (f @ e_neg @ s) p g
   | ECDefinitionDis _ -> assert false (* TODO *)
   | _ -> assert false
 
 let compile_imp f p g q =
+  let formulas = f @ (formulas_from_epattern p) @ g @ (formulas_from_epattern q) in
   let vars =
-    Set.elements
-      (Set.union_list (module String)
-         (List.map f ~f:fv @ List.map g ~f:fv)) in
+    List.fold formulas ~init:(Map.empty (module String)) ~f:fv
+    |> Map.keys
+  in
   make (EAlways
     (Interval.full,
      true,
      tbigcauforall vars
        ((make (EImp (N, compile_pattern
-                          (tbigcauconj f) p, compile_pattern (tbigcauconj g) q)) Non 0))))
-    Non 0
+                          (tbigcauconj f) p, compile_pattern (tbigcauconj g) q)) Non 0 []))))
+    Non 0 []
 
 let compile_imp_rule = function
   | ECImplication (_, _, _, f, p, e, s, g, q, _, _) ->
-    let f = List.map f ~f:snd in
-    let e = List.map e ~f:snd in
-    let s = List.map s ~f:snd in
-    let g = List.map g ~f:snd in
-    let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0) in
+    let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
     compile_imp (f @ e_neg @ s) p g q
   | _ -> assert false
 
@@ -213,8 +208,8 @@ let compile_exception_or_scope_signature pols indexed_predicates aliases variabl
       | _ -> assert false
     in
     let terms = snd pred_name_and_terms in
-    let type_term f = match Eformula.Term.(f.trm) with
-      | Term.TVar v ->
+    let type_term f = match Eformula.ETerm.(f.trm) with
+      | ETerm.TVar v ->
          let a = Map.find_exn var_types v in
          let terms = compile_eval_default aliases a in
          List.map terms ~f:(Etc.concat v)
