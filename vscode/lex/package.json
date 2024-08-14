@@ -21,7 +21,9 @@
     "languages": [
       {
         "id": "lex",
-        "extensions": [".lex"]
+        "extensions": [
+          ".lex"
+        ]
       }
     ],
     "grammars": [
@@ -41,14 +43,11 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/mocha": "^10.0.6",
-    "@types/node": "18.x",
-    "@typescript-eslint/eslint-plugin": "^6.19.1",
-    "@typescript-eslint/parser": "^6.19.1",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3",
-    "@vscode/test-cli": "^0.0.4",
-    "@vscode/test-electron": "^2.3.9"
+    "@types/node": "^22.3.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.3.9",
+    "typescript": "^5.3.3"
   }
 }
