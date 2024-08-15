@@ -271,29 +271,29 @@ let reading_of_pattern formula_id eprog = function
                       ^ reading_of_formula formula_id eprog f
 
 
-let reading_of_rule_if prefix_id eprog g pat =
+let reading_of_rule_if prefix_id eprog pf =
   let formula_id = Printf.sprintf "%s-%d" prefix_id in
   let f i g =
     li "lex-reading-if-formula" (reading_of_formula (formula_id i) eprog g) in
   p "lex-reading-if" (
       "Whenever all of the following happen"
-      ^ reading_of_pattern "if-since" eprog pat
+      ^ reading_of_pattern "if-since" eprog pf.p
       ^ ":"
       ^ ul "lex-reading-if-formulae"
-          (String.concat ~sep:"" (List.mapi ~f g))
+          (String.concat ~sep:"" (List.mapi ~f pf.fs))
     )
 
-let reading_of_rule_then prefix_id eprog verb g pat =
+let reading_of_rule_then prefix_id eprog verb pf =
   let formula_id = Printf.sprintf "%s-%d" prefix_id in
   let f i g =
     li "lex-reading-then-formula" (reading_of_formula (formula_id i) eprog g) in
   p "lex-reading-then" (
       "Then the following "
       ^ strong "lex-reading-verb" verb
-      ^ reading_of_pattern "if-then" eprog pat
+      ^ reading_of_pattern "if-then" eprog pf.p
       ^ ":"
       ^ ul "lex-reading-then-formulae"
-          (String.concat ~sep:"" (List.mapi ~f g))
+          (String.concat ~sep:"" (List.mapi ~f pf.fs))
     )
 
 let reading_of_rule_then2 prefix_id eprog g =
@@ -387,45 +387,45 @@ let verb_of_erule = function
 let reading_of_erule rule_id eprog type_fixes erule =
   let prefix_id = Printf.sprintf "%s-%s" rule_id in
   (* let reading_of_imp_rule verb f p g q rcs rt = *)
-  let reading_of_imp_rule verb f p g q _ _ =
+  let reading_of_imp_rule verb pf1 pf2 _ _ =
     reading_of_type_fixes eprog rule_id type_fixes
-    ^ reading_of_rule_if (prefix_id "if") eprog f p
-    ^ reading_of_rule_then (prefix_id "then") eprog verb g q in
-  let reading_of_cons_rule verb f p g =
+    ^ reading_of_rule_if (prefix_id "if") eprog pf1
+    ^ reading_of_rule_then (prefix_id "then") eprog verb pf2 in
+  let reading_of_cons_rule verb pf g =
     reading_of_type_fixes eprog rule_id type_fixes
-    ^ reading_of_rule_if (prefix_id "if") eprog f p
-    ^ reading_of_rule_then (prefix_id "then") eprog verb g EPPresent in
-  let reading_of_exc_rule f p refs =
+    ^ reading_of_rule_if (prefix_id "if") eprog pf
+    ^ reading_of_rule_then (prefix_id "then") eprog verb { fs=g; p=EPPresent} in
+  let reading_of_exc_rule pf refs =
     reading_of_type_fixes eprog rule_id type_fixes
-    ^ reading_of_rule_if (prefix_id "if") eprog f p
+    ^ reading_of_rule_if (prefix_id "if") eprog pf
     ^ reading_of_rule_except (prefix_id "then") refs in
-  let reading_of_excc_rule f p refs g =
+  let reading_of_excc_rule pf refs g =
     reading_of_type_fixes eprog rule_id type_fixes
-    ^ reading_of_rule_if (prefix_id "if") eprog f p
+    ^ reading_of_rule_if (prefix_id "if") eprog pf 
     ^ reading_of_rule_except (prefix_id "then") refs
     ^ reading_of_rule_then2 (prefix_id "then2") eprog g in
-  let reading_of_scope_rule f p refs =
+  let reading_of_scope_rule pf refs =
     reading_of_type_fixes eprog rule_id type_fixes
-    ^ reading_of_rule_if (prefix_id "if") eprog f p
+    ^ reading_of_rule_if (prefix_id "if") eprog pf
     ^ reading_of_rule_scope (prefix_id "then") refs in
   match erule with
   | EObligation _ ->
-    let f, p, g, q, rt, rcs = get_obligation_params eprog.compilation_rules erule in
-    reading_of_imp_rule (verb_of_erule erule) f p g q rcs rt
+    let pf1, pf2, rt, rcs = get_obligation_params eprog.compilation_rules erule in
+    reading_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EPermission _ ->
-    let f, p, g, q, rt, rcs = get_permission_params eprog.compilation_rules erule in
-    reading_of_imp_rule (verb_of_erule erule) f p g q rcs rt
+    let pf1, pf2, rt, rcs = get_permission_params eprog.compilation_rules erule in
+    reading_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EConstitutive _ ->
-    let f, p, g = get_constitutive_params eprog.compilation_rules erule in
-    reading_of_cons_rule (verb_of_erule erule) f p g
+    let pf, g = get_constitutive_params eprog.compilation_rules erule in
+    reading_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
-    let f, p, refs = get_exception_params eprog.compilation_rules erule in
-    reading_of_exc_rule f p refs
+    let pf, refs = get_exception_params eprog.compilation_rules erule in
+    reading_of_exc_rule pf refs
   | EExceptionC _ ->
-    let f, p, refs, g = get_exceptionc_params eprog.compilation_rules erule in
-    reading_of_excc_rule f p refs g
+    let pf, refs, g = get_exceptionc_params eprog.compilation_rules erule in
+    reading_of_excc_rule pf refs g
   | EScope _ ->
-    let f, p, refs = get_scope_params eprog.compilation_rules erule in
-    reading_of_scope_rule f p refs
+    let pf, refs = get_scope_params eprog.compilation_rules erule in
+    reading_of_scope_rule pf refs
 
 let reading_of_doc_string = Placeholders.mark_all

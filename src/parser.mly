@@ -189,13 +189,13 @@ ref_expr:
                                  { make_ref_expr (fst (List.hd $1)) (List.map snd $1) None }
 
 rule:
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Obligation ($1, $4, $2, $9, $7, fst $10, snd $10) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Permission ($1, $4, $2, $9, $7, fst $10, snd $10) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)               { Constitutive ($1, $4, $2, $8) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWHITE, ref_expr)           { Exception ($1, $4, $2, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Obligation ($1, pf $2 $4, pf $7 $9, fst $10, snd $10) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Permission ($1, pf $2 $4, pf $7 $9, fst $10, snd $10) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)               { Constitutive ($1, pf $2 $4, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWHITE, ref_expr)           { Exception ($1, pf $2 $4, $8) }
   | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN REPLACE NEWUP separated_nonempty_list(NEWHITE, ref_expr) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)
-                                                                                                                                          { ExceptionC ($1, $4, $2, $8, $12) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWHITE, ref_expr)            { Scope ($1, $4, $2, $8) }
+                                                                                                                                          { ExceptionC ($1, pf $2 $4, $8, $12) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWHITE, ref_expr)            { Scope ($1, pf $2 $4, $8) }
 
 ident:
   | IDENT { snd $1 }

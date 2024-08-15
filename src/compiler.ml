@@ -96,7 +96,7 @@ let rec compile_term aliases term =
   in { term with trm }
  *)
 
-let compile_pattern (f: Eformula.t) = function
+let compile_epattern (f: Eformula.t) = function
   | EPPresent -> f
   | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); enftype = Non; id = 0; positions = [] }
   | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); enftype = Non; id = 0; positions = [] }
@@ -105,49 +105,73 @@ let compile_pattern (f: Eformula.t) = function
   | EPHistorically i -> { f = EHistorically (i, f); enftype = Non; id = 0; positions = [] }
   | EPSince (i, g) -> { f = ESince (R, i, f, g); enftype = Non; id = 0; positions = [] }
 
-let compile_let_binding f p pred : Eformula.t * Eformula.t =
+let compile_eformulas ~f fs = f fs
+
+let compile_epformula ~f (epf: epformula): Eformula.t =
+  compile_epattern (compile_eformulas ~f epf.fs) epf.p
+
+(* let compile_let_binding (pf: epformula) (ex_and_sc: Eformula.t list) pred : Eformula.t * Eformula.t = *)
+let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
   match pred with
   | { f = EPredicate (p_name, trms, event_type); _} ->
-     let process_term f (trm: Tformula.TTerm.t) =
-       match trm.trm with
-       | ETerm.TVar _ -> f, trm
-       | _ -> let v = ETerm.{ trm = ETerm.TVar (fresh_var ()); tt = trm.tt; positions = [] } in
-              let eq = ETerm.{ trm = ETerm.TBinop (v, Formula.Term.BEq, trm);
-                               tt = Formula.TypeTerm.TypeConst Dom.TBool;
-                               positions = [] } in
-              { f = EEqConst (eq, (Dom.Bool true, [])); enftype = Formula.EnfType.Obs; id = 0; positions = [] } :: f, v in
-     let f', trms = List.fold_map trms ~init:[] ~f:process_term in
-     let f = f @ List.rev f' in
-     let lhs = { pred with f = EPredicate (p_name, trms, event_type) } in
-     let rhs = (compile_pattern (tbigcauconj f) p) in
-     (lhs, rhs)
+    let process_term fs (trm: Tformula.TTerm.t) = match trm.trm with
+      | ETerm.TVar _ -> fs, trm
+      | _ ->
+        let v = ETerm.{
+          trm = ETerm.TVar (fresh_var ());
+          tt = trm.tt;
+          positions = []
+        } in
+        let eq = ETerm.{
+          trm = ETerm.TBinop (v, Formula.Term.BEq, trm);
+          tt = Formula.TypeTerm.TypeConst Dom.TBool;
+          positions = []
+        } in
+        let ef = {
+          f = EEqConst (eq, (Dom.Bool true, []));
+          enftype = Formula.EnfType.Obs;
+          id = 0;
+          positions = [];
+        } in
+        ef :: fs, v
+    in
+    let fs', trms = List.fold_map trms ~init:[] ~f:process_term in
+    let fs = f :: List.rev fs' in
+    let lhs = { pred with f = EPredicate (p_name, trms, event_type) } in
+    let rhs = tbigcauconj fs in
+    (* TODO: compute free variables in rhs that are not parameters of lhs
+             -> bind these with an existential quantifier *)
+    let vars = [] in
+    let rhs = tbigcauexists vars rhs in
+    (lhs, rhs)
   | _ -> assert false
 
 let compile_let_rule = function
-  | ECDefinition (_, _, _, f, p, e, s, _, g) ->
-    let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
-    compile_let_binding (f @ e_neg @ s) p g
+  | ECDefinition (_, _, _, pf, ex, sc, _, g) ->
+    let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
+    let pf_comp = compile_epformula ~f:(tbigcauconj) pf in
+    let f = tbigcauconj (pf_comp :: ex_neg @ sc) in
+    compile_let_binding f g
   | ECDefinitionDis _ -> assert false (* TODO *)
   | _ -> assert false
 
-let compile_imp f p g q =
-  let formulas = f @ (formulas_from_epattern p) @ g @ (formulas_from_epattern q) in
-  let vars =
-    List.fold formulas ~init:(Map.empty (module String)) ~f:fv
-    |> Map.keys
-  in
+let compile_imp (f1: Eformula.t list) (f2: Eformula.t) =
+  let vars = List.fold (f2 :: f1) ~init:(Map.empty (module String)) ~f:fv
+             |> Map.keys in
   make (EAlways
     (Interval.full,
      true,
      tbigcauforall vars
-       ((make (EImp (N, compile_pattern
-                          (tbigcauconj f) p, compile_pattern (tbigcauconj g) q)) Non 0 []))))
+       ((make (EImp (N,
+          compile_eformulas ~f:tbigcauconj f1, f2)) Non 0 []))))
     Non 0 []
 
 let compile_imp_rule = function
-  | ECImplication (_, _, _, f, p, e, s, g, q, _, _) ->
-    let e_neg = List.map e ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
-    compile_imp (f @ e_neg @ s) p g q
+  | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _) ->
+    let e_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
+    let pf1_comp = compile_epformula ~f:(tbigcauconj) pf1 in
+    let pf2_comp = compile_epformula ~f:(tbigcauconj) pf2 in
+    compile_imp (pf1_comp :: e_neg @ sc) pf2_comp
   | _ -> assert false
 
 let rec compile_typeterm = function
@@ -227,16 +251,16 @@ let compile_exception_or_scope_signature pols indexed_predicates aliases variabl
   List.map indexed_predicates ~f:compile_predicate
 
 let is_exception = function
-  | ECDefinition (_, ERTException, _, _, _, _, _, _, _) -> true
-  | ECDefinition (_, ERTExceptionC, _, _, _, _, _, _, _) -> true
+  | ECDefinition (_, ERTException, _, _, _, _, _, _) -> true
+  | ECDefinition (_, ERTExceptionC, _, _, _, _, _, _) -> true
   | _ -> false
 
 let is_scope = function
-  | ECDefinition (_, ERTScope, _, _, _, _, _, _, _) -> true
+  | ECDefinition (_, ERTScope, _, _, _, _, _, _) -> true
   | _ -> false
 
 let predicate_from_definition = function
-  | ECDefinition (idx, _, _, _, _, _, _, _, g) -> (idx, g)
+  | ECDefinition (idx, _, _, _, _, _, _, g) -> (idx, g)
   | _ -> assert false
 
 let compile_signature pols events functions aliases variables let_rules =

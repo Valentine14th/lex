@@ -171,47 +171,47 @@ let html_of_rule_constrs rule_constrs =
 let html_of_erule compilation_rules rule_id erule =
   let formula_id infix =
     Printf.sprintf "%s-%s-%d" rule_id infix in
-  let string_of_imp_rule verb f p g q rcs rt =
+  let string_of_imp_rule verb pf1 pf2 rcs rt =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" p
-        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
+        ^ html_of_pattern "if-pattern" pf1.p
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf1.fs)
       )
     ^ div "lex-rule-then" (
           kw verb
-          ^ html_of_pattern "then-pattern" q
-          ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
+          ^ html_of_pattern "then-pattern" pf2.p
+          ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) pf2.fs)
         )
     ^ kw (html_of_rule_type rt)
     ^ (if List.is_empty rcs then "" else html_of_rule_constrs rcs)
   in
-  let string_of_cons_rule verb f p g =
+  let string_of_cons_rule verb pf g =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" p
-        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
+        ^ html_of_pattern "if-pattern" pf.p
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf.fs)
       )
     ^ div "lex-rule-then" (
           kw verb
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) g)
         )
   in
-  let string_of_ref_rule verb f p refs =
+  let string_of_ref_rule verb pf refs =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" p
-        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
+        ^ html_of_pattern "if-pattern" pf.p
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf.fs)
       )
     ^ div "lex-rule-then" (
           kw verb
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i r -> html_of_ref (formula_id "then" i) r) refs)
         )
   in
-  let string_of_refc_rule _ f p refs g =
+  let string_of_refc_rule _ pf refs g =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" p
-        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) f)
+        ^ html_of_pattern "if-pattern" pf.p
+        ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf.fs)
       )
     ^ div "lex-rule-then" (
           kw "replace"
@@ -224,23 +224,23 @@ let html_of_erule compilation_rules rule_id erule =
   in
   match erule with
   | EObligation _ ->
-    let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
-    string_of_imp_rule (verb_of_erule erule) f p g q rcs rt
+    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EPermission _ ->
-    let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
-    string_of_imp_rule (verb_of_erule erule) f p g q rcs rt
+    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EConstitutive _ ->
-    let f, p, g = get_constitutive_params compilation_rules erule in
-    string_of_cons_rule (verb_of_erule erule) f p g
+    let pf, g = get_constitutive_params compilation_rules erule in
+    string_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
-    let f, p, refs = get_exception_params compilation_rules erule in
-    string_of_ref_rule (verb_of_erule erule) f p refs
+    let pf, refs = get_exception_params compilation_rules erule in
+    string_of_ref_rule (verb_of_erule erule) pf refs
   | EExceptionC _ ->
-    let f, p, refs, g = get_exceptionc_params compilation_rules erule in
-    string_of_refc_rule (verb_of_erule erule) f p refs g
+    let pf, refs, g = get_exceptionc_params compilation_rules erule in
+    string_of_refc_rule (verb_of_erule erule) pf refs g
   | EScope _ ->
-    let f, p, refs = get_exception_params compilation_rules erule in
-    string_of_ref_rule (verb_of_erule erule) f p refs
+    let pf, refs = get_exception_params compilation_rules erule in
+    string_of_ref_rule (verb_of_erule erule) pf refs
 
 let html_of_tannot = function
   | Tlex.TALex s -> s

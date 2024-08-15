@@ -96,8 +96,16 @@ let tbigcauconj = function
   | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (econj N f g) Non 0 f.positions)
 (*TODO: assign correct type to formula, not just Non*)
 
+let tbigcaudisj = function
+  | [] -> make ett Non 0 []
+  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (edisj N f g) Non 0 f.positions)
+(*TODO: assign correct type to formula, not just Non*)
+
 let tbigcauforall vars f =
   List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non 0 f.positions)
+
+let tbigcauexists vars f =
+  List.fold_right vars ~init:f ~f:(fun x f -> make (eexists x f) Non 0 f.positions)
 
 let rec core_of_tformula tevents ?id:(id=1) d = 
   let lof_formula = of_tformula tevents ~id:(d*id)

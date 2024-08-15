@@ -89,14 +89,16 @@ type rule_constr =
   | Suppressing of rule_constr_kind list
   | Causing     of rule_constr_kind list
 
+type pformula = {p: pattern; fs: Formula.t list}
+let pf p fs = {p; fs}
 
 type rule =
-  | Obligation   of Lexing.position * Formula.t list * pattern * Formula.t list * pattern * rule_type * rule_constr list
-  | Permission   of Lexing.position * Formula.t list * pattern * Formula.t list * pattern * rule_type * rule_constr list
-  | Constitutive of Lexing.position * Formula.t list * pattern * Formula.t list
-  | Exception    of Lexing.position * Formula.t list * pattern * ref_expr list
-  | ExceptionC   of Lexing.position * Formula.t list * pattern * ref_expr list * Formula.t list
-  | Scope        of Lexing.position * Formula.t list * pattern * ref_expr list
+  | Obligation   of Lexing.position * pformula * pformula * rule_type * rule_constr list
+  | Permission   of Lexing.position * pformula * pformula * rule_type * rule_constr list
+  | Constitutive of Lexing.position * pformula * Formula.t list
+  | Exception    of Lexing.position * pformula * ref_expr list
+  | ExceptionC   of Lexing.position * pformula * ref_expr list * Formula.t list
+  | Scope        of Lexing.position * pformula * ref_expr list
 
 type import_format =
   | ILex
@@ -221,45 +223,45 @@ let string_of_rule i rule =
     String.concat ~sep:"\n" (List.map ~f:(fun f -> to_string f) f) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
-  let string_of_imp_rule verb f p g q rcs rt =
-    Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
-    ^ Etc.tabs i   ^ verb       ^ string_of_pattern q ^ "\n"
-    ^ string_of_formula_list g
+  let string_of_imp_rule verb fp1 fp2 rcs rt =
+    Etc.tabs i     ^ "whenever" ^ string_of_pattern fp1.p ^ "\n"
+    ^ string_of_formula_list fp1.fs ^ "\n"
+    ^ Etc.tabs i   ^ verb       ^ string_of_pattern fp2.p ^ "\n"
+    ^ string_of_formula_list fp2.fs
     ^ Etc.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
     ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
       else Etc.tabs i ^ (string_of_rule_constrs rcs))
   in
-  let string_of_cons_rule verb f p g =
-    Etc.tabs i     ^ "whenever" ^ string_of_pattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
+  let string_of_cons_rule verb fp g =
+    Etc.tabs i     ^ "whenever" ^ string_of_pattern fp.p ^ "\n"
+    ^ string_of_formula_list fp.fs ^ "\n"
     ^ Etc.tabs i   ^ verb      ^ "\n"
     ^ string_of_formula_list g
   in
-  let string_of_exc_rule verb f p rs = Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
+  let string_of_exc_rule verb fp rs = Etc.tabs i     ^ "whenever"  ^ string_of_pattern fp.p ^ "\n"
+    ^ string_of_formula_list fp.fs ^ "\n"
     ^ Etc.tabs i   ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:string_of_ref_expr rs)
   in
-  let string_of_excc_rule verb f p rs g =
-    Etc.tabs i     ^ "whenever"  ^ string_of_pattern p ^ "\n"
-    ^ string_of_formula_list f ^ "\n"
+  let string_of_excc_rule verb fp rs g =
+    Etc.tabs i     ^ "whenever"  ^ string_of_pattern fp.p ^ "\n"
+    ^ string_of_formula_list fp.fs ^ "\n"
     ^ Etc.tabs i   ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:string_of_ref_expr rs)
     ^ Etc.tabs i   ^ "constitute"
     ^ string_of_formula_list g
   in
   match rule with
-  | Obligation (_, f, p, g, q, rt, rcs)
-  | Permission (_, f, p, g, q, rt, rcs)
-    -> string_of_imp_rule (verb_of_rule rule) f p g q rcs rt
-  | Constitutive (_, f, p, g)
-    -> string_of_cons_rule (verb_of_rule rule) f p g
-  | Exception (_, f, p, references)
-  | Scope (_, f, p, references)
-    -> string_of_exc_rule (verb_of_rule rule) f p references
-  | ExceptionC (_, f, p, references, g)
-    -> string_of_excc_rule (verb_of_rule rule) f p references g
+  | Obligation (_, fp1, fp2, rt, rcs)
+  | Permission (_, fp1, fp2, rt, rcs)
+    -> string_of_imp_rule (verb_of_rule rule) fp1 fp2 rcs rt
+  | Constitutive (_, fp, g)
+    -> string_of_cons_rule (verb_of_rule rule) fp g
+  | Exception (_, fp, references)
+  | Scope (_, fp, references)
+    -> string_of_exc_rule (verb_of_rule rule) fp references
+  | ExceptionC (_, fp, references, g)
+    -> string_of_excc_rule (verb_of_rule rule) fp references g
 
 let string_of_args args i = 
     let string_of_arg (_, name, typ_alias) = 

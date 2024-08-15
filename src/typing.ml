@@ -351,7 +351,8 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
      in
      Util.type_error err_msg pos
 
-let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f: Formula.t): ('t_vars * Tformula.t) = match f.f with
+let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f: Formula.t): ('t_vars * Tformula.t) =
+  match f.f with
   | Formula.TT -> t_vars, Tformula.ttt f.positions
   | FF -> t_vars, Tformula.tff f.positions
   | Term {trm=(Binop (x, BEq, y)); _} -> begin
@@ -457,7 +458,7 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
      let t_vars, f = type_formula s t_vars f in
      t_vars, Tformula.ttype f.positions f ty
 
-let type_pattern s t_vars = function
+let type_pattern s t_vars: pattern -> ('t_vars * tpattern) = function
   | PPresent -> t_vars, TPPresent
   | PEventually i -> t_vars, TPEventually i
   | PAlways i -> t_vars, TPAlways i
@@ -465,6 +466,16 @@ let type_pattern s t_vars = function
   | POnce i -> t_vars, TPOnce i
   | PHistorically i -> t_vars, TPHistorically i
   | PSince (i, f) -> let t_vars, f = type_formula s t_vars f in t_vars, TPSince (i, f)
+
+let type_formulas s t_vars (fs: Formula.t list): ('t_vars * Tformula.t list) =
+  List.fold_map fs ~init:t_vars ~f:(type_formula s)
+
+let type_pformula tprog t_vars (pf: pformula): ('free_vars * 't_vars * tpformula) = 
+  let t_vars, fs = type_formulas tprog t_vars pf.fs in
+  let t_vars, p = type_pattern tprog t_vars pf.p in
+  let tpf = { fs = fs; p } in
+  let vars = fv_of_tpformula tpf in
+  vars, t_vars, tpf
 
 let type_rule s pos = function
   | SRule (_, rule_id, type_fixes, rule, doc_string) -> begin
@@ -506,61 +517,52 @@ let type_rule s pos = function
             }
           end in
         let rec process_rule s t_vars = function
-          | Exception (pos, f, p, refs) ->
+          | Exception (pos, pf, refs) ->
             let _ = List.map ~f:decreasing_section_kinds refs in
             let reference_labels = List.map ~f:(merge_reference_with_label s.label) refs in
             let p_name = "Exception" ^ string_of_int rule_num in (* TODO: mark 'Exception' as an internal name and prevent user-defined events to start with that *)
-            let t_vars, f = List.fold_map f ~init:t_vars ~f:(type_formula s.tprog) in
-            let vars = List.fold_left f ~init:(Map.empty (module String)) ~f:Tformula.fv in
-            let var_term_of_ident (x, positions) =
+            let vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
+            let var_term_of_ident_and_positions (x, positions) =
               Tformula.TTerm.{ trm = Tformula.TTerm.TVar x;
                                tt = Map.find_exn t_vars x;
                                positions = positions }
             in
-            let terms = List.map (Map.to_alist vars) ~f:var_term_of_ident in
+            let terms = List.map (Map.to_alist vars) ~f:var_term_of_ident_and_positions in
             let pred = Tformula.tpredicate [] p_name terms (Event (false, Standard)) in
             let s' = add_exception_first_pass rule_num pred reference_labels s in
-            let _, p = type_pattern s.tprog t_vars p in
-            s', t_vars, TException (pos, f, p, reference_labels, pred)
-          | Scope (pos, f, p, refs) ->
+            s', t_vars, TException (pos, tpf, reference_labels, pred)
+          | Scope (pos, pf, refs) ->
             let _ = List.map ~f:decreasing_section_kinds refs in
             let reference_labels = List.map ~f:(fun tref -> merge_reference_with_label s.label tref) refs in
             let p_name = "Scope" ^ string_of_int rule_num in (* TODO: mark 'Scope' as an internal name and prevent user-defined events to start with that *)
-            let t_vars, f = List.fold_map f ~init:t_vars ~f:(type_formula s.tprog) in
-            let vars = List.fold_left f ~init:(Map.empty (module String)) ~f:Tformula.fv in
-            let var_term_of_ident (x, positions) =
+            let vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
+            let var_term_of_ident_and_positions (x, positions) =
               Tformula.TTerm.{ trm = Tformula.TTerm.TVar x;
                                tt = Map.find_exn t_vars x;
                                positions = positions }
             in
-            let terms = List.map (Map.to_alist vars) ~f:var_term_of_ident in
+            let terms = List.map (Map.to_alist vars) ~f:var_term_of_ident_and_positions in
             let pred = Tformula.tpredicate [] p_name terms (Event (false, Standard)) in
             let s' = add_scope_first_pass rule_num pred reference_labels s in
-            let _, p = type_pattern s.tprog t_vars p in
-            s', t_vars, TScope (pos, f, p, reference_labels, pred)
-          | Obligation (pos, f1, p, f2, q, rt, rcs) ->
-             let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula s.tprog) in
-             let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula s.tprog) in
-             let t_vars, p = type_pattern s.tprog t_vars p in
-             let _, q = type_pattern s.tprog t_vars q in
-             s, t_vars, TObligation (pos, f1, p, f2, q, rt, rcs)
-          | Permission (pos, f1, p, f2, q, rt, rcs) ->
-             let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula s.tprog) in
-             let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula s.tprog) in
-             let t_vars, p = type_pattern s.tprog t_vars p in
-             let _, q = type_pattern s.tprog t_vars q in
-             s, t_vars, TPermission (pos, f1, p, f2, q, rt, rcs)
-          | Constitutive (pos, f1, p, f2) ->
-             let t_vars, f1 = List.fold_map f1 ~init:t_vars ~f:(type_formula s.tprog) in
-             let t_vars, f2 = List.fold_map f2 ~init:t_vars ~f:(type_formula s.tprog) in
-             let _, p = type_pattern s.tprog t_vars p in
-             s, t_vars, TConstitutive (pos, f1, p, f2)
-          | ExceptionC (pos, f1, p, refs, f2) ->
-             let s, t_vars, tf = process_rule s t_vars (Exception (pos, f1, p, refs)) in
-             let s, t_vars, tg = process_rule s t_vars (Constitutive (pos, f1, p, f2)) in
+            s', t_vars, TScope (pos, tpf, reference_labels, pred)
+          | Obligation (pos, pf1, pf2, rt, rcs) ->
+            let _, t_vars, tpf1 = type_pformula s.tprog t_vars pf1 in
+            let _, t_vars, tpf2 = type_pformula s.tprog t_vars pf2 in
+            s, t_vars, TObligation (pos, tpf1, tpf2, rt, rcs)
+          | Permission (pos, pf1, pf2, rt, rcs) ->
+            let _, t_vars, tpf1 = type_pformula s.tprog t_vars pf1 in
+            let _, t_vars, tpf2 = type_pformula s.tprog t_vars pf2 in
+            s, t_vars, TPermission (pos, tpf1, tpf2, rt, rcs)
+          | Constitutive (pos, pf1, f2) ->
+            let _, t_vars, tpf1 = type_pformula s.tprog t_vars pf1 in
+            let t_vars, tf2 = type_formulas s.tprog t_vars f2 in
+             s, t_vars, TConstitutive (pos, tpf1, tf2)
+          | ExceptionC (pos, pf1, refs, f2) ->
+             let s, t_vars, tf = process_rule s t_vars (Exception (pos, pf1, refs)) in
+             let s, t_vars, tg = process_rule s t_vars (Constitutive (pos, pf1, f2)) in
              match tf, tg with
-             | TException (pos, f1, p, reference_labels, pref), TConstitutive (_, _, _, f2)
-               -> s, t_vars, TExceptionC (pos, f1, p, reference_labels, pref, f2)
+             | TException (pos, tpf1, reference_labels, pref), TConstitutive (_, _, tf2)
+               -> s, t_vars, TExceptionC (pos, tpf1, reference_labels, pref, tf2)
              | _, _ -> assert false
         in process_rule s t_vars rule
       in

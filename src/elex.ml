@@ -30,13 +30,14 @@ let erule_type_from_trule_type = function
   | TRTScope -> ERTScope
 
 type eref_expr = tref_expr
+type epformula = {p: epattern; fs: Eformula.t list}
+let epf p fs = {p; fs}
 
 type edisjunct = { rule_id: int;
                    et: erule_type;
                    rule_pos: Lexing.position;
                    def_positions: Lexing.position list;
-                   f1: Eformula.t list;
-                   f1_patt: epattern;
+                   pf: epformula;
                    exceptions: Eformula.t list; (* list of predicate *)
                    scopes: Eformula.t list; (* list of predicate *)
                    var_original: Tformula.TTerm.t list; (* list of the original terms*)
@@ -44,8 +45,8 @@ type edisjunct = { rule_id: int;
                   }
 
 type erule_compilation =
-  | ECImplication   of int * erule_type * Lexing.position * Eformula.t list * epattern * Eformula.t list * Eformula.t list * Eformula.t list * epattern * rule_type * rule_constr list
-  | ECDefinition    of int * erule_type * Lexing.position * Eformula.t list * epattern * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t
+  | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list
+  | ECDefinition    of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t
   | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t
 
 type estmt =
@@ -113,14 +114,14 @@ let is_erule = function
 let get_obligation_params compilation_rules = function
   | EObligation (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECImplication (_, _, _, f, p, _, _, g, q, rt, rcs) -> (f, p, g, q, rt, rcs)
+      | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs) -> (pf1, pf2, rt, rcs)
       | _ -> assert false)
   | _ -> assert false
 
 let get_permission_params compilation_rules = function
   | EPermission (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECImplication (_, _, _, f, p, _, _, g, q, rt, rcs) -> (f, p, g, q, rt, rcs)
+      | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs) -> (pf1, pf2, rt, rcs)
       | _ -> assert false)
   | _ -> assert false
 
@@ -137,21 +138,21 @@ let get_constitutive_params compilation_rules = function
       | _ -> assert false
     in
     let disjuncts = List.zip_exn c_rules d_indices |> List.map ~f:aux in
-    let f,p = List.map disjuncts ~f:(fun d -> (d.f1, d.f1_patt)) |> List.hd_exn in (* TODO (potentially) check that all compilation rule have the same disjunct *)
-    (f,p,g)
+    let pf = List.map disjuncts ~f:(fun d -> d.pf) |> List.hd_exn in (* TODO (potentially) check that all compilation rule have the same disjunct *)
+    (pf, g)
   | _ -> assert false
 
 let get_exception_params compilation_rules = function
   | EException (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECDefinition (_, _, _, f, p, _, _,  erefs, _) -> (f, p, erefs)
+      | ECDefinition (_, _, _, pf, _, _,  erefs, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
 let get_scope_params compilation_rules = function
   | EScope (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECDefinition (_, _, _, f, p, _, _, erefs, _) -> (f, p, erefs)
+      | ECDefinition (_, _, _, pf, _, _, erefs, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
@@ -159,15 +160,15 @@ let get_exceptionc_params compilation_rules = function
   | EExceptionC (_, c_idx_ex, cs) ->
     let c_rule_ex = Map.find_exn compilation_rules c_idx_ex in
     let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn compilation_rules c_idx) in
-    let f, p, erefs = (match c_rule_ex with
-      | ECDefinition (_, _, _, f, p, _, _, erefs, _) -> (f, p, erefs)
+    let pf, erefs = (match c_rule_ex with
+      | ECDefinition (_, _, _, pf, _, _, erefs, _) -> (pf, erefs)
       | _ -> assert false)
     in (* TODO: check that f is the same collection of formulas as in the constitutive rules, and don't just assume so *)
     let g = List.map c_rules ~f:(fun r -> match r with
               | ECDefinitionDis (_,g) -> g
               | _ -> assert false)
     in
-    (f, p, erefs, g)
+    (pf, erefs, g)
   | _ -> assert false
 
 let verb_of_erule = function
@@ -197,29 +198,29 @@ let string_of_erule compilation_rules i erule =
     String.concat ~sep:"\n" (List.map ~f:reference_to_string refs) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
-  let string_of_imp_rule verb f p g q rcs rt =
-    Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f                         
-    ^ Etc.tabs i   ^ verb       ^ string_of_epattern q ^ "\n"
-    ^ string_of_formula_list g
+  let string_of_imp_rule verb pf1 pf2 rcs rt =
+    Etc.tabs i     ^ "whenever" ^ string_of_epattern pf1.p ^ "\n"
+    ^ string_of_formula_list pf1.fs                         
+    ^ Etc.tabs i   ^ verb       ^ string_of_epattern pf2.p ^ "\n"
+    ^ string_of_formula_list pf2.fs
     ^ Etc.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
     ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
       else Etc.tabs i ^ (string_of_rule_constrs rcs))
   in
-  let string_of_cons_rule verb f p g =
-    Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f  ^ Etc.tabs i   ^ verb  ^ "\n"
+  let string_of_cons_rule verb pf g =
+    Etc.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
+    ^ string_of_formula_list pf.fs  ^ Etc.tabs i   ^ verb  ^ "\n"
     ^ string_of_formula_list g
   in
-  let string_of_ref_rule verb f p refs =
-    Etc.tabs i     ^ "whenever" ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f                         ^ "\n"
+  let string_of_ref_rule verb pf refs =
+    Etc.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
+    ^ string_of_formula_list pf.fs                         ^ "\n"
     ^ Etc.tabs i   ^ verb                              ^ "\n"
     ^ string_of_reference_list refs
   in
-  let string_of_refc_rule verb f p refs g =
-    Etc.tabs i     ^ "whenever"  ^ string_of_epattern p ^ "\n"
-    ^ string_of_formula_list f                          
+  let string_of_refc_rule verb pf refs g =
+    Etc.tabs i     ^ "whenever"  ^ string_of_epattern pf.p ^ "\n"
+    ^ string_of_formula_list pf.fs
     ^ Etc.tabs i   ^ verb                               ^ "\n"
     ^ string_of_reference_list refs                     
     ^ Etc.tabs i   ^ "constitute"                       ^ "\n"
@@ -227,23 +228,23 @@ let string_of_erule compilation_rules i erule =
   in
   match erule with
   | EObligation _ ->
-    let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
-    string_of_imp_rule (verb_of_erule erule) f p g q rcs rt
+    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EPermission _ ->
-    let f, p, g, q, rt, rcs = get_obligation_params compilation_rules erule in
-    string_of_imp_rule (verb_of_erule erule) f p g q rcs rt
+    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EConstitutive _ ->
-    let f, p, g = get_constitutive_params compilation_rules erule in
-    string_of_cons_rule (verb_of_erule erule) f p g
+    let pf, g = get_constitutive_params compilation_rules erule in
+    string_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
-    let f, p, erefs = get_exception_params compilation_rules erule in
-    string_of_ref_rule (verb_of_erule erule) f p (List.map ~f:(fun x -> x.ref) erefs)
+    let pf, erefs = get_exception_params compilation_rules erule in
+    string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs)
   | EExceptionC _ ->
-    let f, p, erefs, g = get_exceptionc_params compilation_rules erule in
-    string_of_refc_rule (verb_of_erule erule) f p (List.map ~f:(fun x -> x.ref) erefs) g
+    let pf, erefs, g = get_exceptionc_params compilation_rules erule in
+    string_of_refc_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs) g
   | EScope _ ->
-    let f, p, erefs = get_exception_params compilation_rules erule in
-    string_of_ref_rule (verb_of_erule erule) f p (List.map ~f:(fun x -> x.ref) erefs)
+    let pf, erefs = get_exception_params compilation_rules erule in
+    string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs)
 
 let string_of_estmt compilation_rules ?(i=0) =
   function
