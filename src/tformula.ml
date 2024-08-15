@@ -462,6 +462,9 @@ let strictly_relative_past ?(itl_itvs_and_strict=Map.empty (module String), Map.
 let get_predicate_name f = match f.f with
   | TPredicate (n,_,_) -> n
   | _ -> assert false
+let get_predicate_params f = match f.f with
+  | TPredicate (_,ts,_) -> ts
+  | _ -> assert false
 
 let rec is_transparent (t: EnfType.t) (f: t) =
   let is_transparent = is_transparent t in

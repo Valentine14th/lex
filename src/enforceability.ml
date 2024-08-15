@@ -16,10 +16,10 @@ open Tlex
 open Elex
 
 type pg_map = (string, (string, bool, String.comparator_witness) Map.t, String.comparator_witness) Map.t
-let xand a b = (a && b) || (not a && not b)
+let xand a b = (a && b) || (not a && not b) (* a=b *)
 
 let rec is_past_guarded ?(pg_map: pg_map=Map.empty (module String)) s x p f =
-  let r =
+  let is_past_guarded = is_past_guarded ~pg_map in
   match f.f with
   | TTT | TFF -> false
   | TEqConst (x', y) -> p && TTerm.equal_core (TTerm.TVar x) x'.trm && TTerm.is_const y.trm
@@ -40,19 +40,23 @@ let rec is_past_guarded ?(pg_map: pg_map=Map.empty (module String)) s x p f =
                                || is_past_guarded s x p f && is_past_guarded s x (not p) g
   | TIff (_, _, f, g) -> (is_past_guarded s x (not p) f || is_past_guarded s x p g)
                         && (is_past_guarded s x p f || is_past_guarded s x (not p) g)
-  | TExists (y, f) | TForall (y, f) -> not (String.equal x y) && is_past_guarded s x p f
+  | TExists (y, f)
+  | TForall (y, f) -> not (String.equal x y) && is_past_guarded s x p f
   | TPrev (_, f) -> p && is_past_guarded s x p f
-  | TOnce (_, f) | TEventually (_, f) when p -> is_past_guarded s x p f
-  | TOnce (i, f) | TEventually (i, f) -> Interval.has_zero i && is_past_guarded s x p f
-  | THistorically (_, f) | TAlways (_, f) when not p -> is_past_guarded s x p f
+  | TOnce (_, f)
+  | TEventually (_, f) when p -> is_past_guarded s x p f (* TODO: is this correct, strictly following the PG rules (and translating (Eventually_I phi) to (true Until_I phi)), x would need to be PG(x)+ in the formula 'true', which would be false *)
+  | TOnce (i, f)
+  | TEventually (i, f) -> Interval.has_zero i && is_past_guarded s x p f
+  | THistorically (_, f)
+  | TAlways (_, f) when not p -> is_past_guarded s x p f
   | THistorically (i, f) -> Interval.has_zero i && is_past_guarded s x p f
   | TSince (_, i, f, g) when p -> not (Interval.has_zero i) && is_past_guarded s x p f
                                  || is_past_guarded s x p g
   | TUntil (_, i, f, g) when p -> not (Interval.has_zero i) && is_past_guarded s x p f
                                  || is_past_guarded s x p f && is_past_guarded s x p g
-  | TSince (_, i, _, g) | TUntil (_, i, _, g) -> Interval.has_zero i && is_past_guarded s x p g
+  | TSince (_, i, _, g)
+  | TUntil (_, i, _, g) -> Interval.has_zero i && is_past_guarded s x p g
   | _ -> false
-  in r
 
 module Errors = struct
 
@@ -1093,21 +1097,146 @@ let update_pols_with_transparency_conditions pols pols_tr =
     | `Both (enftype, (_, tr)) -> Some (enftype, tr)
   )
 
-let var_is_past_guarded_in_rule rule var positions =
-  match rule with
-  | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, _, _) ->
-    assert false
-  | _ -> assert false
+let is_past_guarded_tformulas ?(pg_map: pg_map=Map.empty (module String)) s x p fs =
+  match p with
+  | true -> List.exists fs ~f:(is_past_guarded ~pg_map s x true)
+  | false -> List.for_all fs ~f:(is_past_guarded ~pg_map s x false)
 
-let free_variables_tc_implication_are_past_guarded = function
-  | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, _, _) as rule ->
+let is_past_guarded_tpformula  ?(pg_map: pg_map=Map.empty (module String)) s x p (tpf: tpformula) =
+  let is_past_guarded_tformulas = is_past_guarded_tformulas ~pg_map in
+  let is_past_guarded = is_past_guarded ~pg_map in
+  (* TODO: verify this, implementation follow the implementatoin of is_past_guarded *)
+  match tpf.p with
+  | TPPresent -> is_past_guarded_tformulas s x p tpf.fs
+  | TPOnce _
+  | TPEventually _ when p ->
+    is_past_guarded_tformulas s x p tpf.fs
+    (* TODO: is this correct, strictly following the PG rules (and translating (Eventually_I phi) to (true Until_I phi)), x would need to be PG(x)+ in the formula 'true', which would be false *)
+    (* this is ipmlemented by following the implementation of is_past_guarded *)
+  | TPEventually i
+  | TPOnce i ->
+    Interval.has_zero i && is_past_guarded_tformulas s x p tpf.fs
+  | TPHistorically _ 
+  | TPAlways _  when not p ->
+    is_past_guarded_tformulas s x p tpf.fs
+  | TPHistorically i ->
+    Interval.has_zero i && is_past_guarded_tformulas s x p tpf.fs
+  | TPAlways _ -> false
+  | TPSince (i, g) when p ->
+    not (Interval.has_zero i) && is_past_guarded_tformulas s x p tpf.fs
+    || is_past_guarded s x p g
+  | TPSince (i, g) ->
+    Interval.has_zero i && is_past_guarded s x p g
+  | TPUntil (i, g) when p ->
+    not (Interval.has_zero i) && is_past_guarded s x p g
+    || is_past_guarded_tformulas s x p tpf.fs && is_past_guarded s x p g
+  | TPUntil (i, _) ->
+    Interval.has_zero i && is_past_guarded_tformulas s x p tpf.fs
+
+let is_past_guarded_tcimplication_exn ?(pg_map: pg_map=Map.empty (module String)) s rule var positions =
+  match rule with
+  | TCImplication (_, _, pos, pf1, ex, sc, pf2, _, _) ->
+    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
+    if not (
+      is_past_guarded_tpformula ~pg_map s var true pf1 ||
+      is_past_guarded_tformulas ~pg_map s var true ex_neg ||
+      is_past_guarded_tformulas ~pg_map s var true sc ||
+      is_past_guarded_tpformula ~pg_map s var false pf2
+    ) then
+      let err_msg =
+        Printf.sprintf
+        "Variable \"%s\" (at locations: \n%s\n) is not past-guarded in rule"
+        var
+        (Util.string_of_positions positions)
+      in
+      Util.enf_error err_msg (Some pos)
+  | TCDefinition (_, _, pos, pf, ex, sc, _, _) ->
+    (* TCDefinition is only used for scope/except rules and
+       those should not have any 'fully' unbound variables *)
+    (* assert false *)
+    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
+    if not (
+      is_past_guarded_tpformula ~pg_map s var true pf ||
+      is_past_guarded_tformulas ~pg_map s var true ex_neg ||
+      is_past_guarded_tformulas ~pg_map s var true sc
+    ) then
+      let err_msg =
+        Printf.sprintf
+        "Variable \"%s\" (at locations: \n%s\n) is not past-guarded in rule"
+        var
+        (Util.string_of_positions positions)
+      in
+      Util.enf_error err_msg (Some pos)
+  | TCDefinitionDis (disjuncts, _) ->
+    let aux (disjunct: tdisjunct) =
+      let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
+      is_past_guarded_tpformula ~pg_map s var true disjunct.pf ||
+      is_past_guarded_tformulas ~pg_map s var true ex_neg ||
+      is_past_guarded_tformulas ~pg_map s var true disjunct.scopes
+    in
+    if not (Map.for_all disjuncts ~f:aux) then
+      let err_msg =
+        Printf.sprintf
+        "Variable \"%s\" (at locations: \n%s\n) is not past-guarded in rule"
+        var
+        (Util.string_of_positions positions)
+      in
+      let positions = List.concat_map (Map.data disjuncts) ~f:(fun d -> d.def_positions) in
+      match positions with
+      | pos :: _ -> Util.enf_error err_msg (Some pos) (* TODO: print out other locations where the given event is constituted *)
+      | [] -> Util.enf_error err_msg None (* should not happen *)
+
+let fv_of_tcrule = function
+  | TCImplication (_, _, _, pf1, ex, sc, pf2, _, _) ->
     let free_vars = Map.empty (module String) in
     let free_vars = fv_of_tpformulas free_vars pf1 in
     let free_vars = fv_of_tpformulas free_vars pf2 in
-    let free_vars = fv_of_tformulas free_vars exceptions in
-    let free_vars = fv_of_tformulas free_vars scopes in
-    Map.iteri free_vars ~f:(fun ~key:var ~data:positions -> var_is_past_guarded_in_rule rule var positions)
+    let free_vars = fv_of_tformulas free_vars ex in
+    let free_vars = fv_of_tformulas free_vars sc in
+    free_vars
+  | TCDefinition (_, _, _, pf, ex, sc, _, _) ->
+    let free_vars = Map.empty (module String) in
+    let free_vars = fv_of_tpformulas free_vars pf in
+    let free_vars = fv_of_tformulas free_vars ex in
+    let free_vars = fv_of_tformulas free_vars sc in
+    free_vars
+  | TCDefinitionDis (disjuncts, _) ->
+    let free_vars = Map.empty (module String) in
+    let free_vars = Map.fold disjuncts ~init:free_vars ~f:(fun ~key:_ ~data:disjunct free_vars ->
+      let free_vars = fv_of_tpformulas free_vars disjunct.pf in
+      let free_vars = fv_of_tformulas free_vars disjunct.exceptions in
+      let free_vars = fv_of_tformulas free_vars disjunct.scopes in
+      free_vars
+    ) in
+    free_vars
+
+let vars_are_past_guarded_tcrule_exn ?(pg_map = Map.empty (module String)) s vars rule =
+  (* will throw an enforcement error if some variable is not past-guarded *)
+  let aux ~key:var ~data:positions =
+    is_past_guarded_tcimplication_exn ~pg_map s rule var positions
+  in
+  Map.iteri vars ~f:aux
+
+let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
+  match rule with
+  | TCDefinition (_, _, _, pf, ex, sc, _, _) ->
+    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
+    is_past_guarded_tpformula ~pg_map s x true pf ||
+    is_past_guarded_tformulas ~pg_map s x true ex_neg ||
+    is_past_guarded_tformulas ~pg_map s x true sc
+  | TCDefinitionDis (disjuncts, _) ->
+    let aux (disjunct: tdisjunct) =
+      let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
+      is_past_guarded_tpformula ~pg_map s x true disjunct.pf ||
+      is_past_guarded_tformulas ~pg_map s x true ex_neg ||
+      is_past_guarded_tformulas ~pg_map s x true disjunct.scopes
+    in
+    Map.for_all disjuncts ~f:aux
   | _ -> assert false
+
+let update_pg_map s pg_map e vars rule = 
+  let data = Map.mapi vars ~f:(past_guarded_of_tcrule s pg_map rule) in
+  Map.add_exn pg_map ~key:e ~data:data
 
 let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rule: verdict * pg_map =
   let pols = Tlex.pol_map s
@@ -1127,7 +1256,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map
           vanilla_rule_constraints_warning pos rcs;
           verdict, pg_map (* do not aadd any typing constraints in regards to this rule *)
         | Enforceable ->
-          free_variables_tc_implication_are_past_guarded rule;
+          vars_are_past_guarded_tcrule_exn ~pg_map s (fv_of_tcrule rule) rule;
           let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
             parse_rule_constraints pos pols (List.length pf1.fs) rcs
           in
@@ -1165,6 +1294,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map
               Util.enf_error err_msg (Some pos)
           end
         | Transparent ->
+          vars_are_past_guarded_tcrule_exn ~pg_map s (fv_of_tcrule rule) rule;
           let tr = Some (itl_itvs_and_stricts) in
           let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
             parse_rule_constraints pos pols (List.length pf1.fs) rcs
@@ -1292,6 +1422,22 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map
       end
     | TCDefinition (idx, _, _, pf1, ex, sc, _, f2) ->
       let e = get_predicate_name f2 in
+      let params = get_predicate_params f2 in
+      (* f2 is an except/scope predicat and parameters should be exclusively variable who's name can be extracted *)
+      let get_trm_name (t: TTerm.t) = match t.trm with
+        | TTerm.TVar x -> x
+        | _ -> assert false
+      in
+      let param_names = List.map params ~f:get_trm_name in
+      (* TODO:
+         - extract free variables in rule
+         - separate into variables that are parameters of f2
+         - and those that are not
+         - for the parameters check if they are past-guarded and update pg_map accordingly
+         - for the others, compute past-guardedness according to whethre the rule must be made Cau/Sup *)
+      let fv = fv_of_tcrule rule in
+      let fv_params, fv_unbound = Map.partitioni_tf fv ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
+      let pg_map = update_pg_map s pg_map e fv_params rule in
       let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
       let aux d =
         let v_pols = solve d in
@@ -1312,6 +1458,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map
           let verdict_references = conj v_ex v_sc in
           conj (conj v_pf1 verdict_references) verdict
         | Sup -> (* only one part of the definition must be Sup *)
+          vars_are_past_guarded_tcrule_exn ~pg_map s fv_unbound rule; (* TODO: are they actually quantified with an existential quantifier? *)
           let verdict_references = disj v_ex v_sc in
           conj (disj v_pf1 verdict_references) verdict
         | Obs -> verdict
@@ -1321,6 +1468,16 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map
       Constraints.disj' verdicts, pg_map
     | TCDefinitionDis (disjuncts, g) ->
       let e = get_predicate_name g in
+      let params = get_predicate_params g in
+      (* g is an except/scope predicat and parameters should be exclusively variable who's name can be extracted *)
+      let get_trm_name (t: TTerm.t) = match t.trm with
+        | TTerm.TVar x -> x
+        | _ -> assert false
+      in
+      let param_names = List.map params ~f:get_trm_name in
+      let fv = fv_of_tcrule rule in
+      let fv_params, fv_unbound = Map.partitioni_tf fv ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
+      let pg_map = update_pg_map s pg_map e fv_params rule in
       let aux d =
         let v_pols = solve d in
         (* TODO: test enforcability checking and remove assertion after successful testing *)
@@ -1345,6 +1502,7 @@ let type_trule_compilation itl_itvs_and_stricts (s:Tlex.tprog) ((verdict, pg_map
               let verdict_references = conj v_ex v_sc in
               conj (conj v_pf' verdict_references) verdict
             | Sup -> (* only one part of the definition must be Sup *)
+              vars_are_past_guarded_tcrule_exn ~pg_map s fv_unbound rule; (* TODO: are they actually quantified with an existential quantifier? *)
               let verdict_references = disj v_ex v_sc in
               conj (disj v_pf' verdict_references) verdict
             | Obs -> verdict
@@ -1448,7 +1606,8 @@ let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_c
   rules_are_past_guarded compilation_rules_sorted;
   let itl_itvs = List.fold (List.rev compilation_rules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
   let itl_strict = List.fold (List.rev compilation_rules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
-  let verdict, pg_map = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in
+  (* let verdict, pg_map = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in *)
+  let verdict, _ = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in
   let constraints = match verdict with
     | Possible c -> c
     | Impossible e ->
