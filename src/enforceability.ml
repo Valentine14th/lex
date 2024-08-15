@@ -1579,31 +1579,12 @@ let strict_itl itl_strict = function
   | TCDefinitionDis _ -> assert false
   | _ -> itl_strict
 
-(* TODO: implement past guardedness check *)
-(* let rule_is_past_guarded (pg, itl_pg) = function *)
-let rule_is_past_guarded _ = function
-  | _ ->
-  (* | TCImplication (_, _, pos, f1, p, ex, sc, f2, q, rt, rcs) ->
-    let pf = formulas_from_tpattern p in
-    let qf = formulas_from_tpattern q in
-    let fvs = List.fold (f1@ex@sc@f2@pf@qf) ~init:(Map.empty (module String)) ~f:Tformula.fv
-    in *)
-    assert false
-  (* | TCDefinition _ -> assert false
-  | TCDefinitionDis _ -> assert false *)
-
-let rules_are_past_guarded rules =
-  List.fold rules ~init:(true, Map.empty (module String)) ~f:rule_is_past_guarded
-  |> ignore
-
 let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_compilation, 'a) Map.t) : ((string, EnfType.t * bool, 'b) Map.t * int list) =
   let def_internal = def_sets compilation_rules tprog.tevents in
   let use_internal = use_sets compilation_rules tprog.tevents in
   check_used_events_are_defined tprog def_internal use_internal;
   let sorted_rule_indices = topological_sort (Map.keys compilation_rules) def_internal use_internal in
   let compilation_rules_sorted = List.map sorted_rule_indices ~f:(fun idx -> Map.find_exn compilation_rules idx) in
-  (* TODO: check past-guardedness of rules *)
-  rules_are_past_guarded compilation_rules_sorted;
   let itl_itvs = List.fold (List.rev compilation_rules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
   let itl_strict = List.fold (List.rev compilation_rules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
   (* let verdict, pg_map = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in *)
@@ -1622,7 +1603,6 @@ let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_c
   found_pol_constraints, sorted_rule_indices
 
 let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * trule * Tformula.t list * Tformula.t list) list =
-(* let collect_constitutive_rules (tprog: Tlex.tprog) = *)
   List.filter_map tprog.tstmts ~f:(function
     | TSRule (pos, idx, _, _, trule, _) ->
       let exceptions = get_exception_predicates ~negated:false tprog idx in
@@ -1635,7 +1615,6 @@ let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * tr
       end
     | _ -> None)
 
-(* let combine_constitutive_rules (rules: (Lexing.position * int * trule * Tformula.t list * Tformula.t list) list) : trule_compilation list = *)
 let combine_constitutive_rules rules: trule_compilation list =
   let collect_and_separate_event_definitions m (pos, idx, rule, exceptions, scopes) =
     let trule_type = match rule with
@@ -1667,7 +1646,6 @@ let combine_constitutive_rules rules: trule_compilation list =
     | _ -> assert false
   in
   let event_def_map = List.fold rules ~init:(Map.empty (module String)) ~f:collect_and_separate_event_definitions in
-  (* let replace_variables (idx, trule_type, pos, f1, exceptions, scopes, p, terms) = *)
   let replace_variables (d: tdisjunct): tdisjunct =
     let rename_fun (ts,i) t =
       let t = TTerm.
@@ -1748,14 +1726,20 @@ let create_compilation_rules (tprog: Tlex.tprog) : (int, trule_compilation, Int.
             ~f:(fun (m,i) r -> (Map.add_exn m ~key:i ~data:r, i+1))
   |> fst
 
-let convert_tformulas (s: tprog) (enftype: EnfType.t) pols b (fs: Tformula.t list) : Eformula.t list =
+let epformula_of_tpformula tevents (tpf: tpformula): epformula =
+  {
+    fs = List.map tpf.fs ~f:(Eformula.of_tformula tevents);
+    p = epattern_of_tpattern tevents tpf.p
+  }
+
+let convert_tformulas (s: tprog) (enftype: EnfType.t) pols b (fs: Tformula.t list) : Eformula.t list * int option =
   let pols' = Map.map pols ~f:fst in
   let convert enftype f =
     convert s pols' b enftype f
     |> Option.value_exn (* If conversion fails, then the enforcement type checking is wrong *)
   in
   match enftype with
-  | Cau -> List.map fs ~f:(convert Cau)
+  | Cau -> List.map fs ~f:(convert Cau), None
   | Sup -> 
     let find_first_possible _ f =
       match types s pols Sup f with
@@ -1764,15 +1748,18 @@ let convert_tformulas (s: tprog) (enftype: EnfType.t) pols b (fs: Tformula.t lis
     in
     let idx = List.findi_exn ~f:find_first_possible fs |> fst in (* there must exist at least one formula which types correctly, otherwise the enforcement checking is wrong *)
     let aux i f = if i = idx then convert Sup f else Eformula.of_tformula pols f in
-    List.mapi fs ~f:aux
-  | Obs -> List.map fs ~f:(convert Obs)
+    List.mapi fs ~f:aux, Some idx
+  | Obs -> List.map fs ~f:(convert Obs), None
   | _ -> assert false
 
-let convert_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: tpformula) : epformula =
+let convert_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: tpformula) : epformula * enf_pformula option =
   match enftype with
   | Cau ->
     begin match tpf.p with
-      | TPPresent -> { fs = convert_tformulas s Cau pols b tpf.fs; p = EPPresent }
+      | TPPresent ->
+        let efs, _ = convert_tformulas s Cau pols b tpf.fs in
+        let enf_constr = ECauPFormula ECFormulas in
+        { fs = efs; p = EPPresent }, Some enf_constr
       (* | TPEventually i -> assert false *)
       (* | TPAlways i -> assert false *)
       (* | TPUntil (i, g) -> assert false *)
@@ -1783,7 +1770,10 @@ let convert_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: tpformula) : 
     end
   | Sup ->
     begin match tpf.p with
-      | TPPresent -> { fs = convert_tformulas s Sup pols b tpf.fs; p = EPPresent }
+      | TPPresent ->
+        let efs, i_opt = convert_tformulas s Sup pols b tpf.fs in
+        let enf_constr = ESupPFormula (ESFormula (Option.value_exn i_opt)) in
+        { fs = efs; p = EPPresent }, Some enf_constr
       (* | TPEventually i -> assert false *)
       (* | TPAlways i -> assert false *)
       (* | TPUntil (i, g) -> assert false *)
@@ -1792,17 +1782,7 @@ let convert_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: tpformula) : 
       (* | TPSince (i, g) -> assert false *)
       | _ -> assert false
     end
-  | Obs -> 
-    begin match tpf.p with
-      (* | TPPresent -> assert false *)
-      (* | TPEventually i -> assert false *)
-      (* | TPAlways i -> assert false *)
-      (* | TPUntil (i, g) -> assert false *)
-      (* | TPOnce i -> assert false *)
-      (* | TPHistorically i -> assert false *)
-      (* | TPSince (i, g) -> assert false *)
-      | _ -> assert false
-    end
+  | Obs -> epformula_of_tpformula s.tevents tpf, None
   | _ -> assert false
 
 
@@ -1820,119 +1800,107 @@ let  merge_used_and_unused indices_used used unused =
     in
   List.init n ~f:merge
 
-let epformula_of_tpformula tevents (tpf: tpformula): epformula =
-  {
-    fs = List.map tpf.fs ~f:(Eformula.of_tformula tevents);
-    p = epattern_of_tpattern tevents tpf.p
-  }
-
-(* let convert_compilation_rule (s: tprog) pols b = function *)
-let convert_compilation_rule (s: tprog) pols _ = function
-  | TCImplication (idx, trt, pos, tpf1, ex, sc, tpf2, rt, rcs) ->
+let convert_compilation_rule (s: tprog) pols b = function
+  | TCImplication (idx, trt, pos, pf1, ex, sc, pf2, rt, rcs) ->
     begin match rt with
       | Vanilla ->
         let ert = erule_type_from_trule_type trt in
         let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
         let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
-        let epf1 = epformula_of_tpformula s.tevents tpf1 in
-        let epf2 = epformula_of_tpformula s.tevents tpf2 in
-        ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs)
+        let epf1 = epformula_of_tpformula s.tevents pf1 in
+        let epf2 = epformula_of_tpformula s.tevents pf2 in
+        ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, None)
       | Enforceable ->
         (* TODO: interpret rule constraints (again)
             -> find first applicable way of making the implication Cau
             -> convert based on that
         *)
-        (* let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
-          parse_rule_constraints pos pols (List.length f1) rcs
+        let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
+          parse_rule_constraints pos pols (List.length pf1.fs) rcs
         in
-        begin match cause_exceptions, type_exceptions None s pos pols ex with
+        begin match cause_exceptions, type_exceptions None s pols ex with
           | true, Possible constraints ->
             let pols' = solve constraints |> List.hd_exn in (* TODO: iterate through found policies *)
             let ert = erule_type_from_trule_type trt in
-            let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
-            let ex' =
-              convert_pattern_with_formulas s Cau pols' b ex TPPresent
-              |> fst
-            in
+            let epf1 = epformula_of_tpformula s.tevents pf1 in
+            let ex', i_opt = convert_tformulas s Cau pols' b ex in
             let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
-            let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
-            let p' = epattern_of_tpattern s p in
-            let q' = epattern_of_tpattern s q in
-            ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+            let epf2 = epformula_of_tpformula s.tevents pf2 in
+            let enf_constr = ECICauException (Option.value_exn i_opt) in
+            ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
           | _ ->
-            begin match suppress_scopes, type_scopes None s pos pols sc with
+            begin match suppress_scopes, type_scopes None s pols sc with
             | true, Possible constraints ->
               let pols' = solve constraints |> List.hd_exn in (* TODO: handle multiple/no options *)
               let ert = erule_type_from_trule_type trt in
-              let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
+              let epf1 = epformula_of_tpformula s.tevents pf1 in
               let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
-              let sc' =
-                convert_pattern_with_formulas s Cau pols' b sc TPPresent
-                |> fst
-              in
-              let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
-              let p' = epattern_of_tpattern s p in
-              let q' = epattern_of_tpattern s q in
-              ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+              let sc', i_opt = convert_tformulas s Cau pols' b sc in
+              let epf2 = epformula_of_tpformula s.tevents pf2 in
+              let enf_constr = ECISupScope (Option.value_exn i_opt) in
+              ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
             | _ ->
-              begin match suppress_conditions, type_pattern_with_formulas None s pos pols Sup f1 p with
+              begin match suppress_conditions, type_tpformula None s pos pols Sup pf1 with
               | true, Possible constraints ->
                 let pols' = solve constraints |> List.hd_exn in (* TODO: handle empty/multiple *)
                 let ert = erule_type_from_trule_type trt in
-                let f1', p' =
-                  convert_pattern_with_formulas s Cau pols' b f1 p
-                in
+                let epf1, constr_opt = convert_tpformula s Sup pols' b pf1 in
                 let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
                 let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
-                let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
-                let q' = epattern_of_tpattern s q in
-                ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+                let epf2 = epformula_of_tpformula s.tevents pf2 in
+                let enf_constr = match constr_opt with
+                  | Some (ESupPFormula c) -> ECISupFormula c
+                  | _ -> assert false
+                in
+                ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
               | _ ->
                 let v = begin match suppress_indices with
-                    | Some indices ->
-                      let f1_filtered = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
-                      type_pattern_with_formulas None s pos pols Sup f1_filtered p
-                    | None -> 
-                      Impossible (ERule (pos, "no conditions are marked as suppressing"))
-                  end in
+                  | Some indices ->
+                    let pf1_filtered = { pf1 with fs = List.filteri pf1.fs ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) } in
+                    type_tpformula None s pos pols Sup pf1_filtered
+                  | None -> 
+                    Impossible (ERule (pos, "no conditions are marked as suppressing"))
+                end in
                 begin match v with
                 | Possible constraints ->
                   let indices = Option.value_exn suppress_indices in
                   let pols' = solve constraints |> List.hd_exn in (*TODO*)
                   let ert = erule_type_from_trule_type trt in
-                  let f1_used = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
-                  let f1_unused = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:(fun x y -> Int.equal x y |> not)) in
-                  let f1_used', p' =
-                    convert_pattern_with_formulas s Cau pols' b f1_used p
-                  in
-                  let f1_unused' = List.map f1_unused ~f:(Eformula.of_tformula pols) in
-                  let f1' = merge_used_and_unused indices f1_used' f1_unused' in
+                  let pf1_used = { pf1 with fs = List.filteri pf1.fs ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) } in
+                  let pf1_unused = { pf1 with fs = List.filteri pf1.fs ~f:(fun i _ -> List.mem indices i ~equal:(fun x y -> not (Int.equal x y))) } in
+                  (* let f1_used = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) in
+                  let f1_unused = List.filteri f1 ~f:(fun i _ -> List.mem indices i ~equal:(fun x y -> not (Int.equal x y))) in *)
+                  let epf1_used, constr_opt = convert_tpformula s Cau pols' b pf1_used in
+                  let f1_unused' = epformula_of_tpformula s.tevents pf1_unused in
+                  let epf1 = { epf1_used with fs = merge_used_and_unused indices epf1_used.fs f1_unused'.fs } in
                   let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
                   let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
-                  let f2' = List.map f2 ~f:(Eformula.of_tformula pols) in
-                  let q' = epattern_of_tpattern s q in
-                  ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+                  let epf2 = epformula_of_tpformula s.tevents pf2 in
+                  let enf_constr = match constr_opt with
+                    | Some (ESupPFormula c) -> ECISupFormula c
+                    | _ -> assert false
+                  in
+                  ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
                 | _ ->
-                  begin match cause_effects, type_pattern_with_formulas None s pos pols Cau f2 q with
+                  begin match cause_effects, type_tpformula None s pos pols Cau pf2 with
                     | true, Possible constraints ->
                       let pols' = solve constraints |> List.hd_exn in (* TODO *)
                       let ert = erule_type_from_trule_type trt in
-                      let f1' = List.map f1 ~f:(Eformula.of_tformula pols) in
+                      let epf1 = epformula_of_tpformula s.tevents pf1 in
                       let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
                       let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
-                      let f2', q' =
-                        convert_pattern_with_formulas s Cau pols' b f2 q
+                      let epf2, constr_opt = convert_tpformula s Cau pols' b pf2 in
+                      let enf_constr = match constr_opt with
+                        | Some (ECauPFormula c) -> ECICauEffects c
+                        | _ -> assert false
                       in
-                      let p' = epattern_of_tpattern s p in
-                      ECImplication (idx, ert, pos, f1', p', ex', sc', f2', q', rt, rcs)
+                      ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
                     | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
                   end
                 end
               end
             end
-          end *)
-          assert false
-
+          end
       | Transparent ->
         (* TODO: interpret rule constraints (again)
             -> find first applicable way of making the implication Cau

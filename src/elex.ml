@@ -44,10 +44,46 @@ type edisjunct = { rule_id: int;
                    var_renaming: Eformula.t list (* list of equalities: _vi = <expr> *)
                   }
 
+type enf_sup_pformula =
+  | ESFormula of int
+  | ESPFormula of int (* for until and since, if both sides must be used for enforcement *)
+  | ESPattern (* for until and since, if it suffices to use the formula in the pattern for enforcement *)
+
+type enf_cau_pformula =
+  | ECFormulas
+  | ECPformula (* for until and since, if the formula of the pattern must also be used for enforcement *)
+  | ECPattern (* for until and since, if it suffices to enforce the formula in the pattern *)
+
+type enf_pformula =
+  | ESupPFormula of enf_sup_pformula
+  | ECauPFormula of enf_cau_pformula
+
+type enf_ecimplication =
+  | ECISupFormula of enf_sup_pformula
+  | ECICauException of int (* still suppresses the LHS of the implication as a whole *)
+  | ECISupScope of int
+  | ECICauEffects of enf_cau_pformula
+
+type enf_sup_ecdefinition =
+  | EDSupFormula of enf_sup_pformula
+  | EDCauException of int (* leads to suppressing the constitution of an event *)
+  | EDSupScope of int
+
+type enf_cau_ecdefinition =
+  | EDCauAll of enf_cau_pformula
+
+type enf_ecdefinition =
+  | EDSupDefinition of enf_sup_ecdefinition
+  | EDCauDefinition of enf_cau_ecdefinition
+
+type enf_ecdefinition_dis =
+  | EDDCauDisjunct of int * enf_cau_pformula
+  | EDDSupDisjuncts of enf_sup_ecdefinition list
+
 type erule_compilation =
-  | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list
-  | ECDefinition    of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t
-  | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t
+  | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option
+  | ECDefinition    of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t * enf_ecdefinition option
+  | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * enf_ecdefinition_dis option
 
 type estmt =
   | ESImport  of Lexing.position * string list * import_format
@@ -114,14 +150,14 @@ let is_erule = function
 let get_obligation_params compilation_rules = function
   | EObligation (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs) -> (pf1, pf2, rt, rcs)
+      | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs, _) -> (pf1, pf2, rt, rcs)
       | _ -> assert false)
   | _ -> assert false
 
 let get_permission_params compilation_rules = function
   | EPermission (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs) -> (pf1, pf2, rt, rcs)
+      | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs, _) -> (pf1, pf2, rt, rcs)
       | _ -> assert false)
   | _ -> assert false
 
@@ -130,11 +166,11 @@ let get_constitutive_params compilation_rules = function
     let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn compilation_rules c_idx) in
     let d_indices = List.map cs ~f:(fun (_,d_idx) -> d_idx) in
     let g = List.map c_rules ~f:(fun r -> match r with
-              | ECDefinitionDis (_,g) -> g
+              | ECDefinitionDis (_, g, _) -> g
               | _ -> assert false)
     in
     let aux = function
-      | ECDefinitionDis (disjuncts,_), d_idx -> Map.find_exn disjuncts d_idx
+      | ECDefinitionDis (disjuncts, _, _), d_idx -> Map.find_exn disjuncts d_idx
       | _ -> assert false
     in
     let disjuncts = List.zip_exn c_rules d_indices |> List.map ~f:aux in
@@ -145,14 +181,14 @@ let get_constitutive_params compilation_rules = function
 let get_exception_params compilation_rules = function
   | EException (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECDefinition (_, _, _, pf, _, _,  erefs, _) -> (pf, erefs)
+      | ECDefinition (_, _, _, pf, _, _,  erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
 let get_scope_params compilation_rules = function
   | EScope (_, c_idx) ->
     (match Map.find_exn compilation_rules c_idx with
-      | ECDefinition (_, _, _, pf, _, _, erefs, _) -> (pf, erefs)
+      | ECDefinition (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
@@ -161,11 +197,11 @@ let get_exceptionc_params compilation_rules = function
     let c_rule_ex = Map.find_exn compilation_rules c_idx_ex in
     let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn compilation_rules c_idx) in
     let pf, erefs = (match c_rule_ex with
-      | ECDefinition (_, _, _, pf, _, _, erefs, _) -> (pf, erefs)
+      | ECDefinition (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
     in (* TODO: check that f is the same collection of formulas as in the constitutive rules, and don't just assume so *)
     let g = List.map c_rules ~f:(fun r -> match r with
-              | ECDefinitionDis (_,g) -> g
+              | ECDefinitionDis (_, g, _) -> g
               | _ -> assert false)
     in
     (pf, erefs, g)

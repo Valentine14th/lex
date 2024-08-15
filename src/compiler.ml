@@ -147,7 +147,7 @@ let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
   | _ -> assert false
 
 let compile_let_rule = function
-  | ECDefinition (_, _, _, pf, ex, sc, _, g) ->
+  | ECDefinition (_, _, _, pf, ex, sc, _, g, _) ->
     let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
     let pf_comp = compile_epformula ~f:(tbigcauconj) pf in
     let f = tbigcauconj (pf_comp :: ex_neg @ sc) in
@@ -167,11 +167,29 @@ let compile_imp (f1: Eformula.t list) (f2: Eformula.t) =
     Non 0 []
 
 let compile_imp_rule = function
-  | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _) ->
-    let e_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
+  | ECImplication (_, _, _, _, _, _, _, Vanilla, _, _) ->
+    assert false (* TODO: filter Vanilla rules before compilation *)
+  (* | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _, Some enf_info) ->
+    begin match enf_info with
+    | ECISupFormula enf_sup ->
+      begin match enf_sup with
+      | ESFormula i -> assert false
+      | ESPFormula i -> assert false
+      | ESPattern -> assert false (* TODO *)
+      end
+    | ECICauException i -> assert false (* TODO *)
+    | ECISupScope i -> assert false (* TODO *)
+    | ECICauEffects enf_cau ->
+      begin match enf_cau with
+      | ECFormulas -> assert false (* TODO *)
+      | ECPformula -> assert false (* TODO *)
+      | ECPattern -> assert false (* TODO *)
+      end
+    end *)
+    (* let e_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
     let pf1_comp = compile_epformula ~f:(tbigcauconj) pf1 in
     let pf2_comp = compile_epformula ~f:(tbigcauconj) pf2 in
-    compile_imp (pf1_comp :: e_neg @ sc) pf2_comp
+    compile_imp (pf1_comp :: e_neg @ sc) pf2_comp *)
   | _ -> assert false
 
 let rec compile_typeterm = function
@@ -251,16 +269,16 @@ let compile_exception_or_scope_signature pols indexed_predicates aliases variabl
   List.map indexed_predicates ~f:compile_predicate
 
 let is_exception = function
-  | ECDefinition (_, ERTException, _, _, _, _, _, _) -> true
-  | ECDefinition (_, ERTExceptionC, _, _, _, _, _, _) -> true
+  | ECDefinition (_, ERTException, _, _, _, _, _, _, _) -> true
+  | ECDefinition (_, ERTExceptionC, _, _, _, _, _, _, _) -> true
   | _ -> false
 
 let is_scope = function
-  | ECDefinition (_, ERTScope, _, _, _, _, _, _) -> true
+  | ECDefinition (_, ERTScope, _, _, _, _, _, _, _) -> true
   | _ -> false
 
 let predicate_from_definition = function
-  | ECDefinition (idx, _, _, _, _, _, _, g) -> (idx, g)
+  | ECDefinition (idx, _, _, _, _, _, _, g, _) -> (idx, g)
   | _ -> assert false
 
 let compile_signature pols events functions aliases variables let_rules =
