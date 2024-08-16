@@ -462,10 +462,14 @@ well as the conversion of $time\_interval$ expressions into intervals:
     &\text{Always}^{\mathbb{S}_j} \\
   \frac{b\not=\infty \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
     {\Gamma \vdash \psi~\kw{Until}_{[0,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Until}^{\mathbb{C}} \quad
+    &\text{Until}^{\mathbb{C}R} \quad
   &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
     {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
     &\text{Until}^{\mathbb{S}_j} \\
+  \frac{b\not=\infty \quad \Gamma \vdash \psi :\mathbb{C} \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+    {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+    &\text{Until}^{\mathbb{C}LR} \quad
+  & & \\
   \frac{0 \in [a,b] \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
     {\Gamma \vdash \kw{Once}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
     &\text{Once}^{\mathbb{C}} \quad
