@@ -624,15 +624,6 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) :
   (*Stdio.print_string (EnfType.to_string enftype ^ " " ^ Formula.to_string form ^ " -> ");*)
   match f with Some f -> Some Eformula.{ f ; enftype; id = 0; positions = form.positions } | None -> None
 
-let epattern_of_tpattern tevents = function
-  | TPPresent -> EPPresent
-  | TPEventually i -> EPEventually i
-  | TPAlways i -> EPAlways i
-  | TPUntil (i, f) -> EPUntil (i, Eformula.of_tformula tevents f)
-  | TPOnce i -> EPOnce i
-  | TPHistorically i -> EPHistorically i
-  | TPSince (i, f) -> EPSince (i, Eformula.of_tformula tevents f)
-
 let type_tsrule erule_map =
   function
   | TSRule (pos, idx, label, type_fixes, _, doc_string) -> begin
@@ -1325,8 +1316,8 @@ let type_trule_compilation itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * 
           end
       end
     | TCDefinition (idx, _, _, pf1, ex, sc, _, f2) ->
-      let e = get_predicate_name f2 in
-      let params = get_predicate_params f2 in
+      let e = get_predicate_name_exn f2 in
+      let params = get_predicate_params_exn f2 in
       (* f2 is an except/scope predicat and parameters should be exclusively variable who's name can be extracted *)
       let get_trm_name (t: TTerm.t) = match t.trm with
         | TTerm.TVar x -> x
@@ -1365,8 +1356,8 @@ let type_trule_compilation itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * 
       let verdicts = List.map dnf_of_v ~f:aux in
       Constraints.disj' verdicts, pg_map
     | TCDefinitionDis (disjuncts, g) ->
-      let e = get_predicate_name g in
-      let params = get_predicate_params g in
+      let e = get_predicate_name_exn g in
+      let params = get_predicate_params_exn g in
       (* g is an except/scope predicat and parameters should be exclusively variable who's name can be extracted *)
       let get_trm_name (t: TTerm.t) = match t.trm with
         | TTerm.TVar x -> x
@@ -1621,20 +1612,15 @@ let create_compilation_rules (tprog: Tlex.tprog) : (int, trule_compilation, Int.
             ~f:(fun (m,i) r -> (Map.add_exn m ~key:i ~data:r, i+1))
   |> fst
 
-let epformula_of_tpformula tevents (tpf: tpformula): epformula = {
-  fs = List.map tpf.fs ~f:(Eformula.of_tformula tevents);
-  p = epattern_of_tpattern tevents tpf.p
-}
-
 let convert_enforceable_exn s pols b enftype f =
   (* If conversion fails, then the enforcement type checking is wrong *)
   convert s (Map.map pols ~f:fst) b enftype f |> Option.value_exn
 
-let convert_enforceable_tformulas (s: tprog) (enftype: EnfType.t) pols b (fs: Tformula.t list) : Eformula.t list * int option =
+let convert_enforceable_tformulas ?(formulas_are_disjunction=false) (s: tprog) (enftype: EnfType.t) pols b (fs: Tformula.t list) : Eformula.t list * int option =
   let convert enftype f = convert_enforceable_exn s pols b enftype f in
-  match enftype with
-  | Cau -> List.map fs ~f:(convert Cau), None
-  | Sup -> 
+  match enftype, formulas_are_disjunction with
+  | Cau, false | Sup, true -> List.map fs ~f:(convert Cau), None
+  | Sup, false | Cau, true -> 
     let find_first_possible _ f =
       match types s pols Sup f with
       | Possible _ -> true
@@ -1643,7 +1629,7 @@ let convert_enforceable_tformulas (s: tprog) (enftype: EnfType.t) pols b (fs: Tf
     let idx = List.findi_exn ~f:find_first_possible fs |> fst in (* there must exist at least one formula which types correctly, otherwise the enforcement checking is wrong *)
     let aux i f = if i = idx then convert Sup f else Eformula.of_tformula pols f in
     List.mapi fs ~f:aux, Some idx
-  | Obs -> List.map fs ~f:(convert Obs), None
+  | Obs, _ -> List.map fs ~f:(convert Obs), None
   | _ -> assert false
 
 let convert_enforceable_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: tpformula) : epformula * enf_pformula option =
@@ -1702,7 +1688,6 @@ let convert_enforceable_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: t
         let p = epattern_of_tpattern s.tevents tpf.p  in
         let enf_constr = ESupPFormula (ESFormula (Option.value_exn i_opt)) in
         { fs = efs; p = p }, Some enf_constr
-      (* | _ -> assert false *)
     end
   | Obs -> epformula_of_tpformula s.tevents tpf, None
   | _ -> assert false
@@ -1727,7 +1712,7 @@ let  merge_used_and_unused indices_used used unused =
     in
   List.init n ~f:merge
 
-let convert_compilation_rule itl_srp (s: tprog) pols b = function
+let convert_compilation_rule itl_srp (s: tprog) (pols: (string, (EnfType.t * bool), 'string_comp) Map.t) b = function
   | TCImplication (idx, trt, pos, pf1, ex, sc, pf2, rt, rcs) ->
     let itl_srp = match rt with
       | Vanilla
@@ -1751,26 +1736,24 @@ let convert_compilation_rule itl_srp (s: tprog) pols b = function
            non-transparent case (assuming that the enforcement
            checking until this point is correct) *)
         let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
-          parse_rule_constraints pos pols (List.length pf1.fs) rcs
+          parse_rule_constraints pos (Map.map pols ~f:fst) (List.length pf1.fs) rcs
         in
+        let ert = erule_type_from_trule_type trt in
         begin match cause_exceptions, type_exceptions itl_srp s pols ex with
           | true, Possible constraints ->
             let pols' = solve constraints |> List.hd_exn in (* TODO: iterate through found policies *)
-            let ert = erule_type_from_trule_type trt in
             let epf1 = epformula_of_tpformula s.tevents pf1 in
-            let ex', i_opt = convert_enforceable_tformulas s Cau pols' b ex in
+            let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true s Cau pols' b ex in
             let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
             let epf2 = epformula_of_tpformula s.tevents pf2 in
             let enf_constr = ECICauException (Option.value_exn i_opt) in
             ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
-          | _ ->
-            begin match suppress_scopes, type_scopes itl_srp s pols sc with
+          | _ -> begin match suppress_scopes, type_scopes itl_srp s pols sc with
             | true, Possible constraints ->
               let pols' = solve constraints |> List.hd_exn in (* TODO: handle multiple/no options *)
-              let ert = erule_type_from_trule_type trt in
               let epf1 = epformula_of_tpformula s.tevents pf1 in
               let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
-              let sc', i_opt = convert_enforceable_tformulas s Cau pols' b sc in
+              let sc', i_opt = convert_enforceable_tformulas s Sup pols' b sc in
               let epf2 = epformula_of_tpformula s.tevents pf2 in
               let enf_constr = ECISupScope (Option.value_exn i_opt) in
               ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
@@ -1788,7 +1771,6 @@ let convert_compilation_rule itl_srp (s: tprog) pols b = function
               | Possible constraints ->
                 let indices = Option.value_exn suppress_indices in
                 let pols' = solve constraints |> List.hd_exn in (*TODO*)
-                let ert = erule_type_from_trule_type trt in
                 let pf1_used, f1s_unused = 
                   if suppress_conditions then pf1, []
                   else
@@ -1812,8 +1794,7 @@ let convert_compilation_rule itl_srp (s: tprog) pols b = function
               | _ ->
                 begin match cause_effects, type_tpformula itl_srp s pos pols Cau pf2 with
                   | true, Possible constraints ->
-                    let pols' = solve constraints |> List.hd_exn in (* TODO *)
-                    let ert = erule_type_from_trule_type trt in
+                    let pols' = solve constraints |> List.hd_exn in (* TODO: what to do if multiple policies appear here?  *)
                     let epf1 = epformula_of_tpformula s.tevents pf1 in
                     let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
                     let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
@@ -1825,59 +1806,98 @@ let convert_compilation_rule itl_srp (s: tprog) pols b = function
                     ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
                   | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
                 end
-              end
             end
           end
+        end
     end
-  | TCDefinition _ ->
-  (* | TCDefinition (idx, trt, pos, f1, p, exceptions, scopes, refs, f2) -> *)
-    assert false
-    (* let pred_name = match f2 with
-      | Tformula.TPredicate (name, _, _) -> name
-      | _ -> assert false
-    in
-    let enftype = match Map.find pols pred_name with
-      | Some t -> t
-      | None -> Obs
-    in
-    let f1s, p_e = convert_pattern_with_formulas s enftype pols b [f1;exceptions;scopes] p in
-    let f1_e, e_e, s_e = match f1s with
-      | [f1;exceptions;scopes] -> f1, exceptions, scopes
-      | _ -> assert false
-    in
-    let f2_e = match convert s pols (C Lextime.Span.zero) enftype f2 with (* TODO what is the correct/expected value for the bound `b`? *)
-      | Some f2_e -> f2_e
-      | None -> Util.enf_error ("Internal predicate \"" ^ Tformula.to_string f2 ^ "\" cannot be converted.") None (* TODO, should this be replaced with assert false/ why might this happen, could it even happen after enforcement checking? *)
-    in
+  | TCDefinition (idx, trt, pos, pf1, ex, sc, refs, f2) ->
+    let ef2 = Eformula.of_tformula s.tevents f2 in
     let ert = erule_type_from_trule_type trt in
-    ECDefinition (idx, ert, pos, f1_e, p_e, e_e, s_e, refs, f2_e)  *)
-  | TCDefinitionDis _ ->
-  (* | TCDefinitionDis (disjuncts, g) -> *)
-    assert false
-    (* let pred_name = match g with
-      | Tformula.TPredicate (name, _, _) -> name
-      | _ -> assert false
-    in
-    let enftype = match Map.find pols pred_name with
-      | Some t -> t
-      | None -> Obs
-    in
-    let g_e = match convert s pols (C Lextime.Span.zero) enftype g with (* TODO what is the correct/expected value for the bound `b`? *)
-      | Some g_e -> g_e
-      | None -> Util.enf_error ("Internal predicate \"" ^ Tformula.to_string g ^ "\" cannot be converted.") None (* TODO, should this be replaced with assert false/ why might this happen, could it even happen after enforcement checking? *)
-    in
-    let convert_disjunct (idx, trt, pos, f1, p, exceptions, scopes, cs) =
-      let cs = List.map cs ~f:(fun c -> Lexing.dummy_pos, c) in
-      let f1s, p_e = convert_pattern_with_formulas s enftype pols b [f1;exceptions;scopes;cs] p in
-      let f1_e, e_e, s_e, cs_e = match f1s with
-        | [f1;exceptions;scopes;cs] -> f1, exceptions, scopes, List.map cs ~f:snd
-        | _ -> assert false
-      in
-      let ert = erule_type_from_trule_type trt in
-      idx, ert, pos, f1_e, p_e, e_e, s_e, cs_e
-    in
-    let disjuncts_e = Map.map disjuncts ~f:convert_disjunct in
-    ECDefinitionDis (disjuncts_e, g_e) *)
+    begin match Map.find pols (get_predicate_name_exn f2) with
+      | Some (t, transparency) ->
+        let itl_srp = if transparency then Some itl_srp else None in
+        begin match t with
+          | Cau ->
+            let v_ex = type_exceptions itl_srp s pols ex in
+            let v_sc = type_scopes itl_srp s pols sc in
+            let v_pf1 = type_tpformula itl_srp s pos pols t pf1 in
+            let pols' = match conj (conj v_ex v_sc) v_pf1 with
+              | Possible constraints -> solve constraints |> List.hd_exn (* TODO: how to handle multiple options here? *)
+              | _ -> assert false
+            in
+            let ex', _ = convert_enforceable_tformulas ~formulas_are_disjunction:true s Sup pols' b ex in
+            let sc', _ = convert_enforceable_tformulas s Cau pols' b sc in
+            let epf1, constr_opt = convert_enforceable_tpformula s Cau pols' b pf1 in
+            let enf_constr = match constr_opt with
+              | Some (ECauPFormula c) -> EDCauDefinition (EDCauAll c)
+              | _ -> assert false
+            in
+            ECDefinition (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+          | Sup ->
+            begin match type_exceptions itl_srp s pols ex with
+              | Possible constraints ->
+                let pols' = solve constraints |> List.hd_exn in (* TODO: iterate through found policies *)
+                let epf1 = epformula_of_tpformula s.tevents pf1 in
+                let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true s Cau pols' b ex in
+                let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+                let enf_constr = EDSupDefinition (EDCauException (Option.value_exn i_opt)) in
+                ECDefinition (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+              | _ -> begin match type_scopes itl_srp s pols sc with
+                | Possible constraints ->
+                  let pols' = solve constraints |> List.hd_exn in (* TODO: handle multiple/no options *)
+                  let epf1 = epformula_of_tpformula s.tevents pf1 in
+                  let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+                  let sc', i_opt = convert_enforceable_tformulas s Cau pols' b sc in
+                  let enf_constr = EDSupDefinition (EDSupScope (Option.value_exn i_opt)) in
+                  ECDefinition (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+                | _ ->
+                  begin match type_tpformula itl_srp s pos pols Sup pf1 with
+                  | Possible constraints ->
+                    let pols' = solve constraints |> List.hd_exn in (*TODO*)
+                    let epf1, constr_opt = convert_enforceable_tpformula s Cau pols' b pf1 in
+                    let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+                    let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+                    let enf_constr = match constr_opt with
+                      | Some (ESupPFormula c) -> EDSupDefinition (EDSupFormula c)
+                      | _ -> assert false
+                    in
+                    ECDefinition (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+                  | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
+                end
+              end
+            end
+          | Obs ->
+            let epf1 = epformula_of_tpformula s.tevents pf1 in
+            let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+            let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+            let ef2 = Eformula.of_tformula pols f2 in
+            ECDefinition (idx, ert, pos, epf1, ex', sc', refs, ef2, None) 
+          | _ -> assert false
+        end
+      | None ->
+        let epf1 = epformula_of_tpformula s.tevents pf1 in
+        let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
+        let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
+        let ef2 = Eformula.of_tformula pols f2 in
+        ECDefinition (idx, ert, pos, epf1, ex', sc', refs, ef2, None) 
+    end
+  | TCDefinitionDis (disjuncts, g) ->
+    let eg = Eformula.of_tformula s.tevents g in
+    begin match Map.find pols (get_predicate_name_exn g) with
+      | Some (t, transparency) ->
+        let edisjuncts = Map.map disjuncts ~f:(edisjunct_of_tdisjunct s.tevents) in
+        let itl_srp = if transparency then Some itl_srp else None in
+        begin match t with
+          | Cau ->
+            ECDefinitionDis (edisjuncts, eg, None)
+          | Sup ->
+            ECDefinitionDis (edisjuncts, eg, None)
+          | _ -> assert false
+        end
+      | None ->
+        let edisjuncts = Map.map disjuncts ~f:(edisjunct_of_tdisjunct s.tevents) in
+        ECDefinitionDis (edisjuncts, eg, None) 
+    end
 
 let convert_compilation_rules itl_srp tprog pols b rules =
   Map.map rules ~f:(convert_compilation_rule itl_srp tprog pols b)
@@ -1927,7 +1947,6 @@ let erules_from_compilation_rules (compilation_rules: (int, trule_compilation, I
 let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
   let compilation_rules  = create_compilation_rules tprog in
   let pols, rule_order, itl_srp = type_trules_compilation tprog compilation_rules in
-  let pols = Map.map pols ~f:fst in (* remove transparency information from pols *)
   let erules = erules_from_compilation_rules compilation_rules in
   let e_compilation_rules = convert_compilation_rules itl_srp tprog pols b compilation_rules in
   {
@@ -1939,5 +1958,5 @@ let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
     rule_tree  = tprog.rule_tree;
     compilation_rules = e_compilation_rules;
     compilation_order = rule_order;
-    pols = pols;
+    pols = (Map.map pols ~f:fst);
   }

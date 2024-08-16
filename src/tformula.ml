@@ -459,10 +459,10 @@ let relative_past ?(itl_itvs=Map.empty (module String)) (f: t): bool =
 let strictly_relative_past ?(itl_itvs_and_strict=Map.empty (module String), Map.empty (module String)) (f: t): bool =
   (relative_past ~itl_itvs:(fst itl_itvs_and_strict) f) && (strict ~itl_strict:(snd itl_itvs_and_strict) f)
 
-let get_predicate_name f = match f.f with
+let get_predicate_name_exn f = match f.f with
   | TPredicate (n,_,_) -> n
   | _ -> assert false
-let get_predicate_params f = match f.f with
+let get_predicate_params_exn f = match f.f with
   | TPredicate (_,ts,_) -> ts
   | _ -> assert false
 

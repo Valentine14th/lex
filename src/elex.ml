@@ -33,16 +33,44 @@ type eref_expr = tref_expr
 type epformula = {p: epattern; fs: Eformula.t list}
 let epf p fs = {p; fs}
 
-type edisjunct = { rule_id: int;
-                   et: erule_type;
-                   rule_pos: Lexing.position;
-                   def_positions: Lexing.position list;
-                   pf: epformula;
-                   exceptions: Eformula.t list; (* list of predicate *)
-                   scopes: Eformula.t list; (* list of predicate *)
-                   var_original: Tformula.TTerm.t list; (* list of the original terms*)
-                   var_renaming: Eformula.t list (* list of equalities: _vi = <expr> *)
-                  }
+let epattern_of_tpattern tevents = function
+  | TPPresent -> EPPresent
+  | TPEventually i -> EPEventually i
+  | TPAlways i -> EPAlways i
+  | TPUntil (i, f) -> EPUntil (i, Eformula.of_tformula tevents f)
+  | TPOnce i -> EPOnce i
+  | TPHistorically i -> EPHistorically i
+  | TPSince (i, f) -> EPSince (i, Eformula.of_tformula tevents f)
+
+
+let epformula_of_tpformula tevents (tpf: tpformula): epformula = {
+  fs = List.map tpf.fs ~f:(Eformula.of_tformula tevents);
+  p = epattern_of_tpattern tevents tpf.p
+}
+
+type edisjunct = {
+  rule_id: int;
+  et: erule_type;
+  rule_pos: Lexing.position;
+  def_positions: Lexing.position list;
+  pf: epformula;
+  exceptions: Eformula.t list; (* list of predicate *)
+  scopes: Eformula.t list; (* list of predicate *)
+  var_original: Tformula.TTerm.t list; (* list of the original terms*)
+  var_renaming: Eformula.t list (* list of equalities: _vi = <expr> *)
+}
+
+let edisjunct_of_tdisjunct tevents (td: tdisjunct) = {
+  rule_id = td.rule_id;
+  et = erule_type_from_trule_type td.tt;
+  rule_pos = td.rule_pos;
+  def_positions = td.def_positions;
+  pf = epformula_of_tpformula tevents td.pf;
+  exceptions = List.map td.exceptions ~f:(Eformula.of_tformula tevents);
+  scopes = List.map td.scopes ~f:(Eformula.of_tformula tevents);
+  var_original = td.var_original;
+  var_renaming = List.map td.var_renaming ~f:(Eformula.of_tformula tevents);
+}
 
 type enf_sup_pformula =
   | ESFormula of int
