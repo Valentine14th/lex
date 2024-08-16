@@ -26,7 +26,10 @@ Refer to the Usage chapter for further instructions
 
 Install the following libraries using opam
 ```bash
-opam install dune core_unix menhir xml-light ppx_jane ocaml-lsp-server calendar
+opam switch create 4.14.0
+eval $(opam env)
+opam install . --deps-only
+opam install ocaml-lsp-server ocamlformat # optianal - for development only
 eval $(opam env)
 ```
 
