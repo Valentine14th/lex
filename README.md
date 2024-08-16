@@ -1,5 +1,14 @@
 # Lex
 
+- [Lex](#lex)
+  - [Installation](#installation)
+    - [VS Code Dev Container](#vs-code-dev-container)
+      - [Prerequisites:](#prerequisites)
+      - [Using Lex with devcontainer](#using-lex-with-devcontainer)
+    - [Build from source](#build-from-source)
+      - [requirements](#requirements)
+  - [Usage](#usage)
+
 ## Installation
 ### VS Code Dev Container
 #### Prerequisites:
