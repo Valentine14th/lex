@@ -15,9 +15,15 @@
 (documentation https://url/to/documentation)
 
 (package
- (name lex)
- (synopsis "Compiling the law into logic")
- (description "Compiling the law into logic")
- (depends ocaml dune)
- (allow_empty))
-
+  (name lex)
+  (synopsis "Compiling the law into logic")
+  (description "Compiling the law into logic")
+  (depends
+    (ocaml (>= 4.14))
+    core_unix
+    menhir
+    xml-light
+    ppx_jane
+    calendar
+  )
+  (allow_empty))

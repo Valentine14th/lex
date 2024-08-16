@@ -52,7 +52,7 @@ let string_of_string_list_new_line ?(prefix="") l = Printf.sprintf "%s"
 let string_of_int_list l = Printf.sprintf "[%s]"
                            (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%d; " acc s))
 let string_of_int_to_int_multi_map m = Printf.sprintf "{%s}"
-                                       (List.fold (Int.Map.to_alist m) ~init:"" ~f:(fun acc (k, v) -> Printf.sprintf "%s%d -> %s; " acc k (string_of_int_list v)))
+                                       (List.fold (Map.to_alist m) ~init:"" ~f:(fun acc (k, v) -> Printf.sprintf "%s%d -> %s; " acc k (string_of_int_list v)))
 
 let string_of_int_set s = Printf.sprintf "{%s}"
                            (Set.fold s ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%d; " acc s))

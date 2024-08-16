@@ -7,8 +7,13 @@ authors: ["François Hublet" "Jonas Degelo"]
 license: "LICENSE"
 doc: "https://url/to/documentation"
 depends: [
-  "ocaml"
   "dune" {>= "3.13"}
+  "ocaml" {>= "4.14"}
+  "core_unix"
+  "menhir"
+  "xml-light"
+  "ppx_jane"
+  "calendar"
   "odoc" {with-doc}
 ]
 build: [

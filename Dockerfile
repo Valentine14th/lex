@@ -8,6 +8,7 @@ WORKDIR /home/opam/lex
 
 # RUN code --install-extension /home/opam/lex/vscode/lex/lex-0.0.1.vsix
 
-RUN opam install dune core_unix menhir xml-light ppx_jane ocaml-lsp-server calendar \
+RUN opam install . --deps-only \
+    && opam install ocaml-lsp-server \
     && eval $(opam env) \
     && dune build
