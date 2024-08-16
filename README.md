@@ -8,6 +8,8 @@
     - [Build from source](#build-from-source)
       - [requirements](#requirements)
   - [Usage](#usage)
+    - [Without installing Lex](#without-installing-lex)
+    - [With installation](#with-installation)
 
 ## Installation
 ### VS Code Dev Container
@@ -31,16 +33,25 @@ Refer to the Usage chapter for further instructions
 
 ### Build from source
 #### requirements
-- ocaml (https://ocaml.org/docs/installing-ocaml)
+- Ocaml (https://ocaml.org/docs/installing-ocaml)
 
-Install the following libraries using opam
+Set the Ocaml version:
+
 ```bash
 opam switch create 4.14.0
 eval $(opam env)
+```
+Install project dependencies:
+```bash
 opam install . --deps-only
-opam install ocaml-lsp-server ocamlformat # optianal - for development only
 eval $(opam env)
 ```
+
+Optionally install a language server (for development only):
+```bash
+opam install ocaml-lsp-server ocamlformat
+```
+
 
 To build the project run the following command:
 ```bash
@@ -48,6 +59,7 @@ dune build
 ```
 
 ## Usage
+### Without installing Lex
 From the root directory of this repository, run:
 ```bash
 ./bin/main.exe <path/to/.lex file> [-mode (mfotl|doc)]
@@ -57,6 +69,17 @@ From the root directory of this repository, run:
 e.g.
 ```bash
 ./bin/main.exe examples/hello.lex
+```
+
+### With installation
+Alternatively, Lex can be installed using opam:
+In the root directory of this repository, run:
+```bash
+opam install .
+```
+Then you can run lex from anywhere in your terminal:
+```bash
+lex <path/to/.lex file> [-mode (mfotl|doc)]
 ```
 
 
