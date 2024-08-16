@@ -100,3 +100,13 @@ let lists_with_one_removed lst =
   in
   aux 0 []
 
+let combine_string_descriptors (ds: string list) (bs: bool list): string =
+  let ds' = List.filteri ds ~f:(fun i _ -> List.nth_exn bs i) in
+  let aux = function
+    | [] -> ""
+    | [d] -> d
+    | [d1; d2] -> d1 ^ " and " ^ d2
+    | ds -> (String.concat ~sep:", " (butlast ds)) ^ ", and " ^ (List.last_exn ds)
+  in
+  aux ds'
+
