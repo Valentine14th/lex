@@ -1,5 +1,9 @@
 # lex README
 
+- [lex README](#lex-readme)
+  - [To package and install the extension:](#to-package-and-install-the-extension)
+
+
 ## To package and install the extension:
 make sure `vsce` is installed:
 ```sh
