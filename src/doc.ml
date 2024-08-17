@@ -168,7 +168,7 @@ let html_of_rule_constrs rule_constrs =
       String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
     )
 
-let html_of_erule compilation_rules rule_id erule =
+let html_of_erule ecrules rule_id erule =
   let formula_id infix =
     Printf.sprintf "%s-%s-%d" rule_id infix in
   let string_of_imp_rule verb pf1 pf2 rcs rt =
@@ -224,22 +224,22 @@ let html_of_erule compilation_rules rule_id erule =
   in
   match erule with
   | EObligation _ ->
-    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    let pf1, pf2, rt, rcs = get_obligation_params ecrules erule in
     string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EPermission _ ->
-    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    let pf1, pf2, rt, rcs = get_obligation_params ecrules erule in
     string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EConstitutive _ ->
-    let pf, g = get_constitutive_params compilation_rules erule in
+    let pf, g = get_constitutive_params ecrules erule in
     string_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
-    let pf, refs = get_exception_params compilation_rules erule in
+    let pf, refs = get_exception_params ecrules erule in
     string_of_ref_rule (verb_of_erule erule) pf refs
   | EExceptionC _ ->
-    let pf, refs, g = get_exceptionc_params compilation_rules erule in
+    let pf, refs, g = get_exceptionc_params ecrules erule in
     string_of_refc_rule (verb_of_erule erule) pf refs g
   | EScope _ ->
-    let pf, refs = get_exception_params compilation_rules erule in
+    let pf, refs = get_exception_params ecrules erule in
     string_of_ref_rule (verb_of_erule erule) pf refs
 
 let html_of_tannot = function
@@ -350,7 +350,7 @@ let html_of_estmt eprog =
             kw "rule"
             ^ (match label.rule_id with Some name -> span "lex-rule-label" name | None -> "")
             ^ html_of_type_fixes ("lex-subformula-" ^ rule_id) type_fixes
-            ^ html_of_erule eprog.compilation_rules ("lex-subformula-" ^ rule_id) erule
+            ^ html_of_erule eprog.ecrules ("lex-subformula-" ^ rule_id) erule
           )
           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id)
              eprog type_fixes erule doc_string)

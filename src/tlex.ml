@@ -41,7 +41,7 @@ type tdisjunct = { rule_id: int;
                    var_renaming: Tformula.t list (* list of equalities: _vi = <expr> *)
                   }
 
-type trule_compilation =
+type tcrule =
   | TCImplication   of int * trule_type * Lexing.position * tpformula * Tformula.t list * Tformula.t list * tpformula * rule_type * rule_constr list
   | TCDefinition    of int * trule_type * Lexing.position * tpformula * Tformula.t list * Tformula.t list * tref_expr list * Tformula.t
   | TCDefinitionDis of (int, tdisjunct, Int.comparator_witness) Map.t * Tformula.t

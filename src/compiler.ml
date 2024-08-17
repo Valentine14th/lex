@@ -300,7 +300,7 @@ let is_imp_rule = function
   | _ -> false
 
 let compile (eprog:Elex.eprog) : Clex.cprog =
-  let sorted_c_rules = List.map eprog.compilation_order ~f:(Map.find_exn eprog.compilation_rules) in 
+  let sorted_c_rules = List.map eprog.compilation_order ~f:(Map.find_exn eprog.ecrules) in 
   let let_rules = List.filter sorted_c_rules ~f:is_let_rule in
   let imp_rules = List.filter sorted_c_rules ~f:is_imp_rule in
   let formulae = List.map imp_rules ~f:compile_imp_rule in

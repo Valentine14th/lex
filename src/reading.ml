@@ -410,22 +410,22 @@ let reading_of_erule rule_id eprog type_fixes erule =
     ^ reading_of_rule_scope (prefix_id "then") refs in
   match erule with
   | EObligation _ ->
-    let pf1, pf2, rt, rcs = get_obligation_params eprog.compilation_rules erule in
+    let pf1, pf2, rt, rcs = get_obligation_params eprog.ecrules erule in
     reading_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EPermission _ ->
-    let pf1, pf2, rt, rcs = get_permission_params eprog.compilation_rules erule in
+    let pf1, pf2, rt, rcs = get_permission_params eprog.ecrules erule in
     reading_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EConstitutive _ ->
-    let pf, g = get_constitutive_params eprog.compilation_rules erule in
+    let pf, g = get_constitutive_params eprog.ecrules erule in
     reading_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
-    let pf, refs = get_exception_params eprog.compilation_rules erule in
+    let pf, refs = get_exception_params eprog.ecrules erule in
     reading_of_exc_rule pf refs
   | EExceptionC _ ->
-    let pf, refs, g = get_exceptionc_params eprog.compilation_rules erule in
+    let pf, refs, g = get_exceptionc_params eprog.ecrules erule in
     reading_of_excc_rule pf refs g
   | EScope _ ->
-    let pf, refs = get_scope_params eprog.compilation_rules erule in
+    let pf, refs = get_scope_params eprog.ecrules erule in
     reading_of_scope_rule pf refs
 
 let reading_of_doc_string = Placeholders.mark_all

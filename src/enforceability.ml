@@ -649,7 +649,7 @@ let type_exception s f = Eformula.of_tformula s.tevents f
 
 let type_scope s f = Eformula.of_tformula s.tevents f
 
-let def_sets (rules: (int, trule_compilation, 'a) Map.t) (events: (string, tevent, 'b) Map.t) : (int, string list, 'a) Map.t =
+let def_sets (rules: (int, tcrule, 'a) Map.t) (events: (string, tevent, 'b) Map.t) : (int, string list, 'a) Map.t =
   let aux = function
     | TCImplication _ -> []
     | TCDefinition (_, _, _, _, _, _, _, {f=Tformula.TPredicate (name, _, _); _}) -> [name]
@@ -670,7 +670,7 @@ let def_sets (rules: (int, trule_compilation, 'a) Map.t) (events: (string, teven
   in
   Map.map rules ~f:aux
 
-let use_sets (rules: (int, trule_compilation, Int.comparator_witness) Map.t) (events: (string, tevent, Base.String.comparator_witness) Map.t) : (int, string list, 'a) Map.t =
+let use_sets (rules: (int, tcrule, Int.comparator_witness) Map.t) (events: (string, tevent, Base.String.comparator_witness) Map.t) : (int, string list, 'a) Map.t =
   let use_formula f = match f.f with
     | TPredicate (name, _, _) -> (match Map.find events name with
       | Some (_, _, Lex.TItl, _) -> [name]
@@ -1192,7 +1192,7 @@ let update_pg_map s pg_map e vars rule =
   let data = Map.mapi vars ~f:(past_guarded_of_tcrule s pg_map rule) in
   Map.add_exn pg_map ~key:e ~data:data
 
-let type_trule_compilation itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rule: verdict * pg_map =
+let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rule: verdict * pg_map =
   let pols = Tlex.pol_map s
              |> Map.map ~f:Lex.pol_to_enftype
   in
@@ -1465,16 +1465,15 @@ let strict_itl itl_strict = function
   | TCDefinitionDis _ -> assert false
   | _ -> itl_strict
 
-let type_trules_compilation (tprog:Tlex.tprog) (compilation_rules: (int, trule_compilation, 'a) Map.t) : (string, EnfType.t * bool, 'string_comp) Map.t * int list * 'itl_srp =
-  let def_internal = def_sets compilation_rules tprog.tevents in
-  let use_internal = use_sets compilation_rules tprog.tevents in
+let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) : (string, EnfType.t * bool, 'string_comp) Map.t * int list * 'itl_srp =
+  let def_internal = def_sets tcrules tprog.tevents in
+  let use_internal = use_sets tcrules tprog.tevents in
   check_used_events_are_defined tprog def_internal use_internal;
-  let sorted_rule_indices = topological_sort (Map.keys compilation_rules) def_internal use_internal in
-  let compilation_rules_sorted = List.map sorted_rule_indices ~f:(fun idx -> Map.find_exn compilation_rules idx) in
-  let itl_itvs = List.fold (List.rev compilation_rules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
-  let itl_strict = List.fold (List.rev compilation_rules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
-  (* let verdict, pg_map = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in *)
-  let verdict, _ = List.fold compilation_rules_sorted ~f:(type_trule_compilation (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in
+  let sorted_rule_indices = topological_sort (Map.keys tcrules) def_internal use_internal in
+  let tcrules_sorted = List.map sorted_rule_indices ~f:(fun idx -> Map.find_exn tcrules idx) in
+  let itl_itvs = List.fold (List.rev tcrules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
+  let itl_strict = List.fold (List.rev tcrules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
+  let verdict, _ = List.fold tcrules_sorted ~f:(type_tcrule (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in
   let constraints = match verdict with
     | Possible c -> c
     | Impossible e ->
@@ -1501,7 +1500,7 @@ let collect_constitutive_rules (tprog: Tlex.tprog) : (Lexing.position * int * tr
       end
     | _ -> None)
 
-let combine_constitutive_rules rules: trule_compilation list =
+let combine_constitutive_rules rules: tcrule list =
   let collect_and_separate_event_definitions m (pos, idx, rule, exceptions, scopes) =
     let trule_type = match rule with
       | TConstitutive _ -> TRTConstitutive
@@ -1603,7 +1602,7 @@ let create_imp_rules tprog =
       end
     | _ -> None)
 
-let create_compilation_rules (tprog: Tlex.tprog) : (int, trule_compilation, Int.comparator_witness) Map.t =
+let create_tcrules (tprog: Tlex.tprog) : (int, tcrule, Int.comparator_witness) Map.t =
   let def_dis_rules = create_def_dis_rules tprog in
   let def_rules = create_def_rules tprog in
   let imp_rules = create_imp_rules tprog in
@@ -1712,7 +1711,7 @@ let  merge_used_and_unused indices_used used unused =
     in
   List.init n ~f:merge
 
-let convert_compilation_rule itl_srp (s: tprog) (pols: (string, (EnfType.t * bool), 'string_comp) Map.t) b = function
+let convert_tcrule itl_srp (s: tprog) (pols: (string, (EnfType.t * bool), 'string_comp) Map.t) b = function
   | TCImplication (idx, trt, pos, pf1, ex, sc, pf2, rt, rcs) ->
     let itl_srp = match rt with
       | Vanilla
@@ -1824,7 +1823,13 @@ let convert_compilation_rule itl_srp (s: tprog) (pols: (string, (EnfType.t * boo
             let pols' = match conj (conj v_ex v_sc) v_pf1 with
               | Possible constraints -> solve constraints |> List.hd_exn (* TODO: how to handle multiple options here? *)
               | _ -> assert false
-            in
+            in (* TODO: is it actually necessary to compute a 'new' verdict here ?
+                        - in TCImplication and the Sup case for TCDefinition, it is 
+                          needed to run typing again, to check which part of the rule
+                          is the first that can be used to make the implicaiton Cau
+                          or the the definition Sup, but here all parts must be made Cau
+                          thus running the typing function again does not appear to be 
+                          directly necessary *)
             let ex', _ = convert_enforceable_tformulas ~formulas_are_disjunction:true s Sup pols' b ex in
             let sc', _ = convert_enforceable_tformulas s Cau pols' b sc in
             let epf1, constr_opt = convert_enforceable_tpformula s Cau pols' b pf1 in
@@ -1884,14 +1889,20 @@ let convert_compilation_rule itl_srp (s: tprog) (pols: (string, (EnfType.t * boo
   | TCDefinitionDis (disjuncts, g) ->
     let eg = Eformula.of_tformula s.tevents g in
     begin match Map.find pols (get_predicate_name_exn g) with
-      | Some (t, transparency) ->
-        let edisjuncts = Map.map disjuncts ~f:(edisjunct_of_tdisjunct s.tevents) in
-        let itl_srp = if transparency then Some itl_srp else None in
+      (* | Some (t, transparency) -> *)
+      | Some (t, _) ->
+        (* let itl_srp = if transparency then Some itl_srp else None in *)
         begin match t with
           | Cau ->
-            ECDefinitionDis (edisjuncts, eg, None)
+            (* high-level idea:
+               - find first disjunct that can be made Cau
+               - convert this disjunct analogous to the Cau case for
+                 TCDefinition above *)
+            (* ECDefinitionDis (edisjuncts, eg, None) *)
+            assert false
           | Sup ->
-            ECDefinitionDis (edisjuncts, eg, None)
+            assert false
+            (* ECDefinitionDis (edisjuncts, eg, None) *)
           | _ -> assert false
         end
       | None ->
@@ -1899,11 +1910,11 @@ let convert_compilation_rule itl_srp (s: tprog) (pols: (string, (EnfType.t * boo
         ECDefinitionDis (edisjuncts, eg, None) 
     end
 
-let convert_compilation_rules itl_srp tprog pols b rules =
-  Map.map rules ~f:(convert_compilation_rule itl_srp tprog pols b)
+let convert_tcrules itl_srp tprog pols b rules =
+  Map.map rules ~f:(convert_tcrule itl_srp tprog pols b)
 
-let erules_from_compilation_rules (compilation_rules: (int, trule_compilation, Int.comparator_witness) Map.t) : (int, erule, Int.comparator_witness) Map.t =
-  let c_rules = Map.to_alist compilation_rules in
+let erules_from_tcrules (tcrules: (int, tcrule, Int.comparator_witness) Map.t) : (int, erule, Int.comparator_witness) Map.t =
+  let c_rules = Map.to_alist tcrules in
   let aux erules (c_idx, c_rule) = match c_rule with
     | TCImplication (r_idx, trt, pos, _, _, _, _, _, _) ->
       begin match trt with
@@ -1945,10 +1956,10 @@ let erules_from_compilation_rules (compilation_rules: (int, trule_compilation, I
   List.fold c_rules ~f:aux ~init:(Map.empty (module Int))
 
 let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
-  let compilation_rules  = create_compilation_rules tprog in
-  let pols, rule_order, itl_srp = type_trules_compilation tprog compilation_rules in
-  let erules = erules_from_compilation_rules compilation_rules in
-  let e_compilation_rules = convert_compilation_rules itl_srp tprog pols b compilation_rules in
+  let tcrules  = create_tcrules tprog in
+  let pols, rule_order, itl_srp = type_tcrules tprog tcrules in
+  let erules = erules_from_tcrules tcrules in
+  let ecrules = convert_tcrules itl_srp tprog pols b tcrules in
   {
     estmts     = List.map tprog.tstmts ~f:(type_tstmt erules);
     ealiases   = tprog.taliases;
@@ -1956,7 +1967,7 @@ let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
     efunctions = tprog.tfunctions;
     variables  = tprog.variables;
     rule_tree  = tprog.rule_tree;
-    compilation_rules = e_compilation_rules;
+    ecrules    = ecrules;
     compilation_order = rule_order;
     pols = (Map.map pols ~f:fst);
   }

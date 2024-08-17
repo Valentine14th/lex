@@ -108,7 +108,7 @@ type enf_ecdefinition_dis =
   | EDDCauDisjunct of int * enf_cau_pformula
   | EDDSupDisjuncts of enf_sup_ecdefinition list
 
-type erule_compilation =
+type ecrule =
   | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option
   | ECDefinition    of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t * enf_ecdefinition option
   | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * enf_ecdefinition_dis option
@@ -132,7 +132,7 @@ type eprog =
     efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
     rule_tree: Label.RuleTree.s;
-    compilation_rules: (int, erule_compilation, Int.comparator_witness) Map.t;
+    ecrules: (int, ecrule, Int.comparator_witness) Map.t;
     compilation_order: int list;
     pols: (string, Formula.EnfType.t, Base.String.comparator_witness) Map.t;
   }
@@ -145,7 +145,7 @@ let tempty =
     efunctions = Map.empty (module String);
     variables = Map.empty (module Int); 
     rule_tree = Label.RuleTree.empty;
-    compilation_rules = Map.empty (module Int);
+    ecrules = Map.empty (module Int);
     compilation_order = [];
     pols = Map.empty (module String);
   }
@@ -175,23 +175,23 @@ let is_erule = function
   | ESRule _ -> true
   | _ -> false
 
-let get_obligation_params compilation_rules = function
+let get_obligation_params ecrules = function
   | EObligation (_, c_idx) ->
-    (match Map.find_exn compilation_rules c_idx with
+    (match Map.find_exn ecrules c_idx with
       | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs, _) -> (pf1, pf2, rt, rcs)
       | _ -> assert false)
   | _ -> assert false
 
-let get_permission_params compilation_rules = function
+let get_permission_params ecrules = function
   | EPermission (_, c_idx) ->
-    (match Map.find_exn compilation_rules c_idx with
+    (match Map.find_exn ecrules c_idx with
       | ECImplication (_, _, _, pf1, _, _, pf2, rt, rcs, _) -> (pf1, pf2, rt, rcs)
       | _ -> assert false)
   | _ -> assert false
 
-let get_constitutive_params compilation_rules = function
+let get_constitutive_params ecrules = function
   | EConstitutive (_, cs) ->
-    let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn compilation_rules c_idx) in
+    let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn ecrules c_idx) in
     let d_indices = List.map cs ~f:(fun (_,d_idx) -> d_idx) in
     let g = List.map c_rules ~f:(fun r -> match r with
               | ECDefinitionDis (_, g, _) -> g
@@ -374,7 +374,7 @@ let string_of_estmt compilation_rules ?(i=0) =
   | ESNote text -> "note \"" ^ text ^ "\""
     
 let string_of_eprog eprog =
-  String.concat ~sep:"\n" (List.map eprog.estmts ~f:(string_of_estmt eprog.compilation_rules))
+  String.concat ~sep:"\n" (List.map eprog.estmts ~f:(string_of_estmt eprog.ecrules))
 
 let print_eprog eprog =
   Stdio.printf "%s\n" (string_of_eprog eprog)
