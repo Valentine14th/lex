@@ -93,13 +93,37 @@ let etype s t = EType (s, t)
 
 let tbigcauconj = function
   | [] -> make ett Non 0 []
-  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (econj N f g) Non 0 f.positions)
-(*TODO: assign correct type to formula, not just Non*)
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj LR f g) Cau 0 f.positions)
 
-let tbigcaudisj = function
+let tbigsupconj idx = function
   | [] -> make ett Non 0 []
-  | h::t -> List.fold_left t ~init:h ~f:(fun f g -> make (edisj N f g) Non 0 f.positions)
-(*TODO: assign correct type to formula, not just Non*)
+  | h::t ->
+    let aux i f g =
+      if i < idx then make (econj R f g) Non 0 f.positions
+      else            make (econj L f g) Non 0 f.positions
+    in
+    List.foldi t ~init:h ~f:aux
+
+let tbignonconj = function
+  | [] -> make ett Non 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj N f g) Non 0 f.positions)
+
+let tbigcaudisj idx = function
+  | [] -> make ett Non 0 []
+  | h::t ->
+    let aux i f g =
+      if i < idx then make (edisj R f g) Non 0 f.positions
+      else            make (edisj L f g) Non 0 f.positions
+    in
+    List.foldi t ~init:h ~f:aux
+
+let tbigsupdisj = function
+  | [] -> make ett Non 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj LR f g) Sup 0 f.positions)
+
+let tbignondisj = function
+  | [] -> make ett Non 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj N f g) Non 0 f.positions)
 
 let tbigcauforall vars f =
   List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non 0 f.positions)

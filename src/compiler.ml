@@ -96,19 +96,25 @@ let rec compile_term aliases term =
   in { term with trm }
  *)
 
-let compile_epattern (f: Eformula.t) = function
+let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Formula.EnfType.Cau) (f: Eformula.t) = function
   | EPPresent -> f
-  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); enftype = Non; id = 0; positions = [] }
-  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); enftype = Non; id = 0; positions = [] }
-  | EPUntil (i, g) -> { f = EUntil (R, i, Interval.is_bounded i, g, f); enftype = Non; id = 0; positions = [] }
-  | EPOnce i -> { f = EOnce (i, f); enftype = Non; id = 0; positions = [] }
-  | EPHistorically i -> { f = EHistorically (i, f); enftype = Non; id = 0; positions = [] }
-  | EPSince (i, g) -> { f = ESince (R, i, f, g); enftype = Non; id = 0; positions = [] }
+  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); enftype; id = 0; positions = [] }
+  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); enftype; id = 0; positions = [] }
+  | EPUntil (i, g) ->
+    if use_pattern_for_enf then { f = EUntil (LR, i, Interval.is_bounded i, g, f); enftype; id = 0; positions = [] }
+    else if only_pattern then   { f = EUntil (L, i, Interval.is_bounded i, g, f); enftype; id = 0; positions = [] }
+    else                        { f = EUntil (R, i, Interval.is_bounded i, g, f); enftype; id = 0; positions = [] }
+  | EPOnce i -> { f = EOnce (i, f); enftype; id = 0; positions = [] }
+  | EPHistorically i -> { f = EHistorically (i, f); enftype; id = 0; positions = [] }
+  | EPSince (i, g) ->
+    if use_pattern_for_enf then { f = ESince (LR, i, f, g); enftype; id = 0; positions = [] }
+    else if only_pattern then   { f = ESince (R, i, f, g); enftype; id = 0; positions = [] }
+    else                        { f = ESince (L, i, f, g); enftype; id = 0; positions = [] }
 
 let compile_eformulas ~f fs = f fs
 
-let compile_epformula ~f (epf: epformula): Eformula.t =
-  compile_epattern (compile_eformulas ~f epf.fs) epf.p
+let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Formula.EnfType.Cau) ~f (epf: epformula): Eformula.t =
+  compile_epattern ~use_pattern_for_enf ~only_pattern ~enftype (compile_eformulas ~f epf.fs) epf.p
 
 (* let compile_let_binding (pf: epformula) (ex_and_sc: Eformula.t list) pred : Eformula.t * Eformula.t = *)
 let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
@@ -152,44 +158,92 @@ let compile_let_rule = function
     let pf_comp = compile_epformula ~f:(tbigcauconj) pf in
     let f = tbigcauconj (pf_comp :: ex_neg @ sc) in
     compile_let_binding f g
-  | ECDefinitionDis _ -> assert false (* TODO *)
+  | ECDefinitionDis _ ->
+    assert false (* TODO *)
   | _ -> assert false
 
-let compile_imp (f1: Eformula.t list) (f2: Eformula.t) =
-  let vars = List.fold (f2 :: f1) ~init:(Map.empty (module String)) ~f:fv
+(* let compile_imp (f1: Eformula.t list) (f2: Eformula.t) (s: Formula.Side.t) = *)
+let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Formula.Side.t) =
+  let vars = List.fold [f2; f1] ~init:(Map.empty (module String)) ~f:fv
              |> Map.keys in
   make (EAlways
     (Interval.full,
      true,
      tbigcauforall vars
-       ((make (EImp (N,
-          compile_eformulas ~f:tbigcauconj f1, f2)) Non 0 []))))
-    Non 0 []
+       ((make (EImp (s, f1, f2)) Cau 0 []))))
+    Cau 0 []
 
 let compile_imp_rule = function
-  | ECImplication (_, _, _, _, _, _, _, Vanilla, _, _) ->
-    assert false (* TODO: filter Vanilla rules before compilation *)
-  (* | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _, Some enf_info) ->
+  | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _, Some enf_info) ->
     begin match enf_info with
-    | ECISupFormula enf_sup ->
+    | ESciLhs enf_sup ->
       begin match enf_sup with
-      | ESFormula i -> assert false
-      | ESPFormula i -> assert false
-      | ESPattern -> assert false (* TODO *)
+      | ESlhsSPformula enf_pformula_sup ->
+        begin match enf_pformula_sup with
+        | ESpfFormula i ->
+          let cpf = compile_epformula ~enftype:Sup ~f:(tbigsupconj i) pf1 in (* this is used for enforcement *)
+          let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+          let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
+          let lhs = make (EAnd (L, [cpf; ex_neg_and_scope])) Sup 0 [] in (* this is used for enforcement *)
+          let rhs = compile_epformula ~enftype:Non ~f:tbignonconj pf2 in (* this is not used for enforcement *)
+          compile_imp lhs rhs L
+        | ESpfPformula i ->
+          let cpf = compile_epformula ~use_pattern_for_enf:true ~f:(tbigsupconj i) pf1 in
+          let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+          let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in
+          let lhs = make (EAnd (L, [cpf; ex_neg_and_scope])) Sup 0 [] in
+          let rhs = compile_epformula ~f:tbignonconj pf2 in
+          compile_imp lhs rhs L
+        | ESpfPattern ->
+          let cpf = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf1 in
+          let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+          let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in
+          let lhs = make (EAnd (L, [cpf; ex_neg_and_scope])) Sup 0 [] in
+          let rhs = compile_epformula ~f:tbignonconj pf2 in
+          compile_imp lhs rhs L
+        end
+      | ESlhsCException i ->
+        let cpf = compile_epformula ~f:tbignonconj pf1 in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+        let ex_neg_sup = tbigsupconj i ex_neg in
+        let ex_neg_and_scope = make (EAnd (L, ex_neg_sup::sc )) Sup 0 [] in
+        let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup 0 [] in
+        let rhs = compile_epformula ~f:tbignonconj pf2 in
+        compile_imp lhs rhs L
+      | ESlhsSScope i ->
+        let cpf = compile_epformula ~f:tbignonconj pf1 in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+        let sc_sup = tbigsupconj i sc in
+        let ex_neg_and_scope = make (EAnd (L, sc_sup::ex_neg )) Sup 0 [] in
+        let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup 0 [] in
+        let rhs = compile_epformula ~f:tbignonconj pf2 in
+        compile_imp lhs rhs L
       end
-    | ECICauException i -> assert false (* TODO *)
-    | ECISupScope i -> assert false (* TODO *)
-    | ECICauEffects enf_cau ->
+    | ECciRhs enf_cau ->
       begin match enf_cau with
-      | ECFormulas -> assert false (* TODO *)
-      | ECPformula -> assert false (* TODO *)
-      | ECPattern -> assert false (* TODO *)
+      | ECpfFormulas ->
+        let cpf = compile_epformula ~f:tbignonconj pf1 in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+        let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
+        let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup 0 [] in
+        let rhs = compile_epformula ~f:tbigcauconj pf2 in
+        compile_imp lhs rhs R
+      | ECpfPformula ->
+        let cpf = compile_epformula ~f:tbignonconj pf1 in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+        let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
+        let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup 0 [] in
+        let rhs = compile_epformula ~use_pattern_for_enf:true ~f:tbigcauconj pf2 in
+        compile_imp lhs rhs R
+      | ECpfPattern ->
+        let cpf = compile_epformula ~f:tbignonconj pf1 in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup 0 x.positions) in
+        let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
+        let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup 0 [] in
+        let rhs = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf2 in
+        compile_imp lhs rhs R
       end
-    end *)
-    (* let e_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
-    let pf1_comp = compile_epformula ~f:(tbigcauconj) pf1 in
-    let pf2_comp = compile_epformula ~f:(tbigcauconj) pf2 in
-    compile_imp (pf1_comp :: e_neg @ sc) pf2_comp *)
+    end
   | _ -> assert false
 
 let rec compile_typeterm = function
@@ -299,11 +353,16 @@ let is_imp_rule = function
   | ECImplication _ -> true
   | _ -> false
 
+let is_vanilla = function
+  | ECImplication (_, _, _, _, _, _, _, Vanilla, _, _) -> true
+  | _ -> false
+
 let compile (eprog:Elex.eprog) : Clex.cprog =
   let sorted_c_rules = List.map eprog.compilation_order ~f:(Map.find_exn eprog.ecrules) in 
   let let_rules = List.filter sorted_c_rules ~f:is_let_rule in
   let imp_rules = List.filter sorted_c_rules ~f:is_imp_rule in
-  let formulae = List.map imp_rules ~f:compile_imp_rule in
+  let non_vanilla = List.filter imp_rules ~f:(fun r -> not (is_vanilla r)) in
+  let formulae = List.map non_vanilla ~f:compile_imp_rule in
   let let_bindings = List.map let_rules ~f:compile_let_rule in
   let phi = tbigcauconj formulae in
   let signature = compile_signature eprog.pols eprog.eevents eprog.efunctions eprog.ealiases
