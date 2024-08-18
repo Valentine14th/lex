@@ -10,9 +10,11 @@ type tpattern =
   | TPHistorically of Interval.t
   | TPSince of Interval.t * Tformula.t
 
-type tref_expr = { label: Label.t;
-                   ref: Lex.reference;
-                   pos: Lexing.position }
+type tref_expr = {
+  label: Label.t;
+  ref: Lex.reference;
+  pos: Lexing.position
+}
 let to_rtref_expr (tref: tref_expr) = Label.RuleTree.{label = tref.label; ref = tref.ref; pos = tref.pos}
 
 let make_tref_expr pos label sks rule = { label; ref = Lex.make_reference sks rule; pos }
@@ -30,16 +32,18 @@ type trule =
 
 type trule_type = TRTObligation | TRTPermission | TRTConstitutive | TRTException | TRTExceptionC | TRTScope
 
-type tdisjunct = { rule_id: int;
-                   tt: trule_type;
-                   rule_pos: Lexing.position;
-                   def_positions: Lexing.position list;
-                   pf: tpformula;
-                   exceptions: Tformula.t list; (* list of predicate *)
-                   scopes: Tformula.t list; (* list of predicate *)
-                   var_original: Tformula.TTerm.t list; (* list of the original terms*)
-                   var_renaming: Tformula.t list (* list of equalities: _vi = <expr> *)
-                  }
+type tdisjunct = {
+  rule_id: int;
+  tt: trule_type;
+  rule_pos: Lexing.position;
+  def_positions: Lexing.position list;
+  pf: tpformula;
+  exceptions: Tformula.t list; (* list of predicate *)
+  scopes: Tformula.t list; (* list of predicate *)
+  fv_renaming: (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
+  params_original: Tformula.TTerm.t list; (* list of the original terms*)
+  params_new: Tformula.TTerm.t list; (* list of the new terms *)
+}
 
 type tcrule =
   | TCImplication   of int * trule_type * Lexing.position * tpformula * Tformula.t list * Tformula.t list * tpformula * rule_type * rule_constr list
@@ -105,18 +109,18 @@ let formulas_from_tpattern = function
   | TPUntil (_, f) 
   | TPSince (_, f) -> [f]
 
-let fv_of_tpattern = function
+let fv_of_tpattern ?(map=Map.empty (module String)) = function
   | TPPresent
   | TPEventually _
   | TPOnce _
   | TPAlways _
-  | TPHistorically _ -> Map.empty (module String)
+  | TPHistorically _ -> map
   | TPUntil (_, f)
-  | TPSince (_, f) -> Tformula.fv (Map.empty (module String)) f
+  | TPSince (_, f) -> Tformula.fv ~map f
 
-let fv_of_tpformula {p; fs} =
-  List.fold fs ~init:(fv_of_tpattern p)
-    ~f:(fun acc f -> Tformula.fv acc f)
+let fv_of_tpformula ?(map=Map.empty (module String)) {p; fs} =
+  List.fold fs ~init:(fv_of_tpattern ~map p)
+    ~f:(fun acc f -> Tformula.fv ~map:acc f)
 
 let trule_map tprog =
   List.fold tprog.tstmts ~init:(Map.empty (module Int))
@@ -421,11 +425,11 @@ let srp_of_tpformula (itvls, stricts) tpf =
   (Zinterval.is_nonpositive (relative_interval_of_tpformula itvls tpf))
   && (strict_of_tpformula stricts tpf)
 
-let fv_of_tformulas fv_map fs =
-  List.fold fs ~init:fv_map ~f:Tformula.fv
+let fv_of_tformulas ?(map=Map.empty (module String)) fs =
+  List.fold fs ~init:map ~f:(fun map f -> Tformula.fv ~map f)
 
-let fv_of_tpformulas fv_map ({fs; p}: tpformula) =
-  fv_of_tformulas fv_map (fs@formulas_from_tpattern p)
+let fv_of_tpformulas ?(map=Map.empty (module String)) ({fs; p}: tpformula) =
+  fv_of_tformulas ~map (fs@formulas_from_tpattern p)
 
 let relative_interval_of_tformulas itl_itvs (fs: Tformula.t list): Zinterval.t =
   let itvs = (List.map fs ~f:(Tformula.relative_interval ~itl_itvs:itl_itvs)) in

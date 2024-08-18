@@ -192,12 +192,6 @@ let type_blt = function
   | _ -> None
 
 let rec type_term tevents tfunctions taliases typed_vars (v: Formula.Term.t) t_alias: ('typed_vars * Tformula.TTerm.t) =
-  (*let t = match Map.find taliases t_alias with
-    | Some (typ, _) -> typ
-    | None -> let err_msg =
-                Printf.sprintf "Type alias '%s' is undefined" (value_to_string t_alias) in
-              Util.type_error err_msg pos
-  in*)
   match v.trm with
   | Var x ->
      begin match Map.find typed_vars x, t_alias with
@@ -232,23 +226,8 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Formula.Term.t) t_a
              Util.type_error err_msg v.positions
           end
        | None ->
-          (*match Map.find tevents f_name with
-          | Some (Event (_, Functional), all_types, _, _) ->
-             let all_types = List.map all_types ~f:(fun (_, b, c) -> (b, c)) in
-             let arg_types = List.drop_last_exn all_types
-             and return_type = snd (List.last_exn all_types) in
-             begin match List.fold2 trms arg_types ~init:(typed_vars, []) ~f with
-             | Ok (typed_vars, trms) ->
-                (typed_vars, Tformula.term (TApp (f_name, List.rev trms)) return_type)
-             | Unequal_lengths ->
-                let err_msg = Printf.sprintf "Function %s expects %d arguments, found %d"
-                                f_name (List.length arg_types) (List.length trms) in
-                Util.type_error err_msg pos
-             end
-          | _ ->              *)
-             let err_msg =
-               Printf.sprintf "Function '%s' is undefined" f_name in
-             Util.type_error err_msg v.positions
+        let err_msg = Printf.sprintf "Function '%s' is undefined" f_name in
+        Util.type_error err_msg v.positions
      end
   | Unop (op, trm) ->
      begin

@@ -11,7 +11,7 @@ open Core
 open Formula
 
 module TTerm = struct
-    
+
   type core_t =
     | TVar of string
     | TConst of Dom.t
@@ -201,7 +201,7 @@ let tbigcauforall pos vars f =
 
 module StringMap = Map.Make(String)
 
-let rec fv map f =
+let rec fv ?(map=Map.empty (module String)) f =
   let aux0 v map p = Map.add_multi map ~key:v ~data:p in
   let aux1 map (v, ps) = List.fold ps ~init:map ~f:(aux0 v) in
   let merge_fun ~key:_ = function
@@ -220,7 +220,7 @@ let rec fv map f =
     |> List.fold ~init:map ~f:aux1
   | TExists (x, g)
     | TForall (x, g) ->
-      Map.filter_keys (fv (Map.empty (module String)) g) ~f:(fun y -> not (String.equal x y))
+      Map.filter_keys (fv ~map g) ~f:(fun y -> not (String.equal x y))
       |> merge map (* merge with original map - doing it this way, instead of passing the map as an argument to fv above, we can avoid filtering out variables that are bound inside the quantifier, but free outside of it *)
   | TNeg g
     | TPrev (_, g)
@@ -229,14 +229,14 @@ let rec fv map f =
     | TEventually (_, g)
     | TAlways (_, g)
     | TNext (_, g)
-    | TType (g, _) -> fv map g
+    | TType (g, _) -> fv ~map g
     | TImp (_, f1, f2)
     | TIff (_, _, f1, f2)
     | TSince (_, _, f1, f2)
-    | TUntil (_, _, f1, f2) -> fv (fv map f2) f1
+    | TUntil (_, _, f1, f2) -> fv ~map:(fv ~map f2) f1
   | TAnd (_, fs)
     | TOr (_, fs) ->
-      List.fold_left fs ~init:map ~f:fv
+      List.fold_left fs ~init:map ~f:(fun map f -> fv ~map f)
 
 let rec rank f = match f.f with
   | TTT | TFF -> 0

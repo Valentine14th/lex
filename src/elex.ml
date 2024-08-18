@@ -56,8 +56,9 @@ type edisjunct = {
   pf: epformula;
   exceptions: Eformula.t list; (* list of predicate *)
   scopes: Eformula.t list; (* list of predicate *)
-  var_original: Tformula.TTerm.t list; (* list of the original terms*)
-  var_renaming: Eformula.t list (* list of equalities: _vi = <expr> *)
+  fv_renaming: (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
+  params_original: Tformula.TTerm.t list; (* list of the original terms*)
+  params_new: Tformula.TTerm.t list; (* list of the new terms*)
 }
 
 let edisjunct_of_tdisjunct tevents (td: tdisjunct) = {
@@ -68,45 +69,45 @@ let edisjunct_of_tdisjunct tevents (td: tdisjunct) = {
   pf = epformula_of_tpformula tevents td.pf;
   exceptions = List.map td.exceptions ~f:(Eformula.of_tformula tevents);
   scopes = List.map td.scopes ~f:(Eformula.of_tformula tevents);
-  var_original = td.var_original;
-  var_renaming = List.map td.var_renaming ~f:(Eformula.of_tformula tevents);
+  fv_renaming = td.fv_renaming;
+  params_original = td.params_original;
+  params_new = td.params_new;
 }
 
-type enf_sup_pformula =
-  | ESFormula of int
-  | ESPFormula of int (* for until and since, if both sides must be used for enforcement *)
-  | ESPattern (* for until and since, if it suffices to use the formula in the pattern for enforcement *)
+type enf_pformula_sup =
+  | ESpfFormula of int
+  | ESpfPformula of int (* for until and since, if both sides must be used for enforcement *)
+  | ESpfPattern (* for until and since, if it suffices to use the formula in the pattern for enforcement *)
 
-type enf_cau_pformula =
-  | ECFormulas
-  | ECPformula (* for until and since, if the formula of the pattern must also be used for enforcement *)
-  | ECPattern (* for until and since, if it suffices to enforce the formula in the pattern *)
+type enf_pformula_cau =
+  | ECpfFormulas
+  | ECpfPformula (* for until and since, if the formula of the pattern must also be used for enforcement *)
+  | ECpfPattern (* for until and since, if it suffices to enforce the formula in the pattern *)
+
+(* A 'lhs' (left-hand side) consists of exception predicates, scope predicates, and a pformula (pattern + formulas) *)
+type enf_sup_lhs =
+  | ESlhsSPformula of enf_pformula_sup
+  | ESlhsCException of int (* leads to suppressing the constitution of an event *)
+  | ESlhsSScope of int
+
+type enf_cau_lhs =
+  | EClhsAll of enf_pformula_cau
 
 type enf_pformula =
-  | ESupPFormula of enf_sup_pformula
-  | ECauPFormula of enf_cau_pformula
+  | EpfSup of enf_pformula_sup
+  | EpfCau of enf_pformula_cau
 
 type enf_ecimplication =
-  | ECISupFormula of enf_sup_pformula
-  | ECICauException of int (* still suppresses the LHS of the implication as a whole *)
-  | ECISupScope of int
-  | ECICauEffects of enf_cau_pformula
-
-type enf_sup_ecdefinition =
-  | EDSupFormula of enf_sup_pformula
-  | EDCauException of int (* leads to suppressing the constitution of an event *)
-  | EDSupScope of int
-
-type enf_cau_ecdefinition =
-  | EDCauAll of enf_cau_pformula
+  | ESciLhs of enf_sup_lhs
+  | ECciRhs of enf_pformula_cau
 
 type enf_ecdefinition =
-  | EDSupDefinition of enf_sup_ecdefinition
-  | EDCauDefinition of enf_cau_ecdefinition
+  | ESd of enf_sup_lhs
+  | ECd of enf_cau_lhs
 
 type enf_ecdefinition_dis =
-  | EDDCauDisjunct of int * enf_cau_pformula
-  | EDDSupDisjuncts of enf_sup_ecdefinition list
+  | ECdd of int * enf_sup_lhs
+  | ESdd of enf_cau_lhs list
 
 type ecrule =
   | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option
@@ -206,24 +207,24 @@ let get_constitutive_params ecrules = function
     (pf, g)
   | _ -> assert false
 
-let get_exception_params compilation_rules = function
+let get_exception_params ecrules = function
   | EException (_, c_idx) ->
-    (match Map.find_exn compilation_rules c_idx with
+    (match Map.find_exn ecrules c_idx with
       | ECDefinition (_, _, _, pf, _, _,  erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
-let get_scope_params compilation_rules = function
+let get_scope_params ecrules = function
   | EScope (_, c_idx) ->
-    (match Map.find_exn compilation_rules c_idx with
+    (match Map.find_exn ecrules c_idx with
       | ECDefinition (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
-let get_exceptionc_params compilation_rules = function
+let get_exceptionc_params ecrules = function
   | EExceptionC (_, c_idx_ex, cs) ->
-    let c_rule_ex = Map.find_exn compilation_rules c_idx_ex in
-    let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn compilation_rules c_idx) in
+    let c_rule_ex = Map.find_exn ecrules c_idx_ex in
+    let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn ecrules c_idx) in
     let pf, erefs = (match c_rule_ex with
       | ECDefinition (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
@@ -253,7 +254,7 @@ let string_of_epattern = function
   | EPSince (i, f) -> " always since " ^ Eformula.to_string f ^ " " ^ Interval.to_string i
 
 
-let string_of_erule compilation_rules i erule =
+let string_of_erule ecrules i erule =
   let to_string f = Etc.tabs (i+1) ^ Eformula.to_string f in
   let reference_to_string ref_ = Etc.tabs (i+1) ^ Lex.string_of_reference ref_ in
   let string_of_formula_list f =
@@ -292,25 +293,25 @@ let string_of_erule compilation_rules i erule =
   in
   match erule with
   | EObligation _ ->
-    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    let pf1, pf2, rt, rcs = get_obligation_params ecrules erule in
     string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EPermission _ ->
-    let pf1, pf2, rt, rcs = get_obligation_params compilation_rules erule in
+    let pf1, pf2, rt, rcs = get_obligation_params ecrules erule in
     string_of_imp_rule (verb_of_erule erule) pf1 pf2 rcs rt
   | EConstitutive _ ->
-    let pf, g = get_constitutive_params compilation_rules erule in
+    let pf, g = get_constitutive_params ecrules erule in
     string_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
-    let pf, erefs = get_exception_params compilation_rules erule in
+    let pf, erefs = get_exception_params ecrules erule in
     string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs)
   | EExceptionC _ ->
-    let pf, erefs, g = get_exceptionc_params compilation_rules erule in
+    let pf, erefs, g = get_exceptionc_params ecrules erule in
     string_of_refc_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs) g
   | EScope _ ->
-    let pf, erefs = get_exception_params compilation_rules erule in
+    let pf, erefs = get_exception_params ecrules erule in
     string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs)
 
-let string_of_estmt compilation_rules ?(i=0) =
+let string_of_estmt ecrules ?(i=0) =
   function
   | ESImport (_, idents, _) ->
      Printf.sprintf "import %s"
@@ -331,7 +332,7 @@ let string_of_estmt compilation_rules ?(i=0) =
         (Etc.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)
-        (string_of_erule compilation_rules (i+1) rule)
+        (string_of_erule ecrules (i+1) rule)
        description
   | ESEvent (event_type, name, typed_args, pol, doc_string) ->
       let description =
