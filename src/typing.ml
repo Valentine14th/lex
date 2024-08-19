@@ -73,7 +73,7 @@ let set_labels pos section_kind label s =
            tprog = Tlex.set_labels pos l s.tprog;
            articles = articles }
 
-let c = ref 0
+let c = ref (-1) 
 let fresh () = incr c; !c
 
 let type_check_constant c t = match (c, t) with

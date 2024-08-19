@@ -152,14 +152,39 @@ let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
     (lhs, rhs)
   | _ -> assert false
 
+let compile_edisjunct (enftype: Formula.EnfType.t) ed =
+  match enftype with
+  | Cau -> assert false
+  | Sup -> assert false
+  | Non ->
+    let ex_neg = List.map ed.exceptions ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
+    (* let renaming = List.map2 ed.params_new ed.params_original ~f:(fun t1 t2 -> eeqconst t1 t2) in *)
+    tbignonconj [compile_epformula ~f:(tbignonconj) ed.pf; tbignonconj ex_neg; tbignonconj ed.scopes]
+  | _ -> assert false
+
 let compile_let_rule = function
   | ECDefinition (_, _, _, pf, ex, sc, _, g, _) ->
     let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
     let pf_comp = compile_epformula ~f:(tbigcauconj) pf in
     let f = tbigcauconj (pf_comp :: ex_neg @ sc) in
     compile_let_binding f g
-  | ECDefinitionDis _ ->
-    assert false (* TODO *)
+  | ECDefinitionDis (edisjuncts, g, enf_constr) ->
+    begin match enf_constr with
+    | Some enf_constr_dis -> 
+      begin match enf_constr_dis with
+      (* | ECdd (idx, enf_sup_lhs) -> *)
+      | ECdd _ ->
+        let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct Formula.EnfType.Non)))  in
+        compile_let_binding rhs g
+      (* | ESdd enf_cau_lhs -> *)
+      | ESdd _ ->
+        let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct Formula.EnfType.Non)))  in
+        compile_let_binding rhs g
+      end
+    | None ->
+      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct Formula.EnfType.Non)))  in
+      compile_let_binding rhs g
+    end
   | _ -> assert false
 
 (* let compile_imp (f1: Eformula.t list) (f2: Eformula.t) (s: Formula.Side.t) = *)

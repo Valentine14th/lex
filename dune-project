@@ -14,6 +14,8 @@
 
 (documentation https://url/to/documentation)
 
+; (map_workspace_root false) ; https://github.com/ocamllabs/vscode-ocaml-platform#debugging-ocaml-programs-experimental
+
 (package
   (name lex)
   (synopsis "Compiling the law into logic")

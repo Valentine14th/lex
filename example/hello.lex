@@ -94,11 +94,11 @@ rule
         PersonalDataProcessing(ep, x, z)
     oblige
         lawfulness(ep)
-        fairness(ep)
-        transparency(ep)
-    enforceable suppressing PersonalDataProcessing condition[0]
+        # fairness(ep) # fairness is not constituted
+        # transparency(ep) # transparency is not constituted
+    # enforceable suppressing PersonalDataProcessing condition[0]
     enforceable suppressing PersonalDataProcessing, suppressing conditions
-    enforceable suppressing PersonalDataProcessing, causing effect
+    # enforceable suppressing PersonalDataProcessing, causing effect
     # enforceable suppressing condition 0
     # enforceable causing effect
     # enforceable suppressing PersonalDataProcessing 
@@ -124,7 +124,6 @@ rule
         PersonalData(z, w)
     constitute
         lawfulness(ep)
-    # enforceable causing lawfulness
 
 # article[1] "II" "dummy level to try out sublevels"
 # article[2] "A" "dummy level to try out sublevels"

@@ -44,8 +44,13 @@ let take l n =
 
 let butlast l = List.take l (List.length l - 1)
 
-let string_of_string_list l = Printf.sprintf "[%s]"
-                              (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s\"%s\";" acc s))
+let string_of_string_list ?(quotes=true) l =
+  if quotes then
+    Printf.sprintf "[%s]"
+      (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s\"%s\";" acc s))
+  else
+    Printf.sprintf "[%s]"
+      (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%s;" acc s))
 
 let string_of_string_list_new_line ?(prefix="") l = Printf.sprintf "%s"
                             (List.fold l ~init:"" ~f:(fun acc s -> Printf.sprintf "%s%s%s\n" acc prefix s))
@@ -110,3 +115,10 @@ let combine_string_descriptors (ds: string list) (bs: bool list): string =
   in
   aux ds'
 
+let string_of_pols ~f (pols: (string, 'enftype, 'string_comp) Map.t): string =
+  let aux (k, v) = Printf.sprintf "%s: %s" k (f v) in
+  string_of_string_list ~quotes:false (List.map (Map.to_alist pols) ~f:aux)
+
+let string_of_int_string_multimap (m: (int, string list, _) Map.t) : string =
+  let aux (k, v) = Printf.sprintf "%d: %s" k (string_of_string_list v) in
+  string_of_string_list ~quotes:false (List.map (Map.to_alist m) ~f:aux)
