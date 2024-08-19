@@ -25,9 +25,13 @@
 ##### Setting up the devcontainr
 - Open this repository in VS Code
 - Press `ctrl`+`shift`+`p` and search for "remote explorer: Focus on Dev Containers View"
+
 ![alt text](images/remote-explorer-focus-view.png)
+
 - Inside the window pane that appeared click on the button to open the current folder in a dev container
+
 ![alt text](images/remote-explorer-panel.png)
+
 - This might take a few minutes to set up the container
 
 ##### Start using the devcontainer
