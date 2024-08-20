@@ -729,10 +729,6 @@ let collect_rule_indices (tprog: Tlex.tprog) =
   List.fold tprog.tstmts ~f:aux ~init:[]
 
 let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t) (use: (int, string list, 'a) Map.t) : int list =
-  Printf.printf "(topological sort)\n";
-  Printf.printf "rule_indices: %s\n" (Util.string_of_int_list rule_indices);
-  Printf.printf "def: %s\n" (Util.string_of_int_string_multimap def);
-  Printf.printf "use: %s\n" (Util.string_of_int_string_multimap use);
   let def_inv = Util.invert_int_string_multimap def in
   let init, rest = List.partition_tf rule_indices ~f:(fun r -> not (Map.mem use r)) in (*all rules that do not 'use' any internal events*)
   let rec aux visited rest =
@@ -759,7 +755,6 @@ let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t
         aux (visited @ fully_defined) rest
     in
   let order = aux init rest |> List.rev in
-  Printf.printf "order: %s\n" (Util.string_of_int_list order);
   order
 
 let get_types_fun = function

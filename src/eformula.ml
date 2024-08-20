@@ -174,7 +174,7 @@ and of_tformula tevents ?id:(id=1) (f: Tformula.t) : t =
 
 let of_tformulas tevents = List.map ~f:(of_tformula tevents)
 
-let rec fv map f =
+let rec fv ?(map=Map.empty (module String)) f =
   let aux0 v map p = Map.add_multi map ~key:v ~data:p in
   let aux1 map (v, ps) = List.fold ps ~init:map ~f:(aux0 v) in
   let merge_fun ~key:_ = function
@@ -193,7 +193,7 @@ let rec fv map f =
     |> List.fold ~init:map ~f:aux1
   | EExists (x, g)
     | EForall (x, g) ->
-      Map.filter_keys (fv (Map.empty (module String)) g) ~f:(fun y -> not (String.equal x y))
+      Map.filter_keys (fv g) ~f:(fun y -> not (String.equal x y))
       |> merge map (* merge with original map - doing it this way, instead of passing the map as an argument to fv above, we can avoid filtering out variables that are bound inside the quantifier, but free outside of it *)
   | ENeg f
     | EPrev (_, f)
@@ -202,14 +202,14 @@ let rec fv map f =
     | EEventually (_, _, f)
     | EAlways (_, _, f)
     | ENext (_, f)
-    | EType (f, _) -> fv map f
+    | EType (f, _) -> fv ~map f
     | EImp (_, f1, f2)
     | EIff (_, _, f1, f2)
     | ESince (_, _, f1, f2)
-    | EUntil (_, _, _, f1, f2) -> fv (fv map f2) f1
+    | EUntil (_, _, _, f1, f2) -> fv ~map:(fv ~map f2) f1
   | EAnd (_, fs)
     | EOr (_, fs) ->
-      List.fold_left fs ~init:map ~f:fv
+      List.fold_left fs ~init:map ~f:(fun map f -> fv ~map f)
 
 let rec rank = function
   | ETT | EFF -> 0

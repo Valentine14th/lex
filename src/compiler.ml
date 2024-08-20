@@ -147,7 +147,7 @@ let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
     let rhs = tbigcauconj fs in
     (* TODO: compute free variables in rhs that are not parameters of lhs
              -> bind these with an existential quantifier *)
-    let vars = [] in
+    let vars = Map.keys (Eformula.fv rhs) in
     let rhs = tbigcauexists vars rhs in
     (lhs, rhs)
   | _ -> assert false
@@ -159,7 +159,7 @@ let compile_edisjunct (enftype: Formula.EnfType.t) ed =
   | Non ->
     let ex_neg = List.map ed.exceptions ~f:(fun x -> make (ENeg x) Non 0 x.positions) in
     (* let renaming = List.map2 ed.params_new ed.params_original ~f:(fun t1 t2 -> eeqconst t1 t2) in *)
-    tbignonconj [compile_epformula ~f:(tbignonconj) ed.pf; tbignonconj ex_neg; tbignonconj ed.scopes]
+    tbignonconj (compile_epformula ~f:(tbignonconj) ed.pf :: ex_neg @ ed.scopes)
   | _ -> assert false
 
 let compile_let_rule = function
@@ -189,7 +189,7 @@ let compile_let_rule = function
 
 (* let compile_imp (f1: Eformula.t list) (f2: Eformula.t) (s: Formula.Side.t) = *)
 let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Formula.Side.t) =
-  let vars = List.fold [f2; f1] ~init:(Map.empty (module String)) ~f:fv
+  let vars = List.fold [f2; f1] ~init:(Map.empty (module String)) ~f:(fun map f -> fv ~map f)
              |> Map.keys in
   make (EAlways
     (Interval.full,

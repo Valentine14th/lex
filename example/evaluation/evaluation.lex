@@ -54,5 +54,4 @@ rule
     GivesConsent(ds, co)
   oblige
     AbleToDemonstrateConsent(c, co)
-transparently enforceable
-suppressing Processes
+  transparently enforceable suppressing Processes

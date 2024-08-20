@@ -1,7 +1,7 @@
 (executable
-  (public_name lex)
-  (name main)
-  (libraries lex_lib core core_unix.command_unix)
-  (promote (until-clean))
-  ; (modes byte)
-)
+ (public_name lex)
+ (name main)
+ (libraries lex_lib core core_unix.command_unix)
+ (promote (until-clean))
+ (modes byte native)
+ )
