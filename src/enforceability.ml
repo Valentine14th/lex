@@ -1522,10 +1522,11 @@ let check_used_events_are_defined (tprog: Tlex.tprog) def use =
     let pos = Map.find_exn tprog.rule_tree.label_of_rule idx |> snd in
     List.iter used ~f:(fun name ->
       if not (List.mem all_defined_events name ~equal:String.equal) then
-        let err_msg = Printf.sprintf
-            "Internal event \"%s\" is used but never constituted (defined)"
+        let warning = Printf.sprintf
+            "Internal event \"%s\" is never constituted"
             name in
-        Util.enf_error err_msg (Some pos)) in
+        (* Util.enf_error err_msg (Some pos)) in *)
+        Util.warning warning (Some pos)) in
   Map.iter_keys use ~f:check_used_are_defined
 
 let relative_interval_of_disjunct itl_itvs (d: tdisjunct) =

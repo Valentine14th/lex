@@ -94,8 +94,8 @@ rule
         PersonalDataProcessing(ep, x, z)
     oblige
         lawfulness(ep)
-        # fairness(ep) # fairness is not constituted
-        # transparency(ep) # transparency is not constituted
+        fairness(ep) # fairness is not constituted
+        transparency(ep) # transparency is not constituted
     # enforceable suppressing PersonalDataProcessing condition[0]
     enforceable suppressing PersonalDataProcessing, suppressing conditions
     # enforceable suppressing PersonalDataProcessing, causing effect
