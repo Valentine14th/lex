@@ -13,6 +13,7 @@
     - [Setting up the environment](#setting-up-the-environment)
     - [Without installing Lex](#without-installing-lex)
     - [With installation](#with-installation)
+- [known issues](#known-issues)
 
 ## Installation
 ### VS Code Dev Container
@@ -99,4 +100,11 @@ Then you can run lex from anywhere in your terminal:
 lex <path/to/.lex file> [-mode (mfotl|doc)]
 ```
 
+
+# known issues
+- [example/tax-code/tax.lex](example/tax%20code/tax.lex) uncaught exception
+  - computation of rules with a shared variable scope needs debugging
+- [example/evaluation/evaluation.lex](example/evaluation/evaluation.lex) Impossible verdict
+  - is the expected outcome `Possible ...`?
+    - if yes: issue with strictly relative past computation when a rule is marked as transparent
 

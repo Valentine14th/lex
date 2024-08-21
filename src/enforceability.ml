@@ -15,7 +15,7 @@ open Tformula
 open Tlex
 open Elex
 
-let debug_enforcability = ref false
+let debug_enforcability = ref true
 let debug msg = if !debug_enforcability then Util.debug_print ~f_name:(Some "enforceability.ml") msg 
 
 let c1 = ref 0
@@ -210,7 +210,7 @@ module Constraints = struct
   let eq s t tr = CEq (s, t, tr)
 
   let conj c d =
-    debug (Printf.sprintf "conj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d));
+    (* debug (Printf.sprintf "conj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d)); *)
     match c, d with
     | Possible CTT, _ -> d
     | _, Possible CTT -> c
@@ -219,7 +219,7 @@ module Constraints = struct
     | Possible c, Possible d -> Possible (CConj (c, d))
 
   let disj c d =
-    debug (Printf.sprintf "disj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d));
+    (* debug (Printf.sprintf "disj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d)); *)
     match c, d with
     | Impossible c, Impossible d -> Impossible (EDisj (c, d))
     | Impossible _, _ -> d
@@ -1262,103 +1262,6 @@ let srp_if_transparent_else_true transparent is_srp =
   if transparent then is_srp
   else true
 
-let type_tcimplication_enforceable verdict itl_srp pg_map s rule pols =
-  match rule with
-  | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Enforceable as rt), rcs) 
-  | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Transparent as rt), rcs) ->
-    let transparent = rule_type_equals rt Transparent in
-    let tr =
-      if transparent then Some (itl_srp)
-      else None
-    in
-    let srp = strictly_relative_past ~itl_itvs_and_strict:itl_srp in
-    let srp_exceptions = List.for_all exceptions ~f:srp |> srp_if_transparent_else_true transparent in
-    let srp_scopes = List.for_all scopes ~f:srp |> srp_if_transparent_else_true transparent in
-    let srp_conditions = srp_of_tpformula itl_srp pf1 |> srp_if_transparent_else_true transparent in
-    let srp_effects = srp_of_tpformula itl_srp pf2 |> srp_if_transparent_else_true transparent in
-
-    vars_are_past_guarded_tcrule_exn ~pg_map s (fv_of_tcrule rule) rule;
-    let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
-      parse_rule_constraints pos pols (List.length pf1.fs) rcs
-    in
-    let verdict_exceptions =
-      if cause_exceptions then
-        if srp_scopes && srp_conditions && srp_effects then
-          type_exceptions None s pols exceptions
-        else
-          let not_srp = Util.combine_string_descriptors ["scopes"; "conditions"; "effects"] [srp_scopes; srp_conditions; srp_effects] in
-          Impossible (ERule (pos, "can't make exceptions Cau, because " ^ not_srp ^ " are not SRP"))
-      else Impossible (ERule (pos, "exceptions are not marked as causing"))
-      (* if cause_exceptions then type_exceptions tr s pols exceptions
-      else Impossible (ERule (pos, "exceptions are not marked as causing")) *)
-    in
-    let verdict_scopes =
-      if suppress_scopes then
-        if srp_exceptions && srp_conditions && srp_effects then
-          type_scopes None s pols scopes
-        else
-          let not_srp = Util.combine_string_descriptors ["exceptions"; "conditions"; "effects"] [srp_exceptions; srp_conditions; srp_effects] in
-          Impossible (ERule (pos, "can't make scopes Sup, because " ^ not_srp ^ " are not SRP"))
-      else Impossible (ERule (pos, "scopes are not marked as suppressing"))
-      (* if suppress_scopes then type_scopes tr s pols scopes
-      else Impossible (ERule (pos, "scopes are not marked as suppressing")) *)
-    in
-    let verdict_references = disj verdict_exceptions verdict_scopes in
-    let verdict_conditions =
-      if suppress_conditions then
-        if srp_exceptions && srp_scopes && srp_effects then
-          type_tpformula tr s pos pols Sup pf1
-          |> disj verdict_references
-        else
-          let not_srp = Util.combine_string_descriptors ["exceptions"; "scopes"; "effects"] [srp_exceptions; srp_scopes; srp_effects] in
-          Impossible (ERule (pos, "can't make conditions Sup, because " ^ not_srp ^ " are not SRP"))
-      else
-        match suppress_indices with
-          | Some indices ->
-            let pf1_used = { pf1 with fs = List.filteri pf1.fs ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) } in
-            let pf1_unused = { pf1 with fs = List.filteri pf1.fs ~f:(fun i _ -> List.mem indices i ~equal:(fun x y -> Int.equal x y |> not)) } in
-            let srp_conditions_unused = srp_of_tpformula itl_srp pf1_unused in
-            if srp_conditions_unused && srp_exceptions && srp_scopes && srp_effects then
-              type_tpformula tr s pos pols Sup pf1_used
-            else
-              let not_srp = Util.combine_string_descriptors ["unused conditions"; "exceptions"; "scopes"; "effects"] [srp_conditions_unused; srp_exceptions; srp_scopes; srp_effects] in
-              Impossible (ERule (pos, "can't make selected conditions Sup, because " ^ not_srp ^ " are not SRP"))
-          | None ->
-            Impossible (ERule (pos, "no conditions are marked as suppressing"))
-      (* if suppress_conditions then
-        type_tpformula tr s pos pols Sup pf1
-        |> disj verdict_references
-      else
-        match suppress_indices with
-          | Some indices ->
-            let pf1' = { pf1 with fs = List.filteri pf1.fs ~f:(fun i _ -> List.mem indices i ~equal:Int.equal) } in
-            type_tpformula tr s pos pols Sup pf1'
-          | None ->
-            Impossible (ERule (pos, "no conditions are marked as suppressing")) *)
-    in
-    let verdict_effects =
-      if cause_effects then
-        if srp_exceptions && srp_scopes && srp_conditions then
-          type_tpformula tr s pos pols Cau pf2
-        else
-          let not_srp = Util.combine_string_descriptors ["exceptions"; "scopes"; "conditions"] [srp_exceptions; srp_scopes; srp_conditions] in
-          Impossible (ERule (pos, "can't make effects Cau, because " ^ not_srp ^ " are not SRP"))
-      else Impossible (ERule (pos, "effects are not marked as causing"))
-      (* if cause_effects then type_tpformula tr s pos pols Cau pf2
-      else Impossible (ERule (pos, "effects are not marked as causing")) *)
-    in
-    let verdict_rule_implication = disj verdict_conditions verdict_effects |> conj verdict in
-    begin match verdict_rule_implication with
-      | Possible _ -> verdict_rule_implication, pg_map
-      | Impossible e ->
-        let err_msg =
-          if transparent then Printf.sprintf "Impossible, rule is not transparently enforceable: %s" (Errors.to_string e)
-          else Printf.sprintf "Impossible, rule is not enforceable: %s" (Errors.to_string e)
-        in
-        Util.enf_error err_msg (Some pos)
-    end
-  | _ -> assert false
-
 let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rule: verdict * pg_map =
   let pols = Tlex.pol_map s |> Map.map ~f:Lex.pol_to_enftype in
   let dnf_of_v = match verdict with
@@ -1374,12 +1277,21 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Enforceable as rt), rcs) 
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Transparent as rt), rcs) ->
       let transparent = rule_type_equals rt Transparent in
-      let tr = if transparent then Some (itl_srp) else None in
+      let tr =
+        if transparent then (debug "transparently enfoceable"; Some (itl_srp))
+        else (debug "enforceable"; None)
+      in
       let srp = strictly_relative_past ~itl_itvs_and_strict:itl_srp in
+      debug (Printf.sprintf "Exceptions: %s" (Util.string_of_string_list (List.map exceptions ~f:Tformula.to_string)));
+      debug (Printf.sprintf "Scopes: %s" (Util.string_of_string_list (List.map scopes ~f:Tformula.to_string)));
       let srp_exceptions = List.for_all exceptions ~f:srp |> srp_if_transparent_else_true transparent in
       let srp_scopes = List.for_all scopes ~f:srp |> srp_if_transparent_else_true transparent in
       let srp_conditions = srp_of_tpformula itl_srp pf1 |> srp_if_transparent_else_true transparent in
       let srp_effects = srp_of_tpformula itl_srp pf2 |> srp_if_transparent_else_true transparent in
+      debug (Printf.sprintf "srp_exceptions: %b" srp_exceptions);
+      debug (Printf.sprintf "srp_scopes: %b" srp_scopes);
+      debug (Printf.sprintf "srp_conditions: %b" srp_conditions);
+      debug (Printf.sprintf "srp_effects: %b" srp_effects);
       vars_are_past_guarded_tcrule_exn ~pg_map s (fv_of_tcrule rule) rule;
       let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
         parse_rule_constraints pos pols (List.length pf1.fs) rcs
@@ -1392,8 +1304,6 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
             let not_srp = Util.combine_string_descriptors ["scopes"; "conditions"; "effects"] [srp_scopes; srp_conditions; srp_effects] in
             Impossible (ERule (pos, "can't make exceptions Cau, because " ^ not_srp ^ " are not SRP"))
         else Impossible (ERule (pos, "exceptions are not marked as causing"))
-        (* if cause_exceptions then type_exceptions tr s pols exceptions
-        else Impossible (ERule (pos, "exceptions are not marked as causing")) *)
       in
       let verdict_scopes =
         if suppress_scopes then
@@ -1403,8 +1313,6 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
             let not_srp = Util.combine_string_descriptors ["exceptions"; "conditions"; "effects"] [srp_exceptions; srp_conditions; srp_effects] in
             Impossible (ERule (pos, "can't make scopes Sup, because " ^ not_srp ^ " are not SRP"))
         else Impossible (ERule (pos, "scopes are not marked as suppressing"))
-        (* if suppress_scopes then type_scopes tr s pols scopes
-        else Impossible (ERule (pos, "scopes are not marked as suppressing")) *)
       in
       let verdict_references = disj verdict_exceptions verdict_scopes in
       let verdict_conditions =
@@ -1443,7 +1351,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
         | Possible _ -> verdict_rule_implication, pg_map
         | Impossible e ->
           let err_msg =
-            if transparent then Printf.sprintf "Impossible, rule is not transparently enforceable: %s" (Errors.to_string e)
+            if transparent then Printf.sprintf "Impossible, rule is not transparantly enforceable: %s" (Errors.to_string e)
             else Printf.sprintf "Impossible, rule is not enforceable: %s" (Errors.to_string e)
           in
           Util.enf_error err_msg (Some pos)
