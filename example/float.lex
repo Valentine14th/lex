@@ -22,4 +22,4 @@ rule
         cause(a)
         cause(b)
         cause(c)
-enforceable suppressing action
+    enforceable suppressing action

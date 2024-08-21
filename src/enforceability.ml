@@ -15,6 +15,9 @@ open Tformula
 open Tlex
 open Elex
 
+let debug_enforcability = ref false
+let debug msg = if !debug_enforcability then Util.debug_print ~f_name:(Some "enforceability.ml") msg 
+
 let c1 = ref 0
 let fresh_param () = incr c1; "_p" ^ string_of_int !c1
 
@@ -207,7 +210,7 @@ module Constraints = struct
   let eq s t tr = CEq (s, t, tr)
 
   let conj c d =
-    (* Printf.printf "conj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d); *)
+    debug (Printf.sprintf "conj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d));
     match c, d with
     | Possible CTT, _ -> d
     | _, Possible CTT -> c
@@ -216,7 +219,7 @@ module Constraints = struct
     | Possible c, Possible d -> Possible (CConj (c, d))
 
   let disj c d =
-    (* Printf.printf "disj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d); *)
+    debug (Printf.sprintf "disj\n\t%s\n\t%s\n##########\n" (verdict_to_string c) (verdict_to_string d));
     match c, d with
     | Impossible c, Impossible d -> Impossible (EDisj (c, d))
     | Impossible _, _ -> d
@@ -272,16 +275,13 @@ open Option
 
 let types_predicate tr pols t e =
   (* TODO: verify that this function works correctly and makes use of the correct assumptions *)
-  Printf.printf "(types_predicate) make %s %s\n" e (EnfType.to_string t);
   let v = 
   match Map.find pols e with
-    (* | Some (t', tr') when EnfType.equal t t' && Bool.equal tr tr' -> Possible CTT *)
     | Some (t', tr') when EnfType.equal t t' && Bool.equal tr tr' -> Possible (eq e t (tr || tr'))
     | Some (t', tr') when EnfType.leq t t' -> Possible (eq e t (tr || tr'))
     | Some (t', tr') -> Impossible (ECast (e, t', tr', t, tr))
     | None -> Impossible (ECast (e, Non, false, t, tr))
   in
-  Printf.printf "(types_predicate) %s\n" (verdict_to_string v);
   v
 
 let rec types s pols (t: EnfType.t) (f: Tformula.t) =
@@ -1360,7 +1360,6 @@ let type_tcimplication_enforceable verdict itl_srp pg_map s rule pols =
   | _ -> assert false
 
 let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rule: verdict * pg_map =
-  Printf.printf "(type_tcrule) current verdict: %s\n" (verdict_to_string verdict);
   let pols = Tlex.pol_map s |> Map.map ~f:Lex.pol_to_enftype in
   let dnf_of_v = match verdict with
     | Possible c -> dnf c
@@ -1370,12 +1369,10 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
   in
   match rule with
     | TCImplication (_, _, pos, _, _, _, _, Vanilla, rcs) ->
-      Printf.printf "(type_tcrule) typing implication at %s\n" (Util.string_of_positions [pos]);
       vanilla_rule_constraints_warning pos rcs;
       verdict, pg_map (* do not aadd any typing constraints in regards to this rule *)
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Enforceable as rt), rcs) 
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Transparent as rt), rcs) ->
-      Printf.printf "(type_tcrule) typing implication at %s\n" (Util.string_of_positions [pos]);
       let transparent = rule_type_equals rt Transparent in
       let tr = if transparent then Some (itl_srp) else None in
       let srp = strictly_relative_past ~itl_itvs_and_strict:itl_srp in
@@ -1451,9 +1448,8 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
           in
           Util.enf_error err_msg (Some pos)
       end
-    | TCDefinition (idx, _, pos, pf1, ex, sc, _, f2) ->
+    | TCDefinition (idx, _, _, pf1, ex, sc, _, f2) ->
       let e = get_predicate_name_exn f2 in
-      Printf.printf "(type_tcrule) typing definition of %s at %s\n" e (Util.string_of_positions [pos]);
       let params = get_predicate_params_exn f2 in
       (* f2 is an except/scope predicat and parameters should be exclusively variable who's name can be extracted *)
       let get_trm_name (t: TTerm.t) = match t.trm with
@@ -1494,7 +1490,6 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
       Constraints.disj' verdicts, pg_map
     | TCDefinitionDis (disjuncts, g) ->
       let e = get_predicate_name_exn g in
-      Printf.printf "(type_tcrule) typing definition of %s\n" e;
       let aux d =
         let v_pols = solve d in
         (* TODO: test enforcability checking and remove assertion after successful testing *)
@@ -1525,7 +1520,6 @@ let check_used_events_are_defined (tprog: Tlex.tprog) def use =
         let warning = Printf.sprintf
             "Internal event \"%s\" is never constituted"
             name in
-        (* Util.enf_error err_msg (Some pos)) in *)
         Util.warning warning (Some pos)) in
   Map.iter_keys use ~f:check_used_are_defined
 
@@ -1585,8 +1579,6 @@ let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) : (string
   let itl_itvs = List.fold (List.rev tcrules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
   let itl_strict = List.fold (List.rev tcrules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
   let verdict, pg_map = List.fold tcrules_sorted ~f:(type_tcrule (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in
-  print_endline "(type_tcrules) final verdict:";
-  print_endline (Constraints.verdict_to_string verdict);
   let constraints = match verdict with
     | Possible c -> c
     | Impossible e ->
@@ -2215,7 +2207,7 @@ let erules_from_tcrules (tcrules: (int, tcrule, Int.comparator_witness) Map.t) :
 let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
   let tcrules  = create_tcrules tprog in
   let pols, rule_order, itl_srp, pg_map = type_tcrules tprog tcrules in
-  Printf.printf "Computed policies: %s\n" (Util.string_of_pols ~f:EnfType.to_string (Map.map pols ~f:fst));
+  debug (Util.string_of_pols ~f:EnfType.to_string (Map.map pols ~f:fst));
   let erules = erules_from_tcrules tcrules in
   let ecrules = convert_tcrules pg_map itl_srp tprog pols b tcrules in
   {

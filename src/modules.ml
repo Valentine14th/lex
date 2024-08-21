@@ -1,6 +1,9 @@
 open Core
 open Lexing
 
+let debug_modules = ref false
+let debug msg = if !debug_modules then Util.debug_print ~f_name:(Some "modules.ml") msg
+
 type t =
   | MLex of Elex.eprog
   | MLegalXml of LegalXml.t
@@ -74,12 +77,17 @@ let parse_with_error lexbuf =
   | Lexer.SyntaxError msg ->
     eprintf "%a: %s\n" print_position lexbuf msg;
     exit (-1)
+  (* | Parser.ParseError msg ->
+    eprintf "%a: %s\n" print_position lexbuf msg;
+    exit (-1) *)
   | Parser.Error ->
     eprintf "%a: syntax error\n" print_position lexbuf;
     exit (-1)
 
-let parse_module filename =
-  let inx = In_channel.create filename in
+let parse_module filename: Lex.prog =
+   let inx = try In_channel.create filename with
+    | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
+  in
   let lexbuf = Lexing.from_channel inx in
   lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
   let prog = parse_with_error lexbuf in
@@ -91,7 +99,7 @@ let link_formex_stmt modules = function
   | TSSection (section_kind, full_label, label, None) ->
     let law = Label.qualified_name_of_law full_label.law in
     let title = begin
-        print_endline (String.concat ~sep:" " (
+        debug (String.concat ~sep:" " (
                           List.map (Label.full_filters full_label)
                             ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
         match Map.find modules law with

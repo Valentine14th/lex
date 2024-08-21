@@ -1,10 +1,15 @@
 %{
-    open Lex
-    open Formula
+  open Lex
+  open Formula
+
+  (* exception ParseError of string *)
+
+  let debug_parser = ref false
+  let debug msg = if !debug_parser then Util.debug_print ~f_name:(Some "parser.mly") msg
 %}
 
 %token EOF NEWLINE
-%token NEWUP NEWDOWN NEWHITE
+%token NEWUP NEWDOWN NEWWHITE
 %token <Lexing.position * string> IDENT
 %token <Lexing.position * int> INT
 %token <Lexing.position * Lextime.Span.t> SPAN
@@ -86,26 +91,49 @@
 
 %start <Lex.prog> prog
 %%
-                    
-prog: stmts {$1}
 
-stmts: separated_list(NEWLINE, stmt) EOF   { { stmts = $1 } }
+white_space:
+  |          { debug "white space (empty)"; () }
+  | NEWLINE  { debug "white space NEWLINE"; () }
+  | NEWWHITE { debug "white space NEWWHITE"; () }
+  | NEWDOWN  { debug "white space NEWDOWN"; () }
+  | NEWUP    { debug "white space NEWUP"; () }
+
+prog: white_space stmts {debug "prog"; $2}
+
+stmts: list(stmt_) white_space EOF   { debug "stmts"; { stmts = $1 } }
+
+stmt_:
+  | stmt NEWLINE { debug "stmt_ (new line)"; $1 }
+  | stmt         { debug "stmt_ (no new line)"; $1 }
 
 stmt:
-  | IMPORT import                          { SImport ($1, ILex, $2) }
-  | IMPORT import_option import            { SImport ($1, $2, $3) }
-  | section_kind_and_pos STRING STRING     { SSection (snd $1, fst $1, snd $2, Some (snd $3)) }
-  | section_kind_and_pos STRING            { SSection (snd $1, fst $1, snd $2, None) }
-  | TTYPE IDENT IS type_term               { SType (fst $2, snd $2, Some $4, None) }
-  | TTYPE IDENT IS type_term NEWUP DOCSTRING{ SType (fst $2, snd $2, Some $4, Some $6) }
-  | TTYPE IDENT                            { SType (fst $2, snd $2, None, None) }
-  | TTYPE IDENT NEWUP DOCSTRING            { SType (fst $2, snd $2, None, Some $4) }
-  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term { SFunction (fst $2, snd $2, $5, $10, None) }
-  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term NEWUP DOCSTRING { SFunction (fst $2, snd $2, $5, $10, Some $12) }
-  | event_def                              { $1 }
-  | NOTE STRING                            { SNote ($1, snd $2) }
-  | NOTE DOCSTRING                         { SNote ($1, $2) }
-  | srule                                  { $1 }
+  | IMPORT import                            { debug "stmt: import";
+                                               SImport ($1, ILex, $2) }
+  | IMPORT import_option import              { debug "stmt: import (formex/akomaNtoso)";
+                                               SImport ($1, $2, $3) }
+  | section_kind_and_pos STRING STRING       { debug "stmt: section kind (with descritpion)";
+                                               SSection (snd $1, fst $1, snd $2, Some (snd $3)) }
+  | section_kind_and_pos STRING              { debug "stmt: section kind";
+                                               SSection (snd $1, fst $1, snd $2, None) }
+  | TTYPE IDENT IS type_term                 { debug "stmt: type term";
+                                               SType (fst $2, snd $2, Some $4, None) }
+  | TTYPE IDENT IS type_term NEWUP DOCSTRING { debug "stmt: type term + docstring";
+                                               SType (fst $2, snd $2, Some $4, Some $6) }
+  | TTYPE IDENT                              { debug "stmt: type";
+                                               SType (fst $2, snd $2, None, None) }
+  | TTYPE IDENT NEWUP DOCSTRING              { debug "stmt: type + docstring";
+                                               SType (fst $2, snd $2, None, Some $4) }
+  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term
+                                             { debug "stmt: function";
+                                               SFunction (fst $2, snd $2, $5, $10, None) }
+  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term NEWUP DOCSTRING
+                                             { debug "stmt: function + docstring";
+                                               SFunction (fst $2, snd $2, $5, $10, Some $12) }
+  | event_def                                { debug "stmt: event definition"; $1 }
+  | NOTE STRING                              { debug "stmt: note string"; SNote ($1, snd $2) }
+  | NOTE DOCSTRING                           { debug "stmt: note docstring"; SNote ($1, $2) }
+  | srule                                    { debug "stmt: rule"; $1 }
 
 import:
   | IDENT            { [snd $1] }
@@ -189,13 +217,14 @@ ref_expr:
                                  { make_ref_expr (fst (List.hd $1)) (List.map snd $1) None }
 
 rule:
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Obligation ($1, pf $2 $4, pf $7 $9, fst $10, snd $10) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWHITE, e) rule_type { Permission ($1, pf $2 $4, pf $7 $9, fst $10, snd $10) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)               { Constitutive ($1, pf $2 $4, $8) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWHITE, ref_expr)           { Exception ($1, pf $2 $4, $8) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN REPLACE NEWUP separated_nonempty_list(NEWHITE, ref_expr) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWHITE, e)
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWWHITE, e) NEWDOWN OBLIGE pattern NEWUP separated_nonempty_list(NEWWHITE, e) rule_type { Obligation ($1, pf $2 $4, pf $7 $9, fst $10, snd $10) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWWHITE, e) NEWDOWN PERMIT pattern NEWUP separated_nonempty_list(NEWWHITE, e) rule_type { Permission ($1, pf $2 $4, pf $7 $9, fst $10, snd $10) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWWHITE, e) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWWHITE, e)               { Constitutive ($1, pf $2 $4, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWWHITE, e) NEWDOWN EXCEPT NEWUP separated_nonempty_list(NEWWHITE, ref_expr)           { Exception ($1, pf $2 $4, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWWHITE, e) NEWDOWN REPLACE NEWUP separated_nonempty_list(NEWWHITE, ref_expr) NEWDOWN CONSTITUTE NEWUP separated_nonempty_list(NEWWHITE, e)
                                                                                                                                           { ExceptionC ($1, pf $2 $4, $8, $12) }
-  | WHENEVER pattern NEWUP separated_nonempty_list(NEWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWHITE, ref_expr)            { Scope ($1, pf $2 $4, $8) }
+  | WHENEVER pattern NEWUP separated_nonempty_list(NEWWHITE, e) NEWDOWN SCOPE NEWUP separated_nonempty_list(NEWWHITE, ref_expr)            { Scope ($1, pf $2 $4, $8) }
+  // | WHENEVER pattern NEWUP STRING { raise (ParseError ("expected non-empty list of MFOTL formulas, but got " ^ snd $4)) }
 
 ident:
   | IDENT { snd $1 }
@@ -220,20 +249,20 @@ type_fix:
 
 type_fixes:
   | { [] }
-  | FIX NEWUP separated_nonempty_list(NEWHITE, type_fix) NEWDOWN { $3 }
+  | FIX NEWUP separated_nonempty_list(NEWWHITE, type_fix) NEWDOWN { $3 }
 
 fun_args:
   | list(type_fix) { $1 }
 
 srule:
-  | RULE NEWUP DOCSTRING NEWHITE type_fixes rule         { SRule ($1, None, $5, $6, Some $3) }
-  | RULE STRING NEWUP DOCSTRING NEWHITE type_fixes rule  { SRule ($1, Some (snd $2), $6, $7, Some $4) }
+  | RULE NEWUP DOCSTRING NEWWHITE type_fixes rule         { SRule ($1, None, $5, $6, Some $3) }
+  | RULE STRING NEWUP DOCSTRING NEWWHITE type_fixes rule  { SRule ($1, Some (snd $2), $6, $7, Some $4) }
   | RULE NEWUP type_fixes rule                           { SRule ($1, None, $3, $4, None) }
   | RULE STRING NEWUP type_fixes rule                    { SRule ($1, Some (snd $2), $4, $5, None) }
 
 event_def:
-  | pol event_type IDENT NEWUP separated_list(NEWHITE, arg)                   { SEvent (fst $3, $2, snd $3, $5, $1, None) }
-  | pol event_type IDENT NEWUP DOCSTRING NEWHITE separated_list(NEWHITE, arg) { SEvent (fst $3, $2, snd $3, $7, $1, Some $5) }
+  | pol event_type IDENT NEWUP separated_list(NEWWHITE, arg)                   { SEvent (fst $3, $2, snd $3, $5, $1, None) }
+  | pol event_type IDENT NEWUP DOCSTRING NEWWHITE separated_list(NEWWHITE, arg) { SEvent (fst $3, $2, snd $3, $7, $1, Some $5) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? separated_list(COM, arg) NEWDOWN? RPA SUB GT type_term
     { SEvent (fst $4, Lex.Event ($3, Functional), snd $4, $7@[Lexing.dummy_pos, "~return_value", $12], $1, None) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? separated_list(COM, arg) NEWDOWN? RPA SUB GT type_term NEWUP DOCSTRING

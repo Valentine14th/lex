@@ -2,6 +2,9 @@ open Core
 
 open LegalXml
 
+let debug_formex = ref false
+let debug msg = if !debug_formex then Util.debug_print ~f_name:(Some "formex.ml") msg
+
 let format_ident =
   Re.replace (Re.compile (Re.(alt [char '('; char ')'; char '.']))) ~f:(fun _ -> "")
 
@@ -115,7 +118,7 @@ let read_file filepath filename =
                        (Filename.chop_extension filename) (Some title) in
   let enacting_terms = get_enacting_terms xml in
   let node = fill_in enacting_terms initial_node in
-  print_endline (to_string_structure node);
+  debug (to_string_structure node);
   node
   
 (* Does not currently support levels above chapters  *)

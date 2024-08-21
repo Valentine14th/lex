@@ -4,6 +4,9 @@
 
   exception SyntaxError of string
 
+  let debug_lexer = ref false
+  let debug msg = if !debug_lexer then Util.debug_print ~f_name:(Some "lexer.mll") msg
+
   let keyword_table = Hashtbl.create 53
 
   let indents = ref []
@@ -90,7 +93,6 @@
        "MIN"          , MIN ;
        "MAX"          , MAX ;
       ]
-
 }
 
 let white = [' ' '\t']+
@@ -106,20 +108,20 @@ let float2 = '.' ['0'-'9']+
 
 rule read =
   parse
-  | white          { read lexbuf }
+  | white          { debug "white space 1"; read lexbuf }
   | '\\' white* newline
-                   { new_line lexbuf; read lexbuf }
-  | ((comment? newline white*)* as n) comment? newline (white+ as w)
-                   { repeat new_line lexbuf (1 + count_newlines n) ;
-                     let i = update_indent (String.length w) in
-                     if i > 0 then
-                       NEWUP
-                     else if i < 0 then
-                       NEWDOWN
-                     else
-                       NEWHITE }
-  | ((comment? newline white*)* as n) comment? newline
-                   { repeat new_line lexbuf (1 + count_newlines n);
+                   { debug "white space 2";
+                   new_line lexbuf; read lexbuf }
+  | ((comment? newline white*)* as n) comment? newline (white+ as w) as comment
+                   { debug ("comment 1" ^ comment);
+                     repeat new_line lexbuf (1 + count_newlines n);
+                     match update_indent (String.length w) with
+                      | i when i > 0 -> NEWUP
+                      | i when i < 0 -> NEWDOWN
+                      | _            -> NEWWHITE }
+  | ((comment? newline white*)* as n) comment? newline as comment
+                   { debug ("comment 2" ^ comment);
+                     repeat new_line lexbuf (1 + count_newlines n);
                      indents := [];
                      NEWLINE }
   | '('            { LPA lexbuf.lex_start_p }
@@ -193,7 +195,7 @@ rule read =
   | int            { INT (lexbuf.lex_start_p, int_of_string (Lexing.lexeme lexbuf)) }
   | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s) { SPAN (lexbuf.lex_start_p, Lextime.Span.of_value_with_unit (int_of_string i) [lexbuf.lex_start_p] s) }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
-  | comment? (newline|white)* eof   { EOF }
+  | (comment? as comment) (newline|white)* eof   { debug (comment ^ "\nEOF"); EOF }
 
 and read_string buf =
   parse

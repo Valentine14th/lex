@@ -5,6 +5,9 @@ open Formula.Term
 open Lex
 open Tlex
 
+let debug_typing = ref false
+let debug msg = if !debug_typing then Util.debug_print ~f_name:(Some "typing.ml") msg
+
 type t =
   {
     tprog: tprog;
@@ -545,9 +548,8 @@ let type_rule s pos = function
              | _, _ -> assert false
         in process_rule s t_vars rule
       in
-      print_endline "type_rule";
-      print_endline (Label.string_of_label label');
-      print_endline (Tlex.string_of_var_types t_vars);
+      debug (Label.string_of_label label');
+      debug (Tlex.string_of_var_types t_vars);
       let s' = add_vars rule_num t_vars s in
       let s'' = add_rule pos rule_num label' s' in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in

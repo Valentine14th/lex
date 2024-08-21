@@ -2,16 +2,19 @@ open Core
 open Lex_lib
 
 (* TODO: introduce the upper bound `b` as a command line paramter - analogous to WhyEnf *)
-let loop ?(b=Interval.C Lextime.Span.zero) filename mode f o () =
+let loop filename mode f o b () =
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
   let filepath = Filename.dirname filename
   and basename = Filename.basename filename in
+  let b = match b with (* TODO: does this way of extracting an upper bound b make sense? *)
+    | None -> Interval.C Lextime.Span.zero
+    | Some b -> Interval.C (Lextime.Span.of_value_with_unit b [] "s") in
 
   match mode with
   | None | Some "mfotl" -> begin
       let eprog = Modules.do_type [lexpath] b filepath basename in
-      print_endline "Parsed and typed:\n";
-      Elex.print_eprog eprog;
+      (* Util.debug_print ~f_name:(Some "main.ml/loop") "Parsed and typed:\n"; *)
+      (* if !Util.debug then Elex.print_eprog eprog; *)
       print_endline "Compiled:\n";
       let cprog = Compiler.compile eprog in
       print_endline (Clex.to_string cprog)
@@ -33,14 +36,15 @@ let loop ?(b=Interval.C Lextime.Span.zero) filename mode f o () =
     end
   | Some _ -> assert false
 
-
 let () =
   Command.basic_spec ~summary:"Parse Lex"
     Command.Spec.(empty
                   +> anon ("filename" %: string)
                   +> flag "-mode" (optional string) ~doc:"mode options: mfotl (default), doc, template"
                   +> flag "-f" (optional string) ~doc:"input format options: formex (default), akomaNtoso"
-                  +> flag "-o" (optional string) ~doc:"output file")
+                  +> flag "-o" (optional string) ~doc:"output file"
+                  +> flag "-b" (optional int) ~doc:"upper bound for the time interval"
+                  )
     loop
   |> Command_unix.run
      

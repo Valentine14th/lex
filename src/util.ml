@@ -1,6 +1,12 @@
 open Core
-
 open Lexing
+
+let debug = ref true (* TODO: set to false if not needed *)
+let debug_print ?(f_name=None) msg =
+  if !debug then
+    match f_name with
+    | Some f_name -> Printf.printf "[DEBUG] %s: %s\n" f_name msg
+    | None -> Printf.printf "[DEBUG]: %s\n" msg
 
 let string_of_pos pos =
   sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)

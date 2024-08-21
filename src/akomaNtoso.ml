@@ -2,6 +2,9 @@ open Core
 
 open LegalXml
 
+let debug_akomaNtoso = ref false
+let debug = Util.debug_print ~f_name:(Some "akomaNtoso.ml")
+
 let format_ident =
   Re.replace (Re.compile (Re.(alt [char '('; char ')'; char '.']))) ~f:(fun _ -> "")
 
@@ -36,7 +39,7 @@ let get_text tag xml =
 let get_texts tag = List.map ~f:(get_text tag)
 
 let rec fill_in xml node =
-  (*print_endline (to_string node);*)
+  debug (to_string node);
   let fill_in_points xml node kind =
     let list_xml = XML.get_child_by_tag_name "blockList" xml in
     let text = get_text "listIntroduction" list_xml in
@@ -118,7 +121,7 @@ let read_file filepath filename =
                        (Filename.chop_extension filename) (Some title) in
   let body = get_body xml in
   let node = fill_in body initial_node in
-  (*print_endline (to_string node);*)
+  debug (to_string node);
   node    
 
 (* Does not currently support levels above chapters  *)

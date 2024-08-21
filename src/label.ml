@@ -1,6 +1,9 @@
 open Core
 open Lex
 
+let debug_label = ref true
+let debug = if !debug_label then Util.debug_print ~f_name:(Some "label.ml") else ignore
+
 (** First identifier: number, letter, etc. describing
                       the section in question (e.g. "2")
     second identifier: descriptive, title (e.g. "Material Scope") *)
@@ -522,9 +525,9 @@ module RuleTree = struct
       fixpoint scopes_and_exceptions
     in
     let class_map = combine_exceptions_and_scopes s.exceptions s.scopes in
-    (* print_endline (Util.string_of_int_to_int_multi_map (Map.map class_map ~f:Set.to_list)); *)
+    debug (Util.string_of_int_to_int_multi_map (Map.map class_map ~f:Set.to_list));
     let rules = Map.keys s.label_of_rule in
-    (* print_endline (Util.string_of_int_list rules); *)
+    debug (Util.string_of_int_list rules);
     let update_function' acc x =
       let aux x = function
         | Some s -> Set.add s x
@@ -534,27 +537,27 @@ module RuleTree = struct
     in
     let full_map = List.fold rules ~init:class_map ~f:update_function' in
     let full_list = Map.data full_map in
-    (* print_endline (Util.string_of_int_set_list full_list); *)
+    debug (Util.string_of_int_set_list full_list);
     let aux2 acc x =
       let aux1 acc' y =
         let aux0 z =
           let inter = Set.inter y z in
-          (* print_endline ("y & z: " ^ Util.string_of_int_set inter); *)
-          (* print_endline ("y: " ^ Util.string_of_int_set y); *)
-          (* print_endline ("z: " ^ Util.string_of_int_set z); *)
+          debug ("y & z: " ^ Util.string_of_int_set inter);
+          debug ("y: " ^ Util.string_of_int_set y);
+          debug ("z: " ^ Util.string_of_int_set z);
           if (Set.is_empty inter) then z
           else Set.union y z
         in
         let acc'' = List.map acc' ~f:aux0 in
-        (* print_endline ("acc'': " ^ Util.string_of_int_set_list acc''); *)
+        debug ("acc'': " ^ Util.string_of_int_set_list acc'');
         List.fold acc'' ~f:Set.union ~init:y
       in
-      (* print_endline ("Acc: " ^ Util.string_of_int_set_list acc); *)
-      (* print_endline ("x: " ^ Util.string_of_int_set x); *)
+      debug ("Acc: " ^ Util.string_of_int_set_list acc);
+      debug ("x: " ^ Util.string_of_int_set x);
       let intersections = List.map acc ~f:(fun a -> Set.inter x a) in
       let union_of_intersections = List.fold ~init:x ~f:Set.union intersections in
-      (* print_endline ("Intersections: " ^ Util.string_of_int_set_list intersections); *)
-      (* print_endline ("Union: " ^ Util.string_of_int_set union_of_intersections); *)
+      debug ("Intersections: " ^ Util.string_of_int_set_list intersections);
+      debug ("Union: " ^ Util.string_of_int_set union_of_intersections);
       match Set.equal x union_of_intersections with
       | true -> x::acc
       | false -> [aux1 acc x]
@@ -562,7 +565,7 @@ module RuleTree = struct
     let full_list' = List.dedup_and_sort full_list ~compare:(fun a b -> if Set.equal a b then 0 else 1)  in
     let filtered_list = List.filter full_list' ~f:(fun x -> if List.exists full_list ~f:(fun y -> Set.is_subset x ~of_:y && not (Set.equal x y)) then false else true) in
     let filtered_list' = List.fold filtered_list ~init:[] ~f:aux2 in
-    (* print_endline (Util.string_of_int_set_list filtered_list'); *)
+    debug (Util.string_of_int_set_list filtered_list');
     assert (List.length full_list = List.length rules);
     assert (List.length (List.concat_map filtered_list' ~f:Set.to_list) = List.length rules);
     filtered_list'
