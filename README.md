@@ -107,4 +107,14 @@ lex <path/to/.lex file> [-mode (mfotl|doc)]
 - [example/evaluation/evaluation.lex](example/evaluation/evaluation.lex) Impossible verdict
   - is the expected outcome `Possible ...`?
     - if yes: issue with strictly relative past computation when a rule is marked as transparent
-
+- Parse conflicts
+  ```bash
+  $ dune build
+  Warning: 40 states have shift/reduce conflicts.
+  Warning: 11 states have reduce/reduce conflicts.
+  Warning: 50 shift/reduce conflicts were arbitrarily resolved.
+  Warning: 11 reduce/reduce conflicts were arbitrarily resolved.
+  ```
+- Parsing rules `stmts` and `stmt_` might allow for statements that are not separated by new lines
+  - but using `separated_list(NEWLINE, stmt) EOF` (as before) does not terminate the list, if there is a newline before `EOF`, i.e. the final line of a `.lex` file must be a statement and cannot be empty or a comment
+- compilation of constitutive rules (`ECDefinitionDis`) is not 100% complete and requires a second look at how parameters in let-bindings should work
