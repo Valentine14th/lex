@@ -457,11 +457,11 @@ module RuleTree = struct
   | Intermediate map ->
     let label' = remove_highest_level label in
     let highest = highest_level label in
-    Util.debug_print (string_of_loc highest);
+    debug (string_of_loc highest);
     let key = Location.t_of_loc highest in
     begin match highest with
     | LNone ->
-       (Util.debug_print (String.concat ~sep:", " (List.map (collect_rules_in_tree (Intermediate map)) ~f:string_of_int));
+       (debug (String.concat ~sep:", " (List.map (collect_rules_in_tree (Intermediate map)) ~f:string_of_int));
        collect_rules_in_tree (Intermediate map))
     | LRule _ -> assert false
     | LSection (sk, n) ->
@@ -524,9 +524,10 @@ module RuleTree = struct
   let string_of_rule_idx s i = string_of_reference (reference_of_label (fst (Map.find_exn s.label_of_rule i)))
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx (refs: rtref_expr list) s =
-    Util.debug_print (level_tree_to_string s.tree);
-    Util.debug_print (String.concat ~sep:"\n" (List.map refs ~f:(fun r -> string_of_label r.label)));
+    debug (level_tree_to_string s.tree);
+    debug (String.concat ~sep:"\n" (List.map refs ~f:(fun r -> string_of_label r.label)));
     let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
+    debug (String.concat ~sep:", " (List.map rule_idxs ~f:string_of_int));
     if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
     { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 

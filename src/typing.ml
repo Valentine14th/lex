@@ -5,7 +5,7 @@ open Formula.Term
 open Lex
 open Tlex
 
-let debug_typing = ref false
+let debug_typing = ref true
 let debug msg = if !debug_typing then Util.debug_print ~f_name:(Some "typing.ml") msg
 
 type t =
@@ -485,23 +485,29 @@ let type_rule s pos = function
         let merge_reference_with_label (l: Label.t) (ref_expr: ref_expr) =
           begin match Label.highest_level l with
           | (Label.LSection (Article 0, _)) ->
-            let init = Label.qualified_label l in
-            let aux acc (level, name) = Label.set pos level (name, None) acc in
-            { label = Label.set_rule_id rule_id (List.fold ~init:init ~f:aux ref_expr.ref.sks);
-              ref = ref_expr.ref;
-              pos = ref_expr.pos
-            }
+             let init = Label.qualified_label l in
+             let rule_id = ref_expr.ref.rule in
+             let aux acc (level, name) = Label.set pos level (name, None) acc in
+             let label = Label.set_rule_id rule_id (List.fold ~init:init ~f:aux ref_expr.ref.sks) in
+             { label;
+               ref = ref_expr.ref;
+               pos = ref_expr.pos
+             }
           | _ ->
-            let aux acc (level, name) = Label.set pos level (name, None) acc in
-            { label = Label.set_rule_id rule_id (List.fold ~init:l ~f:aux ref_expr.ref.sks);
-              ref = ref_expr.ref;
-              pos = ref_expr.pos
-            }
+             let rule_id = ref_expr.ref.rule in
+             let aux acc (level, name) = Label.set pos level (name, None) acc in
+             let label = Label.set_rule_id rule_id (List.fold ~init:l ~f:aux ref_expr.ref.sks) in
+             { label;
+               ref = ref_expr.ref;
+               pos = ref_expr.pos
+             }
           end in
         let rec process_rule s t_vars = function
           | Exception (pos, pf, refs) ->
-            let _ = List.map ~f:decreasing_section_kinds refs in
+             let _ = List.map ~f:decreasing_section_kinds refs in
+             debug (String.concat ~sep:"\n" (List.map refs ~f:(fun ref -> Lex.string_of_reference ref.ref)));
             let reference_labels = List.map ~f:(merge_reference_with_label s.label) refs in
+            debug (String.concat ~sep:"\n" (List.map reference_labels ~f:(fun r -> Label.string_of_label r.label)));
             let p_name = "Exception" ^ string_of_int rule_num in (* TODO: mark 'Exception' as an internal name and prevent user-defined events to start with that *)
             let vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
             let var_term_of_ident_and_positions (x, positions) =
@@ -548,8 +554,6 @@ let type_rule s pos = function
              | _, _ -> assert false
         in process_rule s t_vars rule
       in
-      debug (Label.string_of_label label');
-      debug (Tlex.string_of_var_types t_vars);
       let s' = add_vars rule_num t_vars s in
       let s'' = add_rule pos rule_num label' s' in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
@@ -558,16 +562,20 @@ let type_rule s pos = function
   | _ -> assert false
 
 let type_stmt s = function
-  | SImport (pos, import_format, idents) -> add_tstmt (TSImport (pos, idents, import_format)) s
+  | SImport (pos, import_format, idents) ->
+     add_tstmt (TSImport (pos, idents, import_format)) s
   | SSection (pos, section_kind, label_description, title) ->
      let s = set_labels pos section_kind (label_description, title) s in
      let title' = Option.map title ~f:(fun x -> TALex x) in
      let s' = add_section pos s.label s in
      add_tstmt (TSSection (section_kind, s.label, label_description, title')) s'
   | SRule (pos, _, _, _, _) as rule -> type_rule s pos rule
-  | SEvent (pos, event_type, name, args, pol, ds) -> add_tevent event_type name args pol ds s pos
-  | SType (pos, name, typ, doc_string) -> add_talias name typ doc_string s pos
-  | SFunction (pos, name, arg_types, return_type, doc_string) -> add_tfunction name arg_types return_type doc_string s pos
+  | SEvent (pos, event_type, name, args, pol, ds) ->
+     add_tevent event_type name args pol ds s pos
+  | SType (pos, name, typ, doc_string) ->
+     add_talias name typ doc_string s pos
+  | SFunction (pos, name, arg_types, return_type, doc_string) ->
+     add_tfunction name arg_types return_type doc_string s pos
   | SNote (_, text) -> add_tstmt (TSNote text) s
     
 let update_var_ts_with_exceptions vars exceptions =
@@ -581,7 +589,7 @@ let update_var_ts_with_exceptions vars exceptions =
               else let err_msg =
                   Printf.sprintf
                   "Variable '%s' has type '%s' in rule '%s', but has type '%s' in exception '%s' for this rule"
-                  k (Formula.TypeTerm.to_string a1) name (Formula.TypeTerm.to_string a2) exception_rule_name
+                  k (Formula.TypeTerm.value_to_string a1) name (Formula.TypeTerm.value_to_string a2) exception_rule_name
                 in Util.type_error err_msg []
           | `Left t
           | `Right t -> Some t)
@@ -596,7 +604,7 @@ let merge_type_maps pos m1 m2 label = Map.merge m1 m2 ~f:(fun ~key:k -> function
   | `Both (a1, a2) when Formula.TypeTerm.equal a1 a2 -> Some a1
   | `Both (a1, a2) -> let err_msg = Printf.sprintf
         "Variable '%s' has type '%s' in rule '%s', but was expected to have type '%s'"
-        k (Formula.TypeTerm.to_string a2) label (Formula.TypeTerm.to_string a1)
+        k (Formula.TypeTerm.value_to_string a2) label (Formula.TypeTerm.value_to_string a1)
       in Util.type_error err_msg [pos]
   | `Left t
   | `Right t -> Some t)
@@ -621,7 +629,9 @@ let do_type tprog prog =
   (* First pass: type statements *)
   let s = List.fold prog.stmts ~init ~f:type_stmt in
   (* Second pass: exceptions *)
-  let tprog' = List.fold s.exceptions_first_pass ~init:s.tprog ~f:(fun acc (i,f,refs) -> Tlex.add_exception i f refs acc) in
+  let tprog' = List.fold s.exceptions_first_pass ~init:s.tprog ~f:(fun acc (i,f,refs) ->
+                   debug (String.concat ~sep:"\n" (List.map refs ~f:(fun r -> Label.string_of_label r.label)));
+                   Tlex.add_exception i f refs acc) in
   let tprog'' = List.fold s.scopes_first_pass ~init:tprog' ~f:(fun acc (i,f,refs) -> Tlex.add_scope i f refs acc) in
   let vars = check_var_types tprog'' in
   {

@@ -34,7 +34,7 @@ let rec is_past_guarded ?(pg_map: pg_map=Map.empty (module String)) s x p f =
   | TEqConst (x', y) -> p && TTerm.equal_core (TTerm.TVar x) x'.trm && TTerm.is_const y.trm
   | TPredicate (e, ts, _) ->
     begin match Map.find s.tevents e with
-      | Some (_, _, TItl, _) ->  xand p (Map.find_exn (Map.find_exn pg_map e) x)
+      | Some (_, _, TItl, _) -> xand p (Map.find_exn (Map.find_exn pg_map e) x)
       | _ -> List.exists ~f:(fun t -> TTerm.equal_core (TTerm.TVar x) t.trm) ts
     end
   | TAgg (_, _, _, y, f) -> List.mem y x ~equal:String.equal && is_past_guarded s x p f
@@ -1208,7 +1208,7 @@ let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
     Map.for_all disjuncts ~f:aux
   | _ -> assert false
 
-let update_pg_map s pg_map e vars rule = 
+let update_pg_map s pg_map e vars rule =
   let data = Map.mapi vars ~f:(past_guarded_of_tcrule s pg_map rule) in
   Map.add_exn pg_map ~key:e ~data:data
 
@@ -1253,9 +1253,9 @@ let type_tdisjunct s itl_srp pols pg_map t rule (d: tdisjunct) =
   end
 
 let rule_type_equals rt1 rt2 = match rt1, rt2 with
-  | Lex.Vanilla, Lex.Vanilla -> true
-  | Enforceable, Enforceable -> true
-  | Transparent, Transparent -> true
+  | Lex.Vanilla, Lex.Vanilla
+  | Enforceable, Enforceable
+  | Transparent, Transparent
   | _, _ -> false
 
 let srp_if_transparent_else_true transparent is_srp =

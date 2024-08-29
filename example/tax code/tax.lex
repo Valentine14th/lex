@@ -68,7 +68,7 @@ rule "amount_excluded_by_property"
     t >= 2y
   constitute
     amount_excluded_from_gross_income_by_property(p, i) = gain
-     
+  
 rule "amount_excluded"
   whenever
     tax_day(i)
