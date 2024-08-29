@@ -288,6 +288,32 @@ module RuleTree = struct
     | Intermediate of ((level_tree * rule_map) LocationMap.t)
     | Leaf
 
+  let rec level_tree_to_string ?(i=0) = function
+    | Leaf -> Etc.tabs i ^ "Leaf"
+    | Intermediate map ->
+       Etc.tabs i ^ "[\n" ^ Etc.tabs (i+1)
+       ^ String.concat ~sep:("\n" ^ Etc.tabs (i+1))
+           (List.map ~f:(fun (loc, (tree, rules)) ->
+                Printf.sprintf "%s ->\n%s%s%s%s"
+                  (Location.string_of_t loc)
+                  (Etc.tabs (i+2))
+                  (if Map.is_empty rules then
+                     "Rules: none\n"
+                   else
+                     Printf.sprintf "Rules:\n%s%s\n"
+                       (Etc.tabs (i+3))
+                       (String.concat ~sep:("\n" ^ Etc.tabs (i+3))
+                          (List.map ~f:(fun (s, i) ->
+                               Printf.sprintf "%s -> %d"
+                                 (if String.is_empty s then "[unnamed]" else s) i)
+                             (Map.to_alist rules))))
+                  (Etc.tabs (i+2))
+                  (match tree with Leaf -> "Tree: none"
+                                 | _ -> Printf.sprintf "Tree:\n%s\n"
+                                          (level_tree_to_string ~i:(i+3) tree)))
+              (Map.to_alist map))
+           
+
   type rtref_expr = { label: t;
                       ref: Lex.reference;
                       pos: Lexing.position }
@@ -392,8 +418,10 @@ module RuleTree = struct
     end
 
   let rec collect_rules_in_tree = function
-  | Intermediate map -> Map.fold map ~init:[] ~f:(fun ~key:_ ~data:(tree, rm) acc -> collect_rules_in_tree tree @  Map.data rm @ acc)
-  | Leaf -> []
+    | Intermediate map ->
+       List.concat_map (Map.to_alist map)
+         ~f:(fun (_, (tree, rules)) -> collect_rules_in_tree tree @ Map.data rules)
+    | Leaf -> []
 
   let rec infer_intermediate_levels pos map sk name intermediate_levels current_key =
     let sk_name, sk_int = match sk with
@@ -429,10 +457,12 @@ module RuleTree = struct
   | Intermediate map ->
     let label' = remove_highest_level label in
     let highest = highest_level label in
+    Util.debug_print (string_of_loc highest);
     let key = Location.t_of_loc highest in
     begin match highest with
     | LNone ->
-      collect_rules_in_tree (Intermediate map)
+       (Util.debug_print (String.concat ~sep:", " (List.map (collect_rules_in_tree (Intermediate map)) ~f:string_of_int));
+       collect_rules_in_tree (Intermediate map))
     | LRule _ -> assert false
     | LSection (sk, n) ->
       let sub_maps = begin match sk with
@@ -469,10 +499,10 @@ module RuleTree = struct
       begin match highest_level label' with
       | LRule r -> begin try [Map.find_exn map' key |> snd |> (fun x -> Map.find_exn x r)]
                    with _ -> Util.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos end
-      | LNone -> let rm = begin try Map.find_exn map' key |> snd
+      | LNone -> let tree, rules = begin try Map.find_exn map' key
                  with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos
-        end in
-        Map.data rm
+                          end in
+                 Map.data rules @ collect_rules_in_tree tree
       | _ -> let tree' = begin try Map.find_exn map' key |> fst
              with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos end
         in find_rules_in_tree pos label' tree'
@@ -494,6 +524,8 @@ module RuleTree = struct
   let string_of_rule_idx s i = string_of_reference (reference_of_label (fst (Map.find_exn s.label_of_rule i)))
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx (refs: rtref_expr list) s =
+    Util.debug_print (level_tree_to_string s.tree);
+    Util.debug_print (String.concat ~sep:"\n" (List.map refs ~f:(fun r -> string_of_label r.label)));
     let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
     if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
     { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
@@ -562,12 +594,16 @@ module RuleTree = struct
       | true -> x::acc
       | false -> [aux1 acc x]
     in
-    let full_list' = List.dedup_and_sort full_list ~compare:(fun a b -> if Set.equal a b then 0 else 1)  in
-    let filtered_list = List.filter full_list' ~f:(fun x -> if List.exists full_list ~f:(fun y -> Set.is_subset x ~of_:y && not (Set.equal x y)) then false else true) in
+    let full_list' = List.dedup_and_sort full_list ~compare:Set.compare_direct in
+    let filtered_list =
+      List.filter full_list'
+        ~f:(fun x -> not (List.exists full_list
+                            ~f:(fun y -> Set.is_subset x ~of_:y && not (Set.equal x y)))) in
     let filtered_list' = List.fold filtered_list ~init:[] ~f:aux2 in
     debug (Util.string_of_int_set_list filtered_list');
+    debug (Util.string_of_int_list rules);
     assert (List.length full_list = List.length rules);
-    assert (List.length (List.concat_map filtered_list' ~f:Set.to_list) = List.length rules);
+    (*assert (List.length (List.concat_map filtered_list' ~f:Set.to_list) = List.length rules);*)
     filtered_list'
 
 

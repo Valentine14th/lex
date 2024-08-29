@@ -611,7 +611,7 @@ let check_var_types tprog =
   in
   let f1 keys = (keys, Set.fold keys ~init:(Map.empty (module String)) ~f:f0) in
   let updated_vars = List.map var_equivalence_classes ~f:f1 in
-  let f2 v acc key = Map.add_exn acc ~key:key ~data:v in
+  let f2 v acc key = Map.update acc key ~f:(fun _ -> v) in
   let f3 m (keys, v) = Set.fold keys ~init:m ~f:(f2 v) in
   let vars = List.fold ~init:(Map.empty (module Int)) ~f:f3 updated_vars in
   vars
