@@ -5,7 +5,7 @@ open Formula.Term
 open Lex
 open Tlex
 
-let debug_typing = ref true
+let debug_typing = ref false
 let debug msg = if !debug_typing then Util.debug_print ~f_name:(Some "typing.ml") msg
 
 type t =

@@ -1622,14 +1622,15 @@ let convert_enforceable_exn s pols b enftype f =
   | Some f' -> f'
   | None -> 
     (* If conversion fails, then the enforcement type checking is wrong *)
-    (* let err_msg =
+    let err_msg =
       Printf.sprintf
       "(type checking implementation error) Impossible to convert enforceable (%s) formula: %s, with pols: %s"
       (EnfType.to_string enftype)
       (Tformula.to_string f)
       (Util.string_of_pols ~f:EnfType.to_string (Map.map ~f:fst pols))
     in
-    Util.enf_error err_msg None *)
+    (* Util.enf_error err_msg None *)
+    debug err_msg;
     assert false
     (* assertion to get stack trace for debugging *)
 
@@ -1855,26 +1856,25 @@ let convert_tcrule pg_map itl_srp (s: tprog) (pols: (string, (EnfType.t * bool),
            and then the conversion can be the same way as in the
            non-transparent case (assuming that the enforcement
            checking until this point is correct) *)
-        let pols, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
+        (* do not overwrite the pol value passed to this conversion function, by re-initializing the policies *)
+        let _, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
           let pols_ = Tlex.pol_map s |> Map.map ~f:Lex.pol_to_enftype in
           parse_rule_constraints pos pols_ (List.length pf1.fs) rcs
         in
         let ert = erule_type_from_trule_type trt in
         begin match cause_exceptions, type_exceptions itl_srp s pols ex with
-          | true, Possible constraints ->
-            let pols' = solve constraints |> List.hd_exn in (* TODO: iterate through found policies *)
+          | true, Possible _ ->
             let epf1 = epformula_of_tpformula s.tevents pf1 in
-            let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true s Cau pols' b ex in
+            let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true s Cau pols b ex in
             let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
             let epf2 = epformula_of_tpformula s.tevents pf2 in
             let enf_constr = ESciLhs (ESlhsCException (Option.value_exn i_opt)) in
             ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
           | _ -> begin match suppress_scopes, type_scopes itl_srp s pols sc with
-            | true, Possible constraints ->
-              let pols' = solve constraints |> List.hd_exn in (* TODO: handle multiple/no options *)
+            | true, Possible _ ->
               let epf1 = epformula_of_tpformula s.tevents pf1 in
               let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
-              let sc', i_opt = convert_enforceable_tformulas s Sup pols' b sc in
+              let sc', i_opt = convert_enforceable_tformulas s Sup pols b sc in
               let epf2 = epformula_of_tpformula s.tevents pf2 in
               let enf_constr = ESciLhs (ESlhsSScope (Option.value_exn i_opt)) in
               ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
@@ -1889,13 +1889,11 @@ let convert_tcrule pg_map itl_srp (s: tprog) (pols: (string, (EnfType.t * bool),
                 end
               in
               begin match v with
-              | Possible constraints ->
+              | Possible _ ->
                 let indices = match suppress_indices with
                   | Some indices -> indices
                   | None -> pf1.fs |> List.mapi ~f:(fun i _ -> i)
                 in
-                (* let pols' = solve constraints |> List.hd_exn in (* TODO *) *)
-                let _ = solve constraints |> List.hd_exn in (*TODO*)
                 let pf1_used, f1s_unused = 
                   if suppress_conditions then pf1, []
                   else
@@ -1912,16 +1910,13 @@ let convert_tcrule pg_map itl_srp (s: tprog) (pols: (string, (EnfType.t * bool),
                 let sc' = List.map sc ~f:(Eformula.of_tformula pols) in
                 let epf2 = epformula_of_tpformula s.tevents pf2 in
                 let enf_constr = match constr_opt with
-                  (* | Some (ESupPFormula c) -> ECISupFormula c *)
                   | Some (EpfSup c) -> ESciLhs (ESlhsSPformula c)
                   | _ -> assert false
                 in
                 ECImplication (idx, ert, pos, epf1, ex', sc', epf2, rt, rcs, Some enf_constr)
               | _ ->
                 begin match cause_effects, type_tpformula itl_srp s pos pols Cau pf2 with
-                  (* | true, Possible constraints -> *)
                   | true, Possible _ ->
-                    (* let pols' = solve constraints |> List.hd_exn in (* TODO: what to do if multiple policies appear here?  *) *)
                     let epf1 = epformula_of_tpformula s.tevents pf1 in
                     let ex' = List.map ex ~f:(Eformula.of_tformula pols) in
                     let sc' = List.map sc ~f:(Eformula.of_tformula pols) in

@@ -55,7 +55,7 @@ let string_of_let_binding (lhs, rhs) =
   Printf.sprintf "let %s = %s" lhs_str rhs_str
 
 let to_string cprog =
-  Printf.sprintf "Signature:\n%s\n\nFormula:\n%s\n%s\n"
+  Printf.sprintf "Signature:\n%s\n\nFormula:\n%s\n\n%s\n"
     (string_of_signatures cprog.signature)
     ((List.map cprog.let_bindings ~f:string_of_let_binding) |> String.concat ~sep:"\n")
     (Formula.to_string (Eformula.to_formula cprog.phi))

@@ -6,6 +6,9 @@ open Lex
 open Elex
 open Clex
 
+let debug_compiler = ref false
+let debug msg = if !debug_compiler then Util.debug_print ~f_name:(Some "compiler.ml") msg else ignore msg
+
 (* TODO: constants inside of predicates do not
    actually introduce an unnamed variable for the
    "exception" predicate...
@@ -387,6 +390,9 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
   let let_rules = List.filter sorted_c_rules ~f:is_let_rule in
   let imp_rules = List.filter sorted_c_rules ~f:is_imp_rule in
   let non_vanilla = List.filter imp_rules ~f:(fun r -> not (is_vanilla r)) in
+  if List.is_empty non_vanilla then
+    Util.warning "No obligation rules are marked as (transparantly) enforceable, compiled formula will be a tautology" None;
+  debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));
   let formulae = List.map non_vanilla ~f:compile_imp_rule in
   let let_bindings = List.map let_rules ~f:compile_let_rule in
   let phi = tbigcauconj formulae in
@@ -394,4 +400,5 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
                     eprog.variables let_rules in
   { signature = signature;
     let_bindings = let_bindings;
-    phi = phi }
+    phi = phi
+  }
