@@ -300,11 +300,11 @@ let rec to_string_core_rec l = function
   | EAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (ETerm.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
   | ENeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | EAnd (s, fs) ->
-     let sep = "∧" ^ Side.to_string s in
+     let sep = Printf.sprintf " ∧%s " (Side.to_string s) in
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 4 (String.concat ~sep strings)
   | EOr (s, fs) ->
-     let sep = "∨" ^ Side.to_string s in
+     let sep = Printf.sprintf " ∨%s " (Side.to_string s) in
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 3 (String.concat ~sep strings)
   | EImp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g

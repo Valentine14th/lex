@@ -81,6 +81,9 @@ let lub i i' =
      | Some r, Some r' -> rclosed_UI (max r r')
      | _ -> full
 
+let lubs is =
+  List.fold_left is ~init:(singleton 0) ~f:lub
+
 let to_zero = lub (singleton 0)
 let is_nonpositive =
   let isnp_BI (BI (_, r)) = r <= 0 in

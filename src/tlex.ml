@@ -10,6 +10,15 @@ type tpattern =
   | TPHistorically of Interval.t
   | TPSince of Interval.t * Tformula.t
 
+let tpattern_to_string = function
+  | TPPresent -> ""
+  | TPEventually i -> Printf.sprintf "◊%s" (Interval.to_string i)
+  | TPAlways i -> Printf.sprintf "□%s" (Interval.to_string i) 
+  | TPUntil (i, f) -> Printf.sprintf "%s U%s" (Tformula.to_string f) (Interval.to_string i)
+  | TPOnce i -> Printf.sprintf "⧫%s" (Interval.to_string i)
+  | TPHistorically i -> Printf.sprintf "■%s" (Interval.to_string i)
+  | TPSince (i, f) -> Printf.sprintf "%s S%s" (Tformula.to_string f) (Interval.to_string i)
+
 type tref_expr = {
   label: Label.t;
   ref: Lex.reference;
@@ -20,7 +29,13 @@ let to_rtref_expr (tref: tref_expr) = Label.RuleTree.{label = tref.label; ref = 
 let make_tref_expr pos label sks rule = { label; ref = Lex.make_reference sks rule; pos }
 
 type tpformula = {p: tpattern; fs: Tformula.t list}
+
 let tpf p fs = {p; fs}
+
+let tpformula_to_string tpf =
+  Printf.sprintf "{p = %s; fs = [%s]}"
+    (tpattern_to_string tpf.p)
+    (String.concat ~sep:", " (List.map tpf.fs ~f:Tformula.to_string))
 
 type trule =
   | TObligation   of Lexing.position * tpformula * tpformula * rule_type * rule_constr list
@@ -398,7 +413,7 @@ let strict_of_tpformula stricts (tpf: tpformula) =
 let relative_interval_of_tpformula itvls (tpf: tpformula) =
   let j =
     let aux f = Tformula.relative_interval ~itl_itvs:itvls f in
-    List.fold_left (List.map tpf.fs ~f:aux) ~init:Zinterval.full ~f:Zinterval.lub
+    Zinterval.lubs (List.map tpf.fs ~f:aux)
   in
   match tpf.p with
   | TPPresent -> j

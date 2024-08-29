@@ -346,11 +346,11 @@ let rec to_string_rec l f = match f.f with
   | TPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (TTerm.list_to_string trms)
   | TNeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
   | TAnd (s, fs) ->
-     let sep = "∧" ^ Side.to_string s in
+     let sep = Printf.sprintf " ∧%s " (Side.to_string s) in
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 4 (String.concat ~sep strings)
   | TOr (s, fs) ->
-     let sep = "∨" ^ Side.to_string s in
+     let sep = Printf.sprintf " ∨%s " (Side.to_string s) in
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 3 (String.concat ~sep strings)
   | TImp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g

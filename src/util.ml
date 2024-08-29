@@ -77,7 +77,7 @@ let string_of_int_set_list l = Printf.sprintf "[%s]"
 let spaces i = String.init i ~f:(fun _ -> ' ')
   
 let paren h k x = if h>k then "("^^x^^")" else x
-let paren_string h k x = if h>k then "("^x^")" else x
+let paren_string h k x = if h>=k then "("^x^")" else x
 
 let comb x y =
   match x, y with

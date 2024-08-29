@@ -1351,7 +1351,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
         | Possible _ -> verdict_rule_implication, pg_map
         | Impossible e ->
           let err_msg =
-            if transparent then Printf.sprintf "Impossible, rule is not transparantly enforceable: %s" (Errors.to_string e)
+            if transparent then Printf.sprintf "Impossible, rule is not transparently enforceable: %s" (Errors.to_string e)
             else Printf.sprintf "Impossible, rule is not enforceable: %s" (Errors.to_string e)
           in
           Util.enf_error err_msg (Some pos)
