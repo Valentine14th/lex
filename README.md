@@ -106,7 +106,8 @@ lex <path/to/.lex file> [-mode (mfotl|doc)]
 
 # known issues
 - [example/tax-code/tax.lex](example/tax%20code/tax.lex) uncaught exception
-  - computation of rules with a shared variable scope needs debugging
+  - ~~computation of rules with a shared variable scope needs debugging~~
+  - 'transitive' past-guardedness check with regards to internal events was incorrect and needs fixing
 - [example/evaluation/evaluation.lex](example/evaluation/evaluation.lex) Impossible verdict
   - is the expected outcome `Possible ...`?
     - if yes: issue with strictly relative past computation when a rule is marked as transparent
