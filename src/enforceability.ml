@@ -25,16 +25,25 @@ let c2 = ref 0
 let fresh_free_var () = incr c2; "_fv" ^ string_of_int !c2
 
 type pg_map = (string, (string, bool, String.comparator_witness) Map.t, String.comparator_witness) Map.t
-let xand a b = (a && b) || (not a && not b) (* a=b *)
+let string_of_pg_map pg_map =
+  if Map.is_empty pg_map then "pg_map is empty"
+  else
+  let aux m = Map.to_alist m |> List.map ~f:(fun (k, v) -> Printf.sprintf "%s -> %s" k (Bool.to_string v)) in
+  Map.map pg_map ~f:aux
+  |> Map.to_alist
+  |> List.map ~f:(fun (k, v) -> Printf.sprintf "%s -> {%s}" k (String.concat ~sep:", " v))
+  |> String.concat ~sep:"\n"
 
 let rec is_past_guarded ?(pg_map: pg_map=Map.empty (module String)) s x p f =
   let is_past_guarded = is_past_guarded ~pg_map in
+  debug (Tformula.to_string f);
+  debug (Printf.sprintf "pg_map:\n%s\n" (string_of_pg_map pg_map));
   match f.f with
   | TTT | TFF -> false
   | TEqConst (x', y) -> p && TTerm.equal_core (TTerm.TVar x) x'.trm && TTerm.is_const y.trm
   | TPredicate (e, ts, _) ->
     begin match Map.find s.tevents e with
-      | Some (_, _, TItl, _) -> xand p (Map.find_exn (Map.find_exn pg_map e) x)
+      (* | Some (_, _, TItl, _) -> Bool.equal p (Map.find_exn (Map.find_exn pg_map e) x) *) (* TODO: fix this *)
       | _ -> List.exists ~f:(fun t -> TTerm.equal_core (TTerm.TVar x) t.trm) ts
     end
   | TAgg (_, _, _, y, f) -> List.mem y x ~equal:String.equal && is_past_guarded s x p f
@@ -729,6 +738,7 @@ let collect_rule_indices (tprog: Tlex.tprog) =
   List.fold tprog.tstmts ~f:aux ~init:[]
 
 let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t) (use: (int, string list, 'a) Map.t) : int list =
+  debug (Printf.sprintf "topological_sort:\n\tdef: %s\n\tuse: %s" (Util.string_of_int_string_multimap def) (Util.string_of_int_string_multimap use));
   let def_inv = Util.invert_int_string_multimap def in
   let init, rest = List.partition_tf rule_indices ~f:(fun r -> not (Map.mem use r)) in (*all rules that do not 'use' any internal events*)
   let rec aux visited rest =
@@ -755,6 +765,7 @@ let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t
         aux (visited @ fully_defined) rest
     in
   let order = aux init rest |> List.rev in
+  debug (Printf.sprintf "topological_sort result: %s" (Util.string_of_int_list order));
   order
 
 let get_types_fun = function
@@ -1194,11 +1205,13 @@ let vars_are_past_guarded_tcrule_exn ?(pg_map = Map.empty (module String)) s var
 let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
   match rule with
   | TCDefinition (_, _, _, pf, ex, sc, _, _) ->
+    debug "past_guarded_of_tcrule: TCDefinition";
     let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
     is_past_guarded_tpformula ~pg_map s x true pf ||
     is_past_guarded_tformulas ~pg_map s x true ex_neg ||
     is_past_guarded_tformulas ~pg_map s x true sc
   | TCDefinitionDis (disjuncts, _) ->
+    debug "past_guarded_of_tcrule: TCDefinitionDis";
     let aux (disjunct: tdisjunct) =
       let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
       is_past_guarded_tpformula ~pg_map s x true disjunct.pf ||
@@ -1209,8 +1222,12 @@ let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
   | _ -> assert false
 
 let update_pg_map s pg_map e vars rule =
+  debug (Printf.sprintf "Updating pg_map for event \"%s\"" e);
+  if Map.is_empty vars then debug "No (free) variables to check for past-guardedness for this event";
   let data = Map.mapi vars ~f:(past_guarded_of_tcrule s pg_map rule) in
-  Map.add_exn pg_map ~key:e ~data:data
+  let pg_map = Map.add_exn pg_map ~key:e ~data:data in
+  debug (Printf.sprintf "updated pg_map: %s" (string_of_pg_map pg_map));
+  pg_map
 
 
 let tformula_term_equalities (ts1: TTerm.t list) (ts2: TTerm.t list) =
@@ -1228,6 +1245,7 @@ let type_tdisjunct s itl_srp pols pg_map t rule (d: tdisjunct) =
     | TCDefinitionDis (_, g) -> get_predicate_name_exn g, get_predicate_params_exn g
     | _ -> assert false
   in
+  debug (Printf.sprintf "type_tdisjunct (event: %s)" e);
   let param_names = List.map params ~f:get_trm_name in
   begin match t with
     | Cau -> (* all parts of the definition must be Cau *)
@@ -1272,14 +1290,15 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
   in
   match rule with
     | TCImplication (_, _, pos, _, _, _, _, Vanilla, rcs) ->
+      debug "typing TCImplication (Vanilla)";
       vanilla_rule_constraints_warning pos rcs;
       verdict, pg_map (* do not aadd any typing constraints in regards to this rule *)
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Enforceable as rt), rcs) 
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Transparent as rt), rcs) ->
       let transparent = rule_type_equals rt Transparent in
       let tr =
-        if transparent then (debug "transparently enfoceable"; Some (itl_srp))
-        else (debug "enforceable"; None)
+        if transparent then (debug "typing TCImplication (transparently enfoceable)"; Some (itl_srp))
+        else (debug "typing TCImplication (enforceable)"; None)
       in
       let srp = strictly_relative_past ~itl_itvs_and_strict:itl_srp in
       debug (Printf.sprintf "Exceptions: %s" (Util.string_of_string_list (List.map exceptions ~f:Tformula.to_string)));
@@ -1358,6 +1377,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
       end
     | TCDefinition (idx, _, _, pf1, ex, sc, _, f2) ->
       let e = get_predicate_name_exn f2 in
+      debug (Printf.sprintf "typing TCDefinition: %s" e);
       let params = get_predicate_params_exn f2 in
       (* f2 is an except/scope predicat and parameters should be exclusively variable who's name can be extracted *)
       let get_trm_name (t: TTerm.t) = match t.trm with
@@ -1398,6 +1418,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
       Constraints.disj' verdicts, pg_map
     | TCDefinitionDis (disjuncts, g) ->
       let e = get_predicate_name_exn g in
+      debug (Printf.sprintf "typing TCDefinitionDis: %s" e);
       let aux d =
         let v_pols = solve d in
         (* TODO: test enforcability checking and remove assertion after successful testing *)
@@ -1483,6 +1504,7 @@ let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) : (string
   let use_internal = use_sets tcrules tprog.tevents in
   check_used_events_are_defined tprog def_internal use_internal;
   let sorted_rule_indices = topological_sort (Map.keys tcrules) def_internal use_internal in
+  debug (Printf.sprintf "Sorted rule indices: %s" (Util.string_of_int_list sorted_rule_indices));
   let tcrules_sorted = List.map sorted_rule_indices ~f:(fun idx -> Map.find_exn tcrules idx) in
   let itl_itvs = List.fold (List.rev tcrules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
   let itl_strict = List.fold (List.rev tcrules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
@@ -1612,6 +1634,9 @@ let create_tcrules (tprog: Tlex.tprog) : (int, tcrule, Int.comparator_witness) M
   let def_dis_rules, _ = create_def_dis_rules tprog in
   let def_rules = create_def_rules tprog in
   let imp_rules = create_imp_rules tprog in
+  debug (Printf.sprintf "DefDis rules: %d" (List.length def_dis_rules));
+  debug (Printf.sprintf "Def rules: %d" (List.length def_rules));
+  debug (Printf.sprintf "Imp rules: %d" (List.length imp_rules));
   List.fold (def_dis_rules @ def_rules @ imp_rules)
             ~init:((Map.empty (module Int), 0))
             ~f:(fun (m,i) r -> (Map.add_exn m ~key:i ~data:r, i+1))
@@ -2110,6 +2135,7 @@ let erules_from_tcrules (tcrules: (int, tcrule, Int.comparator_witness) Map.t) :
 let do_type _ (tprog: Tlex.tprog) b : Elex.eprog =
   let tcrules  = create_tcrules tprog in
   let pols, rule_order, itl_srp, pg_map = type_tcrules tprog tcrules in
+  debug (Printf.sprintf "rule_order: %s\n" (Util.string_of_int_list rule_order));
   debug (Util.string_of_pols ~f:EnfType.to_string (Map.map pols ~f:fst));
   let erules = erules_from_tcrules tcrules in
   let ecrules = convert_tcrules pg_map itl_srp tprog pols b tcrules in
