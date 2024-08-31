@@ -24,14 +24,15 @@ let fresh_param () = incr c1; "_p" ^ string_of_int !c1
 let c2 = ref 0
 let fresh_free_var () = incr c2; "_fv" ^ string_of_int !c2
 
-type pg_map = (string, (string, bool, String.comparator_witness) Map.t, String.comparator_witness) Map.t
+(** map, containing information whether or not a paramter of an internal event is
+    past-guarded or not *)
+type pg_map = (string, bool list, String.comparator_witness) Map.t
 let string_of_pg_map pg_map =
   if Map.is_empty pg_map then "pg_map is empty"
   else
-  let aux m = Map.to_alist m |> List.map ~f:(fun (k, v) -> Printf.sprintf "%s -> %s" k (Bool.to_string v)) in
-  Map.map pg_map ~f:aux
+  Map.map pg_map ~f:(fun l -> List.map l ~f:Bool.to_string |> Util.string_of_string_list)
   |> Map.to_alist
-  |> List.map ~f:(fun (k, v) -> Printf.sprintf "%s -> {%s}" k (String.concat ~sep:", " v))
+  |> List.map ~f:(fun (k, v) -> Printf.sprintf "%s -> [%s]" k v)
   |> String.concat ~sep:"\n"
 
 let rec is_past_guarded ?(pg_map: pg_map=Map.empty (module String)) s x p f =
@@ -43,7 +44,9 @@ let rec is_past_guarded ?(pg_map: pg_map=Map.empty (module String)) s x p f =
   | TEqConst (x', y) -> p && TTerm.equal_core (TTerm.TVar x) x'.trm && TTerm.is_const y.trm
   | TPredicate (e, ts, _) ->
     begin match Map.find s.tevents e with
-      (* | Some (_, _, TItl, _) -> Bool.equal p (Map.find_exn (Map.find_exn pg_map e) x) *) (* TODO: fix this *)
+      | Some (_, _, TItl, _) ->
+        let pg_event_params = Map.find_exn pg_map e in
+        List.exists2_exn ts pg_event_params ~f:(fun t pg -> pg && List.mem (TTerm.fv_list [t] |> List.map ~f:fst) x ~equal:String.equal)
       | _ -> List.exists ~f:(fun t -> TTerm.equal_core (TTerm.TVar x) t.trm) ts
     end
   | TAgg (_, _, _, y, f) -> List.mem y x ~equal:String.equal && is_past_guarded s x p f
@@ -1221,14 +1224,13 @@ let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
     Map.for_all disjuncts ~f:aux
   | _ -> assert false
 
-let update_pg_map s pg_map e vars rule =
+(* let update_pg_map s pg_map e vars rule =
   debug (Printf.sprintf "Updating pg_map for event \"%s\"" e);
   if Map.is_empty vars then debug "No (free) variables to check for past-guardedness for this event";
   let data = Map.mapi vars ~f:(past_guarded_of_tcrule s pg_map rule) in
   let pg_map = Map.add_exn pg_map ~key:e ~data:data in
   debug (Printf.sprintf "updated pg_map: %s" (string_of_pg_map pg_map));
-  pg_map
-
+  pg_map *)
 
 let tformula_term_equalities (ts1: TTerm.t list) (ts2: TTerm.t list) =
   List.map2_exn ts1 ts2 ~f:(fun t1 t2 -> Tformula.teqconst t2.positions t1 t2)
@@ -1261,9 +1263,10 @@ let type_tdisjunct s itl_srp pols pg_map t rule (d: tdisjunct) =
       let verdict_references = conj v_ex v_sc in
       conj v_pf verdict_references
     | Sup -> (* only one part of the definition must be Sup *)
-      let fv_params, fv_unbound = Map.partitioni_tf (fv_of_tcrule rule) ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
-      let pg_map = update_pg_map s pg_map e fv_params rule in
-      vars_are_past_guarded_tcrule_exn ~pg_map s fv_unbound rule; (* TODO: are they actually quantified with an existential quantifier? *)
+      (* let fv_params, fv_unbound = Map.partitioni_tf (fv_of_tcrule rule) ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in *)
+      let _, fv_unbound = Map.partitioni_tf (fv_of_tcrule rule) ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
+      (* let pg_map = update_pg_map s pg_map e fv_params rule in *)
+      vars_are_past_guarded_tcrule_exn ~pg_map s fv_unbound rule;
       let verdict_references = disj v_ex v_sc in
       disj v_pf verdict_references
     | Obs -> Possible CTT
@@ -1280,7 +1283,7 @@ let srp_if_transparent_else_true transparent is_srp =
   if transparent then is_srp
   else true
 
-let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rule: verdict * pg_map =
+let type_tcrule itl_srp (s:Tlex.tprog) (pg_map: pg_map) (verdict: verdict) rule: verdict =
   let pols = Tlex.pol_map s |> Map.map ~f:Lex.pol_to_enftype in
   let dnf_of_v = match verdict with
     | Possible c -> dnf c
@@ -1292,7 +1295,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
     | TCImplication (_, _, pos, _, _, _, _, Vanilla, rcs) ->
       debug "typing TCImplication (Vanilla)";
       vanilla_rule_constraints_warning pos rcs;
-      verdict, pg_map (* do not aadd any typing constraints in regards to this rule *)
+      verdict (* do not aadd any typing constraints in regards to this rule *)
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Enforceable as rt), rcs) 
     | TCImplication (_, _, pos, pf1, exceptions, scopes, pf2, (Transparent as rt), rcs) ->
       let transparent = rule_type_equals rt Transparent in
@@ -1367,7 +1370,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
       in
       let verdict_rule_implication = disj verdict_conditions verdict_effects |> conj verdict in
       begin match verdict_rule_implication with
-        | Possible _ -> verdict_rule_implication, pg_map
+        | Possible _ -> verdict_rule_implication
         | Impossible e ->
           let err_msg =
             if transparent then Printf.sprintf "Impossible, rule is not transparently enforceable: %s" (Errors.to_string e)
@@ -1386,8 +1389,9 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
       in
       let param_names = List.map params ~f:get_trm_name in
       let fv = fv_of_tcrule rule in
-      let fv_params, fv_unbound = Map.partitioni_tf fv ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
-      let pg_map = update_pg_map s pg_map e fv_params rule in
+      (* let fv_params, fv_unbound = Map.partitioni_tf fv ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in *)
+      let _, fv_unbound = Map.partitioni_tf fv ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
+      (* let pg_map = update_pg_map s pg_map e fv_params rule in *)
       let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
       let aux d =
         let v_pols = solve d in
@@ -1415,7 +1419,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
         | _ -> assert false
       in
       let verdicts = List.map dnf_of_v ~f:aux in
-      Constraints.disj' verdicts, pg_map
+      Constraints.disj' verdicts
     | TCDefinitionDis (disjuncts, g) ->
       let e = get_predicate_name_exn g in
       debug (Printf.sprintf "typing TCDefinitionDis: %s" e);
@@ -1435,7 +1439,7 @@ let type_tcrule itl_srp (s:Tlex.tprog) ((verdict, pg_map): verdict * pg_map) rul
         |> Map.data |> Constraints.disj' |> conj verdict
       in
       let verdicts = List.map dnf_of_v ~f:aux in
-      Constraints.disj' verdicts, pg_map
+      Constraints.disj' verdicts
 
 let check_used_events_are_defined (tprog: Tlex.tprog) def use =
   let all_defined_events = List.concat (Map.data def)
@@ -1499,6 +1503,43 @@ let strict_itl itl_strict = function
   | TCDefinitionDis _ -> assert false
   | _ -> itl_strict
 
+let get_trm_name_exn (t: TTerm.t) = match t.trm with
+  | TTerm.TVar x -> x
+  | _ -> assert false
+
+let pg_map_of_tcrule tprog pg_map: tcrule -> pg_map = function
+  | TCImplication _ -> pg_map
+  | TCDefinition (_, _, _, tpf, ex, sc, _, g) ->
+    let e = get_predicate_name_exn g in
+    let args = get_predicate_params_exn g in
+    let arg_names = List.map args ~f:get_trm_name_exn in
+    let pg_in_tpf = List.map arg_names ~f:(fun x -> is_past_guarded_tpformula ~pg_map tprog x true tpf) in
+    let pg_in_ex = List.map arg_names ~f:(fun x -> is_past_guarded_tformulas ~pg_map tprog x false ex) in
+    let pg_in_sc = List.map arg_names ~f:(fun x -> is_past_guarded_tformulas ~pg_map tprog x true sc) in
+    let pg_in_def = List.map3_exn pg_in_tpf pg_in_ex pg_in_sc ~f:(fun a b c -> a || b || c) in
+    Map.add_exn pg_map ~key:e ~data:pg_in_def
+  | TCDefinitionDis (tdisjuncts, g) ->
+    let e = get_predicate_name_exn g in
+    let pg_disjunct_params = Map.map tdisjuncts ~f:(fun d ->
+      let fv_args = List.map d.params_original ~f:(fun t -> TTerm.fv_list [t] |> List.map ~f:fst) in
+      let aux v = is_past_guarded_tpformula ~pg_map tprog v true d.pf ||
+                  is_past_guarded_tformulas ~pg_map tprog v false d.exceptions ||
+                  is_past_guarded_tformulas ~pg_map tprog v true d.scopes
+      in
+      List.map fv_args ~f:(fun vars -> List.for_all vars ~f:aux)
+    ) in
+    let pg_disjuncts =
+      pg_disjunct_params
+      |> Map.data
+      |> List.fold
+        ~init:(List.map (get_predicate_params_exn g) ~f:(fun _ -> true))
+        ~f:(fun acc pg_disjunct -> List.map2_exn acc pg_disjunct ~f:(fun a b -> a && b))
+    in
+    Map.add_exn pg_map ~key:e ~data:pg_disjuncts
+
+let pg_map_of_tcrules tprog tcrules: pg_map =
+  List.fold tcrules ~init:(Map.empty (module String)) ~f:(pg_map_of_tcrule tprog)
+
 let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) : (string, EnfType.t * bool, 'string_comp) Map.t * int list * 'itl_srp * pg_map =
   let def_internal = def_sets tcrules tprog.tevents in
   let use_internal = use_sets tcrules tprog.tevents in
@@ -1508,7 +1549,8 @@ let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) : (string
   let tcrules_sorted = List.map sorted_rule_indices ~f:(fun idx -> Map.find_exn tcrules idx) in
   let itl_itvs = List.fold (List.rev tcrules_sorted) ~f:relative_interval_itl ~init:(Map.empty (module String)) in
   let itl_strict = List.fold (List.rev tcrules_sorted) ~f:strict_itl ~init:(Map.empty (module String)) in
-  let verdict, pg_map = List.fold tcrules_sorted ~f:(type_tcrule (itl_itvs, itl_strict) tprog) ~init:(Possible CTT, Map.empty (module String)) in
+  let pg_map = pg_map_of_tcrules tprog (List.rev tcrules_sorted) in
+  let verdict = List.fold tcrules_sorted ~f:(type_tcrule (itl_itvs, itl_strict) tprog pg_map) ~init:(Possible CTT) in
   let constraints = match verdict with
     | Possible c -> c
     | Impossible e ->
@@ -1687,7 +1729,6 @@ let convert_enforceable_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: t
       | TPHistorically _ ->
         let efs, _ = convert_enforceable_tformulas s Cau pols b tpf.fs in
         let p = epattern_of_tpattern s.tevents tpf.p  in
-        (* let enf_constr = ECauPFormula ECFormulas in *)
         let enf_constr = EpfCau ECpfFormulas in
         { fs = efs; p = p }, Some enf_constr
       | TPUntil (i, _) when Interval.has_zero i ->
@@ -1719,7 +1760,6 @@ let convert_enforceable_tpformula (s: tprog) (enftype: EnfType.t) pols b (tpf: t
       | TPUntil _ ->
         let efs, i_opt = convert_enforceable_tformulas s Sup pols b tpf.fs in
         let p = epattern_of_tpattern s.tevents tpf.p  in
-        (* let enf_constr = ESupPFormula (ESFormula (Option.value_exn i_opt)) in *)
         let enf_constr = EpfSup (ESpfFormula (Option.value_exn i_opt)) in
         { fs = efs; p = p }, Some enf_constr
       | TPSince (i, g) when Interval.has_zero i ->
@@ -1764,7 +1804,6 @@ let convert_enforceable_tdisjunct itl_srp s pols b t (td: tdisjunct): edisjunct 
     let v_sc = type_scopes itl_srp s pols td.scopes in
     let v_pf = type_tpformula itl_srp s td.rule_pos pols t td.pf in
     let _ = match conj (conj v_ex v_sc) v_pf with
-    (* let pols' = match conj (conj v_ex v_sc) v_pf with *)
       | Possible constraints -> solve constraints |> List.hd_exn (* TODO: how to handle multiple options here? *)
       | _ -> assert false
     in (* TODO: is it actually necessary to compute a 'new' verdict here ?
@@ -1795,7 +1834,6 @@ let convert_enforceable_tdisjunct itl_srp s pols b t (td: tdisjunct): edisjunct 
   | Sup ->
     begin match type_exceptions itl_srp s pols td.exceptions with
       | Possible _ ->
-        (* let pols' = solve constraints |> List.hd_exn in TODO: iterate through found policies *)
         let epf = epformula_of_tpformula s.tevents td.pf in
         let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true s Cau pols b td.exceptions in
         let sc' = List.map td.scopes ~f:(Eformula.of_tformula pols) in
@@ -1813,7 +1851,6 @@ let convert_enforceable_tdisjunct itl_srp s pols b t (td: tdisjunct): edisjunct 
         }, Some enf_constr
       | _ -> begin match type_scopes itl_srp s pols td.scopes with
         | Possible _ ->
-          (* let pols' = solve constraints |> List.hd_exn in TODO: handle multiple/no options *)
           let epf = epformula_of_tpformula s.tevents td.pf in
           let ex' = List.map td.exceptions ~f:(Eformula.of_tformula pols) in
           let sc', i_opt = convert_enforceable_tformulas s Cau pols b td.scopes in
@@ -1832,7 +1869,6 @@ let convert_enforceable_tdisjunct itl_srp s pols b t (td: tdisjunct): edisjunct 
         | _ ->
           begin match type_tpformula itl_srp s (List.hd_exn td.def_positions) pols Sup td.pf with
           | Possible _ ->
-            (* let pols' = solve constraints |> List.hd_exn in TODO *)
             let epf, constr_opt = convert_enforceable_tpformula s Cau pols b td.pf in
             let ex' = List.map td.exceptions ~f:(Eformula.of_tformula pols) in
             let sc' = List.map td.scopes ~f:(Eformula.of_tformula pols) in
