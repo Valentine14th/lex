@@ -15,7 +15,7 @@ open Tformula
 open Tlex
 open Elex
 
-let debug_enforcability = ref true
+let debug_enforcability = ref false
 let debug msg = if !debug_enforcability then Util.debug_print ~f_name:(Some "enforceability.ml") msg 
 
 let c1 = ref 0
@@ -654,7 +654,7 @@ let rec convert s (pols: ('a, 'b, 'c) Base.Map.t) b enftype (form: Tformula.t) :
     | _ -> assert false
   in
   (*Stdio.print_string (EnfType.to_string enftype ^ " " ^ Formula.to_string form ^ " -> ");*)
-  match f with Some f -> Some Eformula.{ f ; enftype; id = 0; positions = form.positions } | None -> None
+  match f with Some f -> Some Eformula.{ f; variable_instantiations=[]; enftype; id = 0; positions = form.positions } | None -> None
 
 let type_tsrule erule_map =
   function
@@ -2089,7 +2089,7 @@ let convert_tcrule pg_map itl_srp (s: tprog) (pols: (string, (EnfType.t * bool),
             let edisjuncts = Map.map edisjuncts_and_constrs ~f:fst in
             let constrs =
               Map.map edisjuncts_and_constrs
-                ~f:(fun (_, c_opt) -> match Option.value_exn c_opt with ECd c -> c | _ -> assert false)
+                ~f:(fun (_, c_opt) -> match Option.value_exn c_opt with ESd c -> c | _ -> assert false)
               |> Map.data
             in
             ECDefinitionDis (edisjuncts, eg, Some (ESdd constrs))
@@ -2104,7 +2104,7 @@ let convert_tcrule pg_map itl_srp (s: tprog) (pols: (string, (EnfType.t * bool),
               if key = first_possible then
                 let ed, c_opt = convert_enforceable_tdisjunct itl_srp s pols b Sup td in
                 let c = match c_opt with
-                  | Some (ESd c) -> c
+                  | Some (ECd c) -> c
                   | _ -> assert false
                 in
                 ed, Some (ECdd (first_possible, c))

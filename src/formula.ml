@@ -336,33 +336,38 @@ type core_t =
   | Until of Side.t * Interval.t * t * t
   | Type of t * ty
 
-and t = {f: core_t; positions: Lexing.position list}
+and t = {
+  f: core_t;
+  variable_instantiations: (string * Term.t) list;
+  positions: Lexing.position list
+}
 
-let make_formula f pos = {f=f; positions=pos}
+let make_formula f instantiations pos = {f=f; variable_instantiations=instantiations; positions=pos}
 
-let tt pos = make_formula TT pos
-let ff pos = make_formula FF pos
-let term pos trm = make_formula (Term trm) pos
-let agg pos s op x y f = make_formula (Agg (s, op, x, y, f)) pos
-let predicate pos p_name trms = make_formula (Predicate (p_name, trms)) pos
-let neg pos f = make_formula (Neg f) pos
-let conj pos s f g = make_formula (And (s, [f; g])) pos
-let disj pos s f g = make_formula (Or (s, [f; g])) pos
-let conj' pos s fs = make_formula (And (s, fs)) pos
-let disj' pos s fs = make_formula (Or (s, fs)) pos
-let imp pos s f g = make_formula (Imp (s, f, g)) pos
-let iff pos s t f g = make_formula (Iff (s, t, f, g)) pos
-let exists pos x f = make_formula (Exists (x, f)) pos
-let forall pos x f = make_formula (Forall (x, f)) pos
-let prev pos i f = make_formula (Prev (i, f)) pos
-let next pos i f = make_formula (Next (i, f)) pos
-let once pos i f = make_formula (Once (i, f)) pos
-let eventually pos i f = make_formula (Eventually (i, f)) pos
-let historically pos i f = make_formula (Historically (i, f)) pos
-let always pos i f = make_formula (Always (i, f)) pos
-let since pos s i f g = make_formula (Since (s, i, f, g)) pos
-let until pos s i f g = make_formula (Until (s, i, f, g)) pos
-let type_ pos s t = make_formula (Type (s, t)) pos
+(* TODO: pass add parameter for variable instatntiations in order to correctly convert to Formula.t (for now instantiations are not acutally used in tformulas)*)
+let tt pos = make_formula TT [] pos
+let ff pos = make_formula FF [] pos
+let term pos trm = make_formula (Term trm) [] pos
+let agg pos s op x y f = make_formula (Agg (s, op, x, y, f)) [] pos
+let predicate pos p_name trms = make_formula (Predicate (p_name, trms)) [] pos
+let neg pos f = make_formula (Neg f) [] pos
+let conj pos s f g = make_formula (And (s, [f; g])) [] pos
+let disj pos s f g = make_formula (Or (s, [f; g])) [] pos
+let conj' pos s fs = make_formula (And (s, fs)) [] pos
+let disj' pos s fs = make_formula (Or (s, fs)) [] pos
+let imp pos s f g = make_formula (Imp (s, f, g)) [] pos
+let iff pos s t f g = make_formula (Iff (s, t, f, g)) [] pos
+let exists pos x f = make_formula (Exists (x, f)) [] pos
+let forall pos x f = make_formula (Forall (x, f)) [] pos
+let prev pos i f = make_formula (Prev (i, f)) [] pos
+let next pos i f = make_formula (Next (i, f)) [] pos
+let once pos i f = make_formula (Once (i, f)) [] pos
+let eventually pos i f = make_formula (Eventually (i, f)) [] pos
+let historically pos i f = make_formula (Historically (i, f)) [] pos
+let always pos i f = make_formula (Always (i, f)) [] pos
+let since pos s i f g = make_formula (Since (s, i, f, g)) [] pos
+let until pos s i f g = make_formula (Until (s, i, f, g)) [] pos
+let type_ pos s t = make_formula (Type (s, t)) [] pos
 
 (* Rewriting of non-native operators *)
 let trigger pos s i f g = neg pos (since f.positions s i (neg f.positions f) (neg g.positions g))
@@ -469,7 +474,14 @@ let rec flatten_assoc f = match f.f with
     disj' f.positions s (List.concat (List.map gs ~f:(fun g -> match g.f with Or (_, gs) -> gs | _ -> [g])))
   | Or (s, gs) -> disj' f.positions s (List.map gs ~f:flatten_assoc)
 
-let rec to_string_rec l (f: t) = match f.f with
+
+let rec string_of_instantiations = function
+  | [] -> ""
+  | [(x, t)] -> Printf.sprintf "%s <- %s" x (Term.value_to_string t)
+  | (x, t) :: insts ->  Printf.sprintf "%s <- %s, %s" x (Term.value_to_string t) (string_of_instantiations insts)
+
+
+let rec to_string_core_rec l (f: t) = match f.f with
   | TT -> Printf.sprintf "⊤"
   | FF -> Printf.sprintf "⊥"
   | Term trm -> Printf.sprintf "(%s)" (Term.value_to_string trm) 
@@ -500,4 +512,11 @@ let rec to_string_rec l (f: t) = match f.f with
                             (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | Type (f, t) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f
                             (fun _ -> ty_to_string) t
+and to_string_rec l f =
+  let f_str = to_string_core_rec l f in
+  match f.variable_instantiations with
+  | [] -> f_str
+  | _ -> Printf.sprintf "(%s; %s)" f_str (string_of_instantiations f.variable_instantiations)
+
+
 let to_string = to_string_rec 0

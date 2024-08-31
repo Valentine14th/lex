@@ -164,33 +164,37 @@ type core_t =
   | TUntil of Side.t * Interval.t * t * t
   | TType of t * ty
 
-and t = {f: core_t; positions: Lexing.position list}
+and t = {
+  f: core_t;
+  variable_instantiations: (string * TTerm.t) list;
+  positions: Lexing.position list
+}
 
-let make_tformula f pos = {f=f; positions=pos}
+let make_tformula f variable_instantiations pos = {f; variable_instantiations; positions=pos}
 
-let ttt pos = make_tformula TTT pos
-let tff pos = make_tformula TFF pos
-let teqconst pos x d = make_tformula (TEqConst (x, d)) pos
-let tpredicate pos p_name trms event_type = make_tformula (TPredicate (p_name, trms, event_type)) pos
-let tagg pos u op x y f = make_tformula (TAgg (u, op, x, y, f)) pos
-let tneg pos f = make_tformula (TNeg f) pos
-let tconj pos s f g = make_tformula (TAnd (s, [f; g])) pos
-let tdisj pos s f g = make_tformula (TOr (s, [f; g])) pos
-let tconj' pos s fs = make_tformula (TAnd (s, fs)) pos
-let tdisj' pos s fs = make_tformula (TOr (s, fs)) pos
-let timp pos s f g = make_tformula (TImp (s, f, g)) pos
-let tiff pos s t f g = make_tformula (TIff (s, t, f, g)) pos
-let texists pos x f = make_tformula (TExists (x, f)) pos
-let tforall pos x f = make_tformula (TForall (x, f)) pos
-let tprev pos i f = make_tformula (TPrev (i, f)) pos
-let tnext pos i f = make_tformula (TNext (i, f)) pos
-let tonce pos i f = make_tformula (TOnce (i, f)) pos
-let teventually pos i f = make_tformula (TEventually (i, f)) pos
-let thistorically pos i f = make_tformula (THistorically (i, f)) pos
-let talways pos i f = make_tformula (TAlways (i, f)) pos
-let tsince pos s i f g = make_tformula (TSince (s, i, f, g)) pos
-let tuntil pos s i f g = make_tformula (TUntil (s, i, f, g)) pos
-let ttype pos s t = make_tformula (TType (s, t)) pos
+let ttt pos = make_tformula TTT [] pos
+let tff pos = make_tformula TFF [] pos
+let teqconst pos x d = make_tformula (TEqConst (x, d)) [] pos
+let tpredicate pos p_name trms event_type = make_tformula (TPredicate (p_name, trms, event_type)) [] pos
+let tagg pos u op x y f = make_tformula (TAgg (u, op, x, y, f)) [] pos
+let tneg pos f = make_tformula (TNeg f) [] pos
+let tconj pos s f g = make_tformula (TAnd (s, [f; g])) [] pos
+let tdisj pos s f g = make_tformula (TOr (s, [f; g])) [] pos
+let tconj' pos s fs = make_tformula (TAnd (s, fs)) [] pos
+let tdisj' pos s fs = make_tformula (TOr (s, fs)) [] pos
+let timp pos s f g = make_tformula (TImp (s, f, g)) [] pos
+let tiff pos s t f g = make_tformula (TIff (s, t, f, g)) [] pos
+let texists pos x f = make_tformula (TExists (x, f)) [] pos
+let tforall pos x f = make_tformula (TForall (x, f)) [] pos
+let tprev pos i f = make_tformula (TPrev (i, f)) [] pos
+let tnext pos i f = make_tformula (TNext (i, f)) [] pos
+let tonce pos i f = make_tformula (TOnce (i, f)) [] pos
+let teventually pos i f = make_tformula (TEventually (i, f)) [] pos
+let thistorically pos i f = make_tformula (THistorically (i, f)) [] pos
+let talways pos i f = make_tformula (TAlways (i, f)) [] pos
+let tsince pos s i f g = make_tformula (TSince (s, i, f, g)) [] pos
+let tuntil pos s i f g = make_tformula (TUntil (s, i, f, g)) [] pos
+let ttype pos s t = make_tformula (TType (s, t)) [] pos
 
 let tbigcauconj pos = function
   | [] -> ttt pos

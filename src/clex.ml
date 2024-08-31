@@ -52,10 +52,13 @@ let string_of_signatures signatures =
 let string_of_let_binding (lhs, rhs) =
   let lhs_str = Formula.to_string (Eformula.to_formula lhs) in
   let rhs_str = Formula.to_string (Eformula.to_formula rhs) in
+  (* let lhs_str = (Eformula.to_string lhs) in
+  let rhs_str = (Eformula.to_string rhs) in *)
   Printf.sprintf "let %s = %s" lhs_str rhs_str
 
 let to_string cprog =
   Printf.sprintf "Signature:\n%s\n\nFormula:\n%s\n\n%s\n"
     (string_of_signatures cprog.signature)
     ((List.map cprog.let_bindings ~f:string_of_let_binding) |> String.concat ~sep:"\n")
+    (* (Eformula.to_string cprog.phi) *)
     (Formula.to_string (Eformula.to_formula cprog.phi))

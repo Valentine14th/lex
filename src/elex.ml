@@ -106,8 +106,8 @@ type enf_ecdefinition =
   | ECd of enf_cau_lhs
 
 type enf_ecdefinition_dis =
-  | ECdd of int * enf_sup_lhs
-  | ESdd of enf_cau_lhs list
+  | ESdd of enf_sup_lhs list
+  | ECdd of int * enf_cau_lhs
 
 type ecrule =
   | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option

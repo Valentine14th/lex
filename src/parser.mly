@@ -288,7 +288,7 @@ e:
 | ee                                   { flatten_assoc $1 }
 
 ee:
-| LPA e RPA                            { make_formula $2.f [$1] }
+| LPA e RPA                            { make_formula $2.f [] [$1] }
 | TRUE                                 { tt [$1] }
 | FALSE                                { ff [$1] }
 | term2                                { term ($1: Term.t).positions $1 }
