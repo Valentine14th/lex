@@ -171,7 +171,7 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Formula.EnfType.
   | _ -> assert false
 
 (* let compile_let_binding (pf: epformula) (ex_and_sc: Eformula.t list) pred : Eformula.t * Eformula.t = *)
-let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
+let compile_let_binding ?(quantifier=true) (f: Eformula.t) pred : Eformula.t * Eformula.t =
   match pred with
   | { f = EPredicate (p_name, trms, event_type); _} ->
     let process_term fs (trm: Tformula.TTerm.t) = match trm.trm with
@@ -201,7 +201,7 @@ let compile_let_binding (f: Eformula.t) pred : Eformula.t * Eformula.t =
     let lhs = { pred with f = EPredicate (p_name, trms, event_type) } in
     let rhs = tbigcauconj fs in
     let vars = Map.keys (Eformula.fv rhs) in
-    let rhs = tbigcauexists vars rhs in
+    let rhs = if quantifier then tbigcauexists vars rhs else rhs in
     (lhs, rhs)
   | _ -> assert false
 
@@ -232,15 +232,15 @@ let compile_let_rule = function
     begin match enf_constr with
     | Some (ESd enf_sup_lhs) ->
       let f = compile_lhs ~sup_constr:(Some enf_sup_lhs) Sup pf ex sc in
-      compile_let_binding f g
+      compile_let_binding ~quantifier:false f g
     | Some (ECd enf_cau_lhs) ->
       let f = compile_lhs ~cau_constr:(Some enf_cau_lhs) Cau pf ex sc in
-      compile_let_binding f g
+      compile_let_binding ~quantifier:false f g
     | None ->
       let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Non [] 0 x.positions) in
       let pf_comp = compile_epformula ~f:(tbignonconj) pf in
       let f = tbignonconj (pf_comp :: ex_neg @ sc) in
-      compile_let_binding f g
+      compile_let_binding ~quantifier:false f g
     end
   | ECDefinitionDis (edisjuncts, g, enf_constr) ->
     begin match enf_constr with
