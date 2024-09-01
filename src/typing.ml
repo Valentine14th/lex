@@ -335,8 +335,8 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
 
 let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f: Formula.t): ('t_vars * Tformula.t) =
   match f.f with
-  | Formula.TT -> t_vars, Tformula.ttt f.positions
-  | FF -> t_vars, Tformula.tff f.positions
+  | Formula.TT -> t_vars, Tformula.ttt [] f.positions
+  | FF -> t_vars, Tformula.tff [] f.positions
   | Term {trm=(Binop (x, BEq, y)); _} -> begin
     match Lex.unpack_special_eq s.tevents x y with
     | Some (event_name, trms, event_type) ->
@@ -345,7 +345,7 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
       let t_vars, x' = type_term s.tevents s.tfunctions s.taliases t_vars x None in
       let t_vars, y' = type_term s.tevents s.tfunctions s.taliases t_vars y (Some x'.tt) in
       if Formula.TypeTerm.equal x'.tt y'.tt then
-        (t_vars, Tformula.teqconst f.positions x' y')
+        (t_vars, Tformula.teqconst [] f.positions x' y')
       else
         let err_msg = Printf.sprintf "Ill-typed argument types in equality: '%s' vs '%s'"
                         (Formula.TypeTerm.to_string x'.tt) (Formula.TypeTerm.to_string y'.tt) in
@@ -359,13 +359,13 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
           let true' = Tformula.TTerm.{ trm = Tformula.TTerm.TConst (Dom.Bool true);
                                        tt  = Formula.TypeTerm.TypeConst Dom.TBool;
                                        positions = trm'.positions } in
-          (t_vars, Tformula.teqconst f.positions trm' true')
+          (t_vars, Tformula.teqconst [] f.positions trm' true')
        | _ -> let err_msg = Printf.sprintf "Ill-typed term type: '%s'" (Formula.TypeTerm.to_string trm'.tt) in
               Util.type_error err_msg f.positions
      end
   | Predicate (event_name, trms) ->
      let t_vars, trms = type_terms event_name trms t_vars f.positions s.tevents s.tfunctions s.taliases in
-     (t_vars, Tformula.tpredicate f.positions event_name trms event_type)
+     (t_vars, Tformula.tpredicate [] f.positions event_name trms event_type)
   | Agg (u, op, x, y, f) ->
      let t_vars, f = type_formula s t_vars f in
      let t_vars, x = type_term s.tevents s.tfunctions s.taliases t_vars x None in
@@ -386,59 +386,59 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
               (Formula.TypeTerm.to_string x.tt) in
           Util.type_error err_msg f.positions
      in
-     t_vars, Tformula.tagg f.positions u op x y f
+     t_vars, Tformula.tagg [] f.positions u op x y f
   | Neg f ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.tneg f.positions f
+     t_vars, Tformula.tneg [] f.positions f
   | And (side, fs) ->
      let t_vars, fs = List.fold_map fs ~init:t_vars ~f:(type_formula s) in
-     t_vars, Tformula.tconj' f.positions side fs
+     t_vars, Tformula.tconj' [] f.positions side fs
   | Or (side, fs) ->
      let t_vars, fs = List.fold_map fs ~init:t_vars ~f:(type_formula s) in
-     t_vars, Tformula.tdisj' f.positions side fs
+     t_vars, Tformula.tdisj' [] f.positions side fs
   | Imp (side, f, g) ->
      let t_vars, f = type_formula s t_vars f in
      let t_vars, g = type_formula s t_vars g in
-     t_vars, Tformula.timp f.positions side f g
+     t_vars, Tformula.timp [] f.positions side f g
   | Iff (side, side', f, g) ->
      let t_vars, f = type_formula s t_vars f in
      let t_vars, g = type_formula s t_vars g in
-     t_vars, Tformula.tiff f.positions side side' f g
+     t_vars, Tformula.tiff [] f.positions side side' f g
   | Exists (x, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.texists f.positions x f
+     t_vars, Tformula.texists [] f.positions x f
   | Forall (x, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.tforall f.positions x f
+     t_vars, Tformula.tforall [] f.positions x f
   | Prev (i, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.tprev f.positions i f
+     t_vars, Tformula.tprev [] f.positions i f
   | Next (i, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.tnext f.positions i f
+     t_vars, Tformula.tnext [] f.positions i f
   | Once (i, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.tonce f.positions i f
+     t_vars, Tformula.tonce [] f.positions i f
   | Eventually (i, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.teventually f.positions i f
+     t_vars, Tformula.teventually [] f.positions i f
   | Historically (i, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.thistorically f.positions i f
+     t_vars, Tformula.thistorically [] f.positions i f
   | Always (i, f) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.talways f.positions i f
+     t_vars, Tformula.talways [] f.positions i f
   | Since (side, i, f, g) ->
      let t_vars, f = type_formula s t_vars f in
      let t_vars, g = type_formula s t_vars g in
-     t_vars, Tformula.tsince f.positions side i f g
+     t_vars, Tformula.tsince [] f.positions side i f g
   | Until (side, i, f, g) ->
      let t_vars, f = type_formula s t_vars f in
      let t_vars, g = type_formula s t_vars g in
-     t_vars, Tformula.tuntil f.positions side i f g
+     t_vars, Tformula.tuntil [] f.positions side i f g
   | Type (f, ty) ->
      let t_vars, f = type_formula s t_vars f in
-     t_vars, Tformula.ttype f.positions f ty
+     t_vars, Tformula.ttype [] f.positions f ty
 
 let type_pattern s t_vars: pattern -> ('t_vars * tpattern) = function
   | PPresent -> t_vars, TPPresent
@@ -516,7 +516,7 @@ let type_rule s pos = function
                                positions = positions }
             in
             let terms = List.map (Map.to_alist vars) ~f:var_term_of_ident_and_positions in
-            let pred = Tformula.tpredicate [] p_name terms (Event (false, Standard)) in
+            let pred = Tformula.tpredicate [] [] p_name terms (Event (false, Standard)) in
             let s' = add_exception_first_pass rule_num pred reference_labels s in
             s', t_vars, TException (pos, tpf, reference_labels, pred)
           | Scope (pos, pf, refs) ->
@@ -530,7 +530,7 @@ let type_rule s pos = function
                                positions = positions }
             in
             let terms = List.map (Map.to_alist vars) ~f:var_term_of_ident_and_positions in
-            let pred = Tformula.tpredicate [] p_name terms (Event (false, Standard)) in
+            let pred = Tformula.tpredicate [] [] p_name terms (Event (false, Standard)) in
             let s' = add_scope_first_pass rule_num pred reference_labels s in
             s', t_vars, TScope (pos, tpf, reference_labels, pred)
           | Obligation (pos, pf1, pf2, rt, rcs) ->

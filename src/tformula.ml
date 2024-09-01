@@ -172,36 +172,36 @@ and t = {
 
 let make_tformula f variable_instantiations pos = {f; variable_instantiations; positions=pos}
 
-let ttt pos = make_tformula TTT [] pos
-let tff pos = make_tformula TFF [] pos
-let teqconst pos x d = make_tformula (TEqConst (x, d)) [] pos
-let tpredicate pos p_name trms event_type = make_tformula (TPredicate (p_name, trms, event_type)) [] pos
-let tagg pos u op x y f = make_tformula (TAgg (u, op, x, y, f)) [] pos
-let tneg pos f = make_tformula (TNeg f) [] pos
-let tconj pos s f g = make_tformula (TAnd (s, [f; g])) [] pos
-let tdisj pos s f g = make_tformula (TOr (s, [f; g])) [] pos
-let tconj' pos s fs = make_tformula (TAnd (s, fs)) [] pos
-let tdisj' pos s fs = make_tformula (TOr (s, fs)) [] pos
-let timp pos s f g = make_tformula (TImp (s, f, g)) [] pos
-let tiff pos s t f g = make_tformula (TIff (s, t, f, g)) [] pos
-let texists pos x f = make_tformula (TExists (x, f)) [] pos
-let tforall pos x f = make_tformula (TForall (x, f)) [] pos
-let tprev pos i f = make_tformula (TPrev (i, f)) [] pos
-let tnext pos i f = make_tformula (TNext (i, f)) [] pos
-let tonce pos i f = make_tformula (TOnce (i, f)) [] pos
-let teventually pos i f = make_tformula (TEventually (i, f)) [] pos
-let thistorically pos i f = make_tformula (THistorically (i, f)) [] pos
-let talways pos i f = make_tformula (TAlways (i, f)) [] pos
-let tsince pos s i f g = make_tformula (TSince (s, i, f, g)) [] pos
-let tuntil pos s i f g = make_tformula (TUntil (s, i, f, g)) [] pos
-let ttype pos s t = make_tformula (TType (s, t)) [] pos
+let ttt insts pos = make_tformula TTT insts pos
+let tff insts pos = make_tformula TFF insts pos
+let teqconst insts pos x d = make_tformula (TEqConst (x, d)) insts pos
+let tpredicate insts pos p_name trms event_type = make_tformula (TPredicate (p_name, trms, event_type)) insts pos
+let tagg insts pos u op x y f = make_tformula (TAgg (u, op, x, y, f)) insts pos
+let tneg insts pos f = make_tformula (TNeg f) insts pos
+let tconj insts pos s f g = make_tformula (TAnd (s, [f; g])) insts pos
+let tdisj insts pos s f g = make_tformula (TOr (s, [f; g])) insts pos
+let tconj' insts pos s fs = make_tformula (TAnd (s, fs)) insts pos
+let tdisj' insts pos s fs = make_tformula (TOr (s, fs)) insts pos
+let timp insts pos s f g = make_tformula (TImp (s, f, g)) insts pos
+let tiff insts pos s t f g = make_tformula (TIff (s, t, f, g)) insts pos
+let texists insts pos x f = make_tformula (TExists (x, f)) insts pos
+let tforall insts pos x f = make_tformula (TForall (x, f)) insts pos
+let tprev insts pos i f = make_tformula (TPrev (i, f)) insts pos
+let tnext insts pos i f = make_tformula (TNext (i, f)) insts pos
+let tonce insts pos i f = make_tformula (TOnce (i, f)) insts pos
+let teventually insts pos i f = make_tformula (TEventually (i, f)) insts pos
+let thistorically insts pos i f = make_tformula (THistorically (i, f)) insts pos
+let talways insts pos i f = make_tformula (TAlways (i, f)) insts pos
+let tsince insts pos s i f g = make_tformula (TSince (s, i, f, g)) insts pos
+let tuntil insts pos s i f g = make_tformula (TUntil (s, i, f, g)) insts pos
+let ttype insts pos s t = make_tformula (TType (s, t)) insts pos
 
 let tbigcauconj pos = function
-  | [] -> ttt pos
-  | h::t -> List.fold_left t ~init:h ~f:(tconj pos N) (*TODO: assign correct type to formula, not just Non*)
+  | [] -> ttt [] pos
+  | h::t -> List.fold_left t ~init:h ~f:(tconj [] pos N) (*TODO: assign correct type to formula, not just Non*)
 
 let tbigcauforall pos vars f =
-  List.fold_right vars ~init:f ~f:(tforall pos)
+  List.fold_right vars ~init:f ~f:(tforall [] pos)
 
 module StringMap = Map.Make(String)
 
@@ -341,8 +341,12 @@ let op_to_string f = match f.f with
   | TUntil (_, i,  _, _) -> Printf.sprintf "U%s" (Interval.to_string i)
   | TType (_, _) -> Printf.sprintf ":"
 
+let rec string_of_instantiations = function
+  | [] -> ""
+  | [(x, t)] -> Printf.sprintf "%s <- %s" x (TTerm.value_to_string t)
+  | (x, t) :: insts ->  Printf.sprintf "%s <- %s, %s" x (TTerm.value_to_string t) (string_of_instantiations insts)
 
-let rec to_string_rec l f = match f.f with
+let rec to_string_core_rec l f = match f.f with
   | TTT -> Printf.sprintf "⊤"
   | TFF -> Printf.sprintf "⊥"
   | TEqConst (trm, trm') -> Printf.sprintf "%s = %s" (TTerm.to_string trm) (TTerm.to_string trm')
@@ -372,6 +376,11 @@ let rec to_string_rec l f = match f.f with
   | TUntil (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
                              (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | TType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> ty_to_string) ty
+and to_string_rec l f =
+  let f_str = to_string_core_rec l f in
+  match f.variable_instantiations with
+  | [] -> f_str
+  | _ -> Printf.sprintf "(%s; %s)" f_str (string_of_instantiations f.variable_instantiations)
 
 let rec collect_tpredicates l f = match f.f with
   | TTT

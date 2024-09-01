@@ -834,7 +834,7 @@ let get_exception_predicates ?(negated=false) (s: Tlex.tprog) rule_idx =
   let exception_idxs = Map.find_multi s.rule_tree.exceptions rule_idx in
   let exception_predicates = List.map exception_idxs ~f:(try Map.find_exn s.exception_predicates with _ -> assert false) in
   if negated then
-    List.map exception_predicates ~f:(fun x -> Tformula.tneg x.positions x)
+    List.map exception_predicates ~f:(fun x -> Tformula.tneg [] x.positions x)
   else exception_predicates
 
 let get_scope_predicates (s: Tlex.tprog) rule_idx = 
@@ -1045,7 +1045,7 @@ let check_pol_constrs pos pols pol_constrs =
   Map.mapi pol_constrs ~f:check_pol_constr
 
 let type_exceptions itl_srp s pols exceptions =
-  let exceptions_neg = List.map exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
+  let exceptions_neg = List.map exceptions ~f:(fun f -> Tformula.tneg [] f.positions f) in
   type_tformulas s pols itl_srp exceptions_neg Cau (* TODO: is Cau correct here? *)
 
 let type_scopes itl_srp s pols scopes =
@@ -1126,7 +1126,7 @@ let is_past_guarded_tpformula  ?(pg_map: pg_map=Map.empty (module String)) s x p
 let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module String)) s rule var positions =
   match rule with
   | TCImplication (_, _, pos, pf1, ex, sc, pf2, _, _) ->
-    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
+    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg [] f.positions f) in
     if not (
       is_past_guarded_tpformula ~pg_map s var true pf1 ||
       is_past_guarded_tformulas ~pg_map s var true ex_neg ||
@@ -1144,7 +1144,7 @@ let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module String)) s rul
     (* TCDefinition is only used for scope/except rules and
        those should not have any 'fully' unbound variables *)
     (* assert false *)
-    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
+    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg [] f.positions f) in
     if not (
       is_past_guarded_tpformula ~pg_map s var true pf ||
       is_past_guarded_tformulas ~pg_map s var true ex_neg ||
@@ -1159,7 +1159,7 @@ let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module String)) s rul
       Util.enf_error err_msg (Some pos)
   | TCDefinitionDis (disjuncts, _) ->
     let aux (disjunct: tdisjunct) =
-      let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
+      let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg [] f.positions f) in
       is_past_guarded_tpformula ~pg_map s var true disjunct.pf ||
       is_past_guarded_tformulas ~pg_map s var true ex_neg ||
       is_past_guarded_tformulas ~pg_map s var true disjunct.scopes
@@ -1209,14 +1209,14 @@ let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
   match rule with
   | TCDefinition (_, _, _, pf, ex, sc, _, _) ->
     debug "past_guarded_of_tcrule: TCDefinition";
-    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg f.positions f) in
+    let ex_neg = List.map ex ~f:(fun f -> Tformula.tneg [] f.positions f) in
     is_past_guarded_tpformula ~pg_map s x true pf ||
     is_past_guarded_tformulas ~pg_map s x true ex_neg ||
     is_past_guarded_tformulas ~pg_map s x true sc
   | TCDefinitionDis (disjuncts, _) ->
     debug "past_guarded_of_tcrule: TCDefinitionDis";
     let aux (disjunct: tdisjunct) =
-      let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg f.positions f) in
+      let ex_neg = List.map disjunct.exceptions ~f:(fun f -> Tformula.tneg [] f.positions f) in
       is_past_guarded_tpformula ~pg_map s x true disjunct.pf ||
       is_past_guarded_tformulas ~pg_map s x true ex_neg ||
       is_past_guarded_tformulas ~pg_map s x true disjunct.scopes
@@ -1233,7 +1233,7 @@ let past_guarded_of_tcrule s pg_map rule ~key:x ~data:_ : bool =
   pg_map *)
 
 let tformula_term_equalities (ts1: TTerm.t list) (ts2: TTerm.t list) =
-  List.map2_exn ts1 ts2 ~f:(fun t1 t2 -> Tformula.teqconst t2.positions t1 t2)
+  List.map2_exn ts1 ts2 ~f:(fun t1 t2 -> Tformula.teqconst [] t2.positions t1 t2)
 
 let get_trm_name (t: TTerm.t) = match t.trm with
   | TTerm.TVar x -> x
@@ -1633,7 +1633,7 @@ let combine_constitutive_rules rules: tcrule list * 'params_map =
     in
     let params = Map.find_exn params_map name in
     let positions = Map.find_exn positions name in
-    let eg = Tformula.tpredicate positions name params Lex.Predicate in
+    let eg = Tformula.tpredicate [] positions name params Lex.Predicate in
     TCDefinitionDis (disjunction, eg)
   in
   Map.to_alist event_def_map |> List.map ~f:to_tr_def_dis, params_map
