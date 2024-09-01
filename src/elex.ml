@@ -203,7 +203,12 @@ let get_constitutive_params ecrules = function
       | _ -> assert false
     in
     let disjuncts = List.zip_exn c_rules d_indices |> List.map ~f:aux in
-    let pf = List.map disjuncts ~f:(fun d -> d.pf) |> List.hd_exn in (* TODO (potentially) check that all compilation rule have the same disjunct *)
+    let g = List.map2_exn disjuncts g ~f:(fun d g -> match g.f with
+      | EPredicate (e, _, ty) -> { g with f = EPredicate (e, d.params_original, ty) }
+      | _ -> assert false)
+    in
+    let d = List.hd_exn disjuncts in
+    let pf = d.pf in
     (pf, g)
   | _ -> assert false
 
