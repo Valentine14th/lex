@@ -121,7 +121,7 @@ lex <path/to/.lex file> [-mode (mfotl|doc)]
   ```
 - Parsing rules `stmts` and `stmt_` might allow for statements that are not separated by new lines
   - but using `separated_list(NEWLINE, stmt) EOF` (as before) does not terminate the list, if there is a newline before `EOF`, i.e. the final line of a `.lex` file must be a statement and cannot be empty or a comment
-- compilation of constitutive rules (`ECDefinitionDis`) is not 100% complete and requires a second look at how parameters in let-bindings should work
+- ~~compilation of constitutive rules (`ECDefinitionDis`) is not 100% complete and requires a second look at how parameters in let-bindings should work~~
 - `example/events.lex` event definition without parameters throws syntax error
 - finish integrating variable/parameter instantiations (with <- ("get") operator) into make formula functions of (t|e)formula.ml
   - done in tformula.ml, but might require more fine-tuning, because outside of the right-hand side of let-bindings the <- operator is not allowed/makes no sense
