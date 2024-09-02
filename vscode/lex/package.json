@@ -2,6 +2,7 @@
   "name": "lex",
   "displayName": "lex",
   "description": "Lex language extension",
+  "publisher": "lex-lang",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.85.0"
