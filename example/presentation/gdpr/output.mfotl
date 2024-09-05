@@ -15,7 +15,15 @@ Exception2(w__: int)
 
 Formula:
 let Exception2(w) = isMinor(w)
-let lawfulness(_p1) = ∃c. ∃ep. ∃prp. ∃w. ∃x. ∃y. ∃z. ((((((PersonalDataProcessing(ep, x, z)
-    ∧ HasPurpose(ep, prp)) ∧ ⧫ (GiveConsent(w, c) ∧ Authorizes(c, prp))) ∧ ⧫ Nominates(y, x)) ∧ PersonalData(z, w)) ∧ ¬Exception2(w)); _p1 <- ep)
+let lawfulness(_p1) = ∃c. ∃ep. ∃prp. ∃w. ∃x. ∃y. ∃z.
+                        ((((((PersonalDataProcessing(ep, x, z)
+                                ∧ HasPurpose(ep, prp))
+                                ∧ ⧫ (GiveConsent(w, c)
+                                ∧ Authorizes(c, prp)))
+                                ∧ ⧫ Nominates(y, x))
+                                ∧ PersonalData(z, w))
+                            ∧ ¬Exception2(w))
+                        ; _p1 <- ep)
 
-□ ∀ep. ∀x. ∀z. (PersonalDataProcessing(ep, x, z) ∧:L ⊤) →:L ((lawfulness(ep) ∧ fairness(ep)) ∧ transparency(ep))
+□ ∀ep. ∀x. ∀z. (PersonalDataProcessing(ep, x, z) ∧:L ⊤)
+    →:L ((lawfulness(ep) ∧ fairness(ep)) ∧ transparency(ep))
