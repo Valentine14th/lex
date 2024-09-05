@@ -23,6 +23,7 @@
 \usepackage{url}
 \usepackage{cite}
 \usepackage{listings}
+\usepackage{prftree}
 \usetikzlibrary{automata}
 
 \graphicspath{{icons/}}
@@ -441,53 +442,67 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 \textbf{Typing Rules of Temporal Patterns}
 
-\begin{align*}
-  \frac{\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
-    {\Gamma \vdash \bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Present}^{\mathbb{C}} \quad
-  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
-    {\Gamma \vdash \bigwedge_{i=0}^n \phi_i : \mathbb{S}}
-    &\text{Present}^{\mathbb{S}_j} \\
-  \frac{\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
-    {\Gamma \vdash \kw{EVENTUALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Eventually}^{\mathbb{C}} \quad
-  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
-    {\Gamma \vdash \kw{EVENTUALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
-    &\text{Eventually}^{\mathbb{S}_j} \\
-  \frac{\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
-    {\Gamma \vdash \kw{ALWAYS}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Always}^{\mathbb{C}} \quad
-  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
-    {\Gamma \vdash \kw{ALWAYS}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
-    &\text{Always}^{\mathbb{S}_j} \\
-  \frac{b\not=\infty \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
-    {\Gamma \vdash \psi~\kw{Until}_{[0,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Until}^{\mathbb{C}R} \quad
-  &\frac{\Gamma \vdash \phi_j : \mathbb{S}}
-    {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
-    &\text{Until}^{\mathbb{S}_j} \\
-  \frac{b\not=\infty \quad \Gamma \vdash \psi :\mathbb{C} \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
-    {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Until}^{\mathbb{C}LR} \quad
-  & & \\
-  \frac{0 \in [a,b] \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
-    {\Gamma \vdash \kw{Once}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
-    &\text{Once}^{\mathbb{C}} \quad
-  & \text{impossible }& \text{Once}^{\mathbb{S}} \\
-  \text{impossible } &\text{Historically}^{\mathbb{C}} \quad
-  & \frac{\Gamma \vdash \phi_j : \mathbb{S}}
-    {\Gamma \vdash \kw{HISTORICALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
-    & \text{Historically}^{\mathbb{S}_j} \\
-  \frac{0 \in [a,b] \quad \Gamma \vdash \psi : \mathbb{C}}
-    {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{C}}
-    &\text{Since}^{\mathbb{C}} \quad
-  & \frac{0 \not\in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S}}
-    {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
-    & \text{Since}^{\mathbb{S}L_j} \\
-  && \frac{0 \in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S} \quad \Gamma \vdash \psi : \mathbb{S}}
-    {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
-    & \text{Since}^{\mathbb{S}LR_j} \\
-\end{align*}
+\begin{figure}
+  \begin{gather*}
+    \prftree[r]
+      {\text{Present}^{\mathbb{C}}}
+      {\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+      {\Gamma \vdash \bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+      \qquad
+    \prftree[r]{\text{Present}^{\mathbb{S}_j}}
+      {\Gamma \vdash \phi_j : \mathbb{S}}
+      {\Gamma \vdash \bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+      \\
+    \prftree[r]{\text{Eventually}^{\mathbb{C}}}
+      {\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+      {\Gamma \vdash \kw{EVENTUALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+      \qquad
+    \prftree[r]{\text{Eventually}^{\mathbb{S}_j}}
+      {\Gamma \vdash \phi_j : \mathbb{S}}
+      {\Gamma \vdash \kw{EVENTUALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+      \\
+    \prftree[r]{\text{Always}^{\mathbb{C}}}
+      {\Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+      {\Gamma \vdash \kw{ALWAYS}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+      \qquad
+    \prftree[r]{\text{Always}^{\mathbb{S}_j}}
+      {\Gamma \vdash \phi_j : \mathbb{S}}
+      {\Gamma \vdash \kw{ALWAYS}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+      \\
+    \prftree[r]{\text{Until}^{\mathbb{C}R}}
+      {b\not=\infty \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+      {\Gamma \vdash \psi~\kw{Until}_{[0,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+      \qquad
+    \prftree[r]{\text{Until}^{\mathbb{S}_j}}
+      {\Gamma \vdash \phi_j : \mathbb{S}}
+      {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+      \\
+    \prftree[r]{\text{Until}^{\mathbb{C}LR}}
+      {b\not=\infty \quad \Gamma \vdash \psi :\mathbb{C} \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+      {\Gamma \vdash \psi~\kw{Until}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+      \\
+     \prftree[r]{\text{Historically}^{\mathbb{S}_j}}
+      {\Gamma \vdash \phi_j : \mathbb{S}}
+      {\Gamma \vdash \kw{HISTORICALLY}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{S}}
+      \\
+    \prftree[r]{\text{Once}^{\mathbb{C}}}
+      {0 \in [a,b] \quad \Gamma \vdash \phi_0 :\mathbb{C} \quad\dots\quad \Gamma \vdash \phi_n : \mathbb{C}}
+      {\Gamma \vdash \kw{Once}_{[a,b]}~\bigwedge_{i=0}^n \phi_i : \mathbb{C}}
+      \qquad
+    \prftree[r]{\text{Since}^{\mathbb{C}}}
+      {0 \in [a,b] \quad \Gamma \vdash \psi : \mathbb{C}}
+      {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{C}}
+      \\
+    \prftree[r]{\text{Since}^{\mathbb{S}L_j}}
+      {0 \not\in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S}}
+      {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
+      \qquad
+    \prftree[r]{\text{Since}^{\mathbb{S}LR_j}}
+      {0 \in [a,b] \quad \Gamma \vdash \phi_j : \mathbb{S} \quad \Gamma \vdash \psi : \mathbb{S}}
+      {\Gamma \vdash \left(\bigwedge_{i=0}^n~\phi_i\right)~\kw{Since}_{[a,b]}~\psi : \mathbb{S}}
+  \end{gather*}
+  \caption{Typing rules for temporal patterns}
+\end{figure}
 
 \section{Compilation}
 
