@@ -10,6 +10,9 @@
 open Core
 open Formula
 
+let debug_eformula = ref true
+let debug msg = if !debug_eformula then Util.debug_print ~f_name:(Some "eformula.ml") msg else ignore msg
+
 module ETerm = Tformula.TTerm
 
 type core_t =
@@ -35,9 +38,12 @@ type core_t =
   | EUntil of Side.t * Interval.t * bool * t * t
   | EType of t * ty
 
-and t = { f: core_t; enftype: EnfType.t;
-          id: int;
-          positions: Lexing.position list }
+and t = {
+  f: core_t; enftype: EnfType.t;
+  variable_instantiations: (string * ETerm.t) list;
+  id: int;
+  positions: Lexing.position list
+}
 
 let rec max_id_core = function
   | ETT
@@ -68,7 +74,7 @@ let rec max_id_core = function
 
 and max_id f = Int.max f.id (max_id_core f.f)
 
-let make f enftype id positions = { f; enftype; id; positions }
+let make f enftype variable_instantiations id positions = { f; variable_instantiations; enftype; id; positions }
 
 let ett = ETT
 let eff = EFF
@@ -92,44 +98,44 @@ let euntil s i f g = EUntil (s, i, true, f, g)
 let etype s t = EType (s, t)
 
 let tbigcauconj = function
-  | [] -> make ett Non 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj LR f g) Cau 0 f.positions)
+  | [] -> make ett Non [] 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj LR f g) Cau [] 0 f.positions)
 
 let tbigsupconj idx = function
-  | [] -> make ett Non 0 []
+  | [] -> make ett Non [] 0 []
   | h::t ->
     let aux i f g =
-      if i < idx then make (econj R f g) Non 0 f.positions
-      else            make (econj L f g) Non 0 f.positions
+      if i < idx then make (econj R f g) Non [] 0 f.positions
+      else            make (econj L f g) Non [] 0 f.positions
     in
     List.foldi t ~init:h ~f:aux
 
 let tbignonconj = function
-  | [] -> make ett Non 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj N f g) Non 0 f.positions)
+  | [] -> make ett Non [] 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj N f g) Non [] 0 f.positions)
 
 let tbigcaudisj idx = function
-  | [] -> make ett Non 0 []
+  | [] -> make ett Non [] 0 []
   | h::t ->
     let aux i f g =
-      if i < idx then make (edisj R f g) Non 0 f.positions
-      else            make (edisj L f g) Non 0 f.positions
+      if i < idx then make (edisj R f g) Non [] 0 f.positions
+      else            make (edisj L f g) Non [] 0 f.positions
     in
     List.foldi t ~init:h ~f:aux
 
 let tbigsupdisj = function
-  | [] -> make ett Non 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj LR f g) Sup 0 f.positions)
+  | [] -> make ett Non [] 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj LR f g) Sup [] 0 f.positions)
 
 let tbignondisj = function
-  | [] -> make ett Non 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj N f g) Non 0 f.positions)
+  | [] -> make ett Non [] 0 []
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj N f g) Non [] 0 f.positions)
 
 let tbigcauforall vars f =
-  List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non 0 f.positions)
+  List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non [] 0 f.positions)
 
 let tbigcauexists vars f =
-  List.fold_right vars ~init:f ~f:(fun x f -> make (eexists x f) Non 0 f.positions)
+  List.fold_right vars ~init:f ~f:(fun x f -> make (eexists x f) Non [] 0 f.positions)
 
 let rec core_of_tformula tevents ?id:(id=1) d = 
   let lof_formula = of_tformula tevents ~id:(d*id)
@@ -168,6 +174,7 @@ let rec core_of_tformula tevents ?id:(id=1) d =
 and of_tformula tevents ?id:(id=1) (f: Tformula.t) : t =
   let d = Tformula.deg f in
   { f = core_of_tformula tevents ~id d f.f;
+    variable_instantiations = []; (* TODO: maybe implement instantiations in (t)formula.ml, but first ensure that the current implementation in eformula.ml is even the best way to implement this *)
     enftype = EnfType.Obs;
     id;
     positions = f.positions }
@@ -239,7 +246,9 @@ let fix_side s f g =
                else Side.R
   | _ -> s
 
-let rec to_formula (f: t): Formula.t = Formula.make_formula (to_formula_core f.f) f.positions
+let rec to_formula (f: t): Formula.t =
+  let insts = List.map f.variable_instantiations ~f:(fun (x, t) -> (x, ETerm.to_formula_term t)) in
+  Formula.make_formula (to_formula_core f.f) insts f.positions
 
 and to_formula_core: core_t -> Formula.core_t = function
   | ETT -> TT
@@ -291,6 +300,10 @@ let rec op_to_string_core = function
   | EType (_, _) -> Printf.sprintf ":"
 and op_to_string f = op_to_string_core f.f
 
+let rec string_of_instantiations = function
+  | [] -> ""
+  | [(x, t)] -> Printf.sprintf "%s <- %s" x (ETerm.value_to_string t)
+  | (x, t) :: insts ->  Printf.sprintf "%s <- %s, %s" x (ETerm.value_to_string t) (string_of_instantiations insts)
 
 let rec to_string_core_rec l = function
   | ETT -> Printf.sprintf "⊤"
@@ -324,10 +337,19 @@ let rec to_string_core_rec l = function
   | EType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> ty_to_string) ty
 
 and to_string_rec l form =
-  if EnfType.equal form.enftype EnfType.Obs then
-    Printf.sprintf "%a" (fun _ -> to_string_core_rec 5) form.f
-  else
-    Printf.sprintf (Util.paren l 0 "%a : %s") (fun _ -> to_string_core_rec 5) form.f (EnfType.to_string form.enftype)
+  let f_str =
+    if EnfType.equal form.enftype EnfType.Obs then
+      Printf.sprintf "%a" (fun _ -> to_string_core_rec 5) form.f
+    else
+      Printf.sprintf (Util.paren l 0 "%a : %s") (fun _ -> to_string_core_rec 5) form.f (EnfType.to_string form.enftype)
+  in
+  match form.variable_instantiations with
+  | [] ->
+    debug (Printf.sprintf "to_string_rec: %s" f_str);
+    f_str
+  | _ ->
+    debug (Printf.sprintf "to_string_rec: %s; %s" f_str (string_of_instantiations form.variable_instantiations));
+    Printf.sprintf "(%s; %s)" f_str (string_of_instantiations form.variable_instantiations)
 
 let to_string = to_string_rec 0
 

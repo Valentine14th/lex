@@ -1,0 +1,279 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Lexdoc: tax.lex</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous"><style>.lex-formula-term {
+    color: #e83e8c;
+}
+
+.lex-ident {
+    color: #e83e8c;
+}
+
+.lex-const {
+    color: #0077b6;
+}
+
+.lex-typ {
+    color: #17c274;
+}
+
+.lex-stmt {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    /*border-bottom: 1px solid rgba(0,0,0,.125);*/
+}
+
+.lex-keyword {
+    style: inline;
+    color: #9a3ee8;
+    font-weight: bold;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+.lex-section-kind {
+    color: #9a3ee8;
+    padding-right: 5px;
+}
+
+.lex-type-fixes {
+    padding-left: 10px;
+}
+
+.lex-type-fixes .lex-type-fix-outer {
+    padding-left: 10px;
+}
+
+.lex-rule-if {
+    padding-left: 10px;
+}
+
+.lex-rule-if .lex-formula {
+    padding-left: 10px;
+}
+
+.lex-rule-then {
+    padding-left: 10px;
+}
+
+.lex-rule-then .lex-formula {
+    padding-left: 10px;
+}
+
+.col-6 > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.col-12 > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.lex-subformula > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+/*
+.lex-rule-then > .lex-keyword:first-child {
+    padding-left: 0px;
+}
+
+.lex-formula > .lex-keyword:first-child {
+    padding-left: 0px;
+}*/
+
+.lex-keyword + .lex-keyword {
+    padding-left: 0px;
+}
+
+.lex-string {
+    font-style: italic;
+}
+
+.lex-event-args {
+    padding-left: 10px;
+}
+
+.lex-stmt-section {
+    /*font-weight: bold;*/
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.lex-stmt-section-law {
+    font-size: 280%;
+    /*text-align: center;*/
+}
+
+.lex-section-title {
+    font-size: 80%;
+    font-weight: lighter;
+    padding-bottom: 5px;
+}
+
+.lex-stmt-section-title {
+    font-size: 250%;
+    /*text-align: center;*/
+}
+
+.lex-stmt-section-chapter {
+    font-size: 200%;
+    /*text-align: center;*/
+}
+
+.lex-stmt-section-section {
+    font-size: 175%;
+    /*text-align: center;*/
+}
+
+.lex-stmt-section-article {
+    font-size: 150%;
+    /*text-align: center;*/
+}
+
+.lex-stmt-section-paragraph {
+    font-size: 100%;
+}
+
+.lex-stmt-section-point {
+    font-size: 100%;
+}
+
+.lex-stmt-section-subpoint {
+    font-size: 100%;
+}
+
+.lex-reading .card-header {
+    font-size: 75%;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    padding-left: 5px;
+}
+
+.lex-interval {
+    padding-right: 5px;
+}
+
+.lex-docstring-body {
+    font-style: italic;
+}
+/*8ce83e*/
+
+.badge {
+    background-color: #FDE68A;
+    color: black;
+    font-weight: normal;
+    font-style: normal;
+    margin-right: 5px;
+    font-size: 75%;
+}
+
+.lex-subformula, .lex-type-fix {
+    border: 1px solid transparent;
+}
+
+.lex-subformula-reading, .lex-type-fix-reading {
+    border: 1px solid transparent;
+}
+
+.lex-subformula-active {
+    background-color: rgba(252,209,38,.2);
+    border: 1px solid rgba(0,0,0,.125);
+}
+
+.lex-subformula-reading-active {
+    background-color: rgba(252,209,38,.2);
+    border: 1px solid rgba(0,0,0,.125);
+}
+
+.lex-section-links {
+    margin-left: 5px;
+    font-size: 75%;
+    float: right;
+    font-weight: lighter;
+}
+
+.lex-section-links a {
+    color: black;
+    text-decoration: none;
+}
+
+.lex-section-links a:hover {
+    color: rgba(0,0,0,0.5);
+}
+
+.title-row {
+    background-color: rgba(0,0,0,.03);
+}
+
+.lex-section-link {
+    color: black;
+    text-decoration: none;
+}
+
+.lex-event-link {
+    color: #e83e8c;
+    text-decoration: none;
+}
+</style></head><body class="container"><div class="lex-program col-12"><div class="lex-stmt-section lex-stmt-section-law" id="lex-section-law-U-S--Code"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">law</span><span class="lex-section-label">U.S. Code</span></div></div></div><div class="lex-stmt-section lex-stmt-section-title" id="lex-section-law-U-S--Code-title-26"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">title</span><span class="lex-section-label">26</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a></span></div></div></div><div class="lex-stmt-section-title[1]" id="lex-section-law-U-S--Code-title-26-title-1--A"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">title[1]</span><span class="lex-section-label">A</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a></span></div></div></div><div class="lex-stmt-section lex-stmt-section-chapter" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">chapter</span><span class="lex-section-label">1</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a></span></div></div></div><div class="lex-stmt-section-chapter[1]" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">chapter[1]</span><span class="lex-section-label">B</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1" class="lex-section-link">chapter 1</a></span></div></div></div><div class="lex-stmt-section lex-stmt-section-section" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">section</span><span class="lex-section-label">III</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1" class="lex-section-link">chapter 1</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B" class="lex-section-link">chapter[1] B</a></span></div></div></div><div class="lex-stmt-section lex-stmt-section-article" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">article</span><span class="lex-section-label">121</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1" class="lex-section-link">chapter 1</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B" class="lex-section-link">chapter[1] B</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III" class="lex-section-link">section III</a></span></div></div></div><div class="lex-stmt lex-stmt-type"><div class="row"><div class="col-12"><span class="lex-keyword">type</span><span class="lex-typ">individual</span></div></div></div><div class="lex-stmt lex-stmt-type"><div class="row"><div class="col-12"><span class="lex-keyword">type</span><span class="lex-typ">property</span></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-amount_excluded_from_gross_income_by_property"><div class="row"><div class="col-6"><span class="lex-keyword">internal</span><span class="lex-keyword"> functional event</span><span class="lex-ident">amount_excluded_from_gross_income_by_property</span> (<div class="lex-event-args"><span class="lex-event-arg"><span class="lex-ident">p</span>: <span class="lex-typ">property</span></span>, <span class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></span></div>) -> <span class="lex-typ">money USD</span></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> the amount excluded from gross income of individual <span class="lex-formula-term">i</span> due to sale or exchange of property <span class="lex-formula-term">p</span> </div></div></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-amount_excluded_from_gross_income"><div class="row"><div class="col-6"><span class="lex-keyword">internal</span><span class="lex-keyword"> functional event</span><span class="lex-ident">amount_excluded_from_gross_income</span> (<div class="lex-event-args"><span class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></span></div>) -> <span class="lex-typ">money USD</span></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> the total amount excluded from gross income of individual <span class="lex-formula-term">i</span> due to sale or exchange of properties </div></div></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-time_in_principal_residence"><div class="row"><div class="col-6"><span class="lex-keyword">internal</span><span class="lex-keyword"> functional event</span><span class="lex-ident">time_in_principal_residence</span> (<div class="lex-event-args"><span class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></span>, <span class="lex-event-arg"><span class="lex-ident">p</span>: <span class="lex-typ">property</span></span></div>) -> <span class="lex-typ">span</span></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> the amount of time that individual <span class="lex-formula-term">i</span> used property <span class="lex-formula-term">p</span> as their principal residence </div></div></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-uses_property_as_principal_residence"><div class="row"><div class="col-6"><span class="lex-keyword">observable</span><span class="lex-keyword">event</span><span class="lex-ident">uses_property_as_principal_residence</span><div class="lex-event-args"><div class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></div><div class="lex-event-arg"><span class="lex-ident">p</span>: <span class="lex-typ">property</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> individual <span class="lex-formula-term">i</span> uses property <span class="lex-formula-term">p</span> as their principal residence </div></div></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-owns_property"><div class="row"><div class="col-6"><span class="lex-keyword">observable</span><span class="lex-keyword">event</span><span class="lex-ident">owns_property</span><div class="lex-event-args"><div class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></div><div class="lex-event-arg"><span class="lex-ident">p</span>: <span class="lex-typ">property</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> individual <span class="lex-formula-term">i</span> owns property <span class="lex-formula-term">p</span> </div></div></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-gain_from_sale_or_exchange_of_property"><div class="row"><div class="col-6"><span class="lex-keyword">observable</span><span class="lex-keyword">event</span><span class="lex-ident">gain_from_sale_or_exchange_of_property</span><div class="lex-event-args"><div class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></div><div class="lex-event-arg"><span class="lex-ident">p</span>: <span class="lex-typ">property</span></div><div class="lex-event-arg"><span class="lex-ident">g</span>: <span class="lex-typ">money USD</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> individual <span class="lex-formula-term">i</span> gains <span class="lex-formula-term">g</span> from sale or exchange of their property <span class="lex-formula-term">p</span> </div></div></div></div></div><div class="lex-stmt lex-stmt-event" id="lex-event-tax_day"><div class="row"><div class="col-6"><span class="lex-keyword">observable</span><span class="lex-keyword">event</span><span class="lex-ident">tax_day</span><div class="lex-event-args"><div class="lex-event-arg"><span class="lex-ident">i</span>: <span class="lex-typ">individual</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"> it is tax day for individual <span class="lex-formula-term">i</span> </div></div></div></div></div><div class="lex-stmt-section lex-stmt-section-paragraph" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121-paragraph-a"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">paragraph</span><span class="lex-section-label">a</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1" class="lex-section-link">chapter 1</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B" class="lex-section-link">chapter[1] B</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III" class="lex-section-link">section III</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121" class="lex-section-link">article 121</a></span></div></div></div><div class="lex-stmt lex-stmt-note"><div class="row"><div class="col-12"><span class="lex-keyword">note</span><span class="lex-keyword">"</span><span class="lex-string">
+Gross income shall not include gain from the sale or exchange of property if, during the 5-year period ending on the date of the sale or exchange, such property has been owned and used by the taxpayer as the taxpayer’s principal residence for periods aggregating 2 years or more.
+</span><span class="lex-keyword">"</span></div></div></div><div class="lex-stmt lex-stmt-rule" id="U-S--Code-121-a---time_in_principal_residence"><div class="row"><div class="col-6"><span class="lex-keyword">rule</span><span class="lex-rule-label">time_in_principal_residence</span><div class="lex-rule-if"><span class="lex-keyword">whenever</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-0-1"><a href="#lex-event-gain_from_sale_or_exchange_of_property" class="lex-event-link"><span class="lex-ident">gain_from_sale_or_exchange_of_property</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>, <span class="lex-ident">gain</span>)</span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-1"><span class="lex-ident">t</span> <-<span class="lex-keyword">CNT</span>(<span class="lex-ident">d</span>; <span class="lex-ident">i</span>, <span class="lex-ident">p</span>; <span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-3">(<span class="lex-keyword">ONCE</span><span class="lex-interval">[<span class="lex-const"></span>,<span class="lex-const">5y</span>]</span><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-6">(<span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-12"><a href="#lex-event-uses_property_as_principal_residence" class="lex-event-link"><span class="lex-ident">uses_property_as_principal_residence</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>)</span><span class="lex-keyword">AND</span><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-13"><a href="#lex-event-owns_property" class="lex-event-link"><span class="lex-ident">owns_property</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>)</span><span class="lex-keyword">AND</span><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-14"><a href="#lex-event-ts" class="lex-event-link"><span class="lex-ident">ts</span></a> = <span class="lex-ident">cur_time</span></span><span class="lex-keyword">AND</span><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-if-1-15"><span class="lex-ident">day</span>(<span class="lex-ident">cur_time</span>) = <span class="lex-ident">d</span></span>)</span>)</span>)</span></div></div><div class="lex-rule-then"><span class="lex-keyword">constitute</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---time_in_principal_residence-then-0-1"><a href="#lex-event-time_in_principal_residence" class="lex-event-link"><span class="lex-ident">time_in_principal_residence</span></a>(<span class="lex-ident">_p1</span>, <span class="lex-ident">_p2</span>, <span class="lex-ident">_p3</span>)</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"><p class="lex-reading-if">Whenever all of the following happen:<ul class="lex-reading-if-formulae"><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-0-1"> individual <span class=""><span class="lex-ident">i</span></span> gains <span class=""><span class="lex-ident">gain</span></span> from sale or exchange of their property <span class=""><span class="lex-ident">p</span></span> </div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-1"><span class="lex-ident">t</span> is the count of all <span class=""><span class="lex-ident">d</span></span>, grouping on <span class="lex-ident">i</span>, <span class="lex-ident">p</span>,  such that the following is the case:<ul class="lex-reading-neg"><li class="lex-reading-neg-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-3">at some point within <span class="lex-const">5 years</span> (included) in the past, the following happened: <ul class="lex-reading-once"><li class="lex-reading-once-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-6">all of the following are the case:<ul class="lex-reading-and"><li class="lex-reading-and-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-12"> individual <span class=""><span class="lex-ident">i</span></span> uses property <span class=""><span class="lex-ident">p</span></span> as their principal residence </div></li><li class="lex-reading-and-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-13"> individual <span class=""><span class="lex-ident">i</span></span> owns property <span class=""><span class="lex-ident">p</span></span> </div></li><li class="lex-reading-and-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-14">the current time is equal to <span class=""><span class="lex-ident">cur_time</span></span></div></li><li class="lex-reading-and-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-if-1-15"><span class="">the day of time <span class=""><span class="lex-ident">cur_time</span></span> is equal to <span class="lex-ident">d</span></span></div></li></ul></div></li></ul></div></li></ul></div></li></ul></p><p class="lex-reading-then">Then the following <strong class="lex-reading-verb">shall be constituted</strong>:<ul class="lex-reading-then-formulae"><li class="lex-reading-then-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---time_in_principal_residence-then-0-1"> the amount of time that individual <span class=""><span class="lex-ident">_p1</span></span> used property <span class=""><span class="lex-ident">_p2</span></span> as their principal residence </div></li></ul></p></div></div></div></div></div><div class="lex-stmt lex-stmt-rule" id="U-S--Code-121-a---amount_excluded_by_property"><div class="row"><div class="col-6"><span class="lex-keyword">rule</span><span class="lex-rule-label">amount_excluded_by_property</span><div class="lex-rule-if"><span class="lex-keyword">whenever</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded_by_property-if-0-1"><a href="#lex-event-gain_from_sale_or_exchange_of_property" class="lex-event-link"><span class="lex-ident">gain_from_sale_or_exchange_of_property</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>, <span class="lex-ident">gain</span>)</span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded_by_property-if-1-1"><a href="#lex-event-time_in_principal_residence" class="lex-event-link"><span class="lex-ident">time_in_principal_residence</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>) = <span class="lex-ident">t</span></span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded_by_property-if-2-1"><span class="lex-ident">t</span> >= <span class="lex-const">2y</span></span></div></div><div class="lex-rule-then"><span class="lex-keyword">constitute</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded_by_property-then-0-1"><a href="#lex-event-amount_excluded_from_gross_income_by_property" class="lex-event-link"><span class="lex-ident">amount_excluded_from_gross_income_by_property</span></a>(<span class="lex-ident">_p4</span>, <span class="lex-ident">_p5</span>, <span class="lex-ident">_p6</span>)</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"><p class="lex-reading-if">Whenever all of the following happen:<ul class="lex-reading-if-formulae"><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded_by_property-if-0-1"> individual <span class=""><span class="lex-ident">i</span></span> gains <span class=""><span class="lex-ident">gain</span></span> from sale or exchange of their property <span class=""><span class="lex-ident">p</span></span> </div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded_by_property-if-1-1"> the amount of time that individual <span class=""><span class="lex-ident">i</span></span> used property <span class=""><span class="lex-ident">p</span></span> as their principal residence  is equal to <span class=""><span class="lex-ident">t</span></span></div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded_by_property-if-2-1"><span class=""><span class="lex-ident">t</span> is greater or equal to <span class="lex-const">2 years</span></span></div></li></ul></p><p class="lex-reading-then">Then the following <strong class="lex-reading-verb">shall be constituted</strong>:<ul class="lex-reading-then-formulae"><li class="lex-reading-then-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded_by_property-then-0-1"> the amount excluded from gross income of individual <span class=""><span class="lex-ident">_p5</span></span> due to sale or exchange of property <span class=""><span class="lex-ident">_p4</span></span> </div></li></ul></p></div></div></div></div></div><div class="lex-stmt lex-stmt-rule" id="U-S--Code-121-a---amount_excluded"><div class="row"><div class="col-6"><span class="lex-keyword">rule</span><span class="lex-rule-label">amount_excluded</span><div class="lex-rule-if"><span class="lex-keyword">whenever</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded-if-0-1"><a href="#lex-event-tax_day" class="lex-event-link"><span class="lex-ident">tax_day</span></a>(<span class="lex-ident">i</span>)</span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded-if-1-1"><span class="lex-ident">a</span> <-<span class="lex-keyword">SUM</span>(<span class="lex-ident">t</span>; <span class="lex-ident">p</span>, <span class="lex-ident">i</span>; <span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded-if-1-3">(<span class="lex-keyword">ONCE</span><span class="lex-interval">[<span class="lex-const"></span>,<span class="lex-const">1y</span>)</span><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded-if-1-6"><a href="#lex-event-amount_excluded_from_gross_income_by_property" class="lex-event-link"><span class="lex-ident">amount_excluded_from_gross_income_by_property</span></a>(<span class="lex-ident">p</span>, <span class="lex-ident">i</span>) = <span class="lex-ident">t</span></span>)</span>)</span></div></div><div class="lex-rule-then"><span class="lex-keyword">constitute</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-a---amount_excluded-then-0-1"><a href="#lex-event-amount_excluded_from_gross_income" class="lex-event-link"><span class="lex-ident">amount_excluded_from_gross_income</span></a>(<span class="lex-ident">_p7</span>, <span class="lex-ident">_p8</span>)</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"><p class="lex-reading-if">Whenever all of the following happen:<ul class="lex-reading-if-formulae"><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded-if-0-1"> it is tax day for individual <span class=""><span class="lex-ident">i</span></span> </div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded-if-1-1"><span class="lex-ident">a</span> is the sum of all <span class=""><span class="lex-ident">t</span></span>, grouping on <span class="lex-ident">p</span>, <span class="lex-ident">i</span>,  such that the following is the case:<ul class="lex-reading-neg"><li class="lex-reading-neg-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded-if-1-3">at some point within <span class="lex-const">1 year</span> (excluded) in the past, the following happened: <ul class="lex-reading-once"><li class="lex-reading-once-li"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded-if-1-6"> the amount excluded from gross income of individual <span class=""><span class="lex-ident">i</span></span> due to sale or exchange of property <span class=""><span class="lex-ident">p</span></span>  is equal to <span class=""><span class="lex-ident">t</span></span></div></li></ul></div></li></ul></div></li></ul></p><p class="lex-reading-then">Then the following <strong class="lex-reading-verb">shall be constituted</strong>:<ul class="lex-reading-then-formulae"><li class="lex-reading-then-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-a---amount_excluded-then-0-1"> the total amount excluded from gross income of individual <span class=""><span class="lex-ident">_p7</span></span> due to sale or exchange of properties </div></li></ul></p></div></div></div></div></div><div class="lex-stmt-section lex-stmt-section-paragraph" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121-paragraph-b"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">paragraph</span><span class="lex-section-label">b</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1" class="lex-section-link">chapter 1</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B" class="lex-section-link">chapter[1] B</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III" class="lex-section-link">section III</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121" class="lex-section-link">article 121</a></span></div></div></div><div class="lex-stmt-section lex-stmt-section-point" id="lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121-paragraph-b-point-1"><div class="row title-row"><div class="col-12"><span class="lex-section-kind">point</span><span class="lex-section-label">1</span><span class="lex-section-links"><a href="#lex-section-law-U-S--Code" class="lex-section-link">law U.S. Code</a> / <a href="#lex-section-law-U-S--Code-title-26" class="lex-section-link">title 26</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A" class="lex-section-link">title[1] A</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1" class="lex-section-link">chapter 1</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B" class="lex-section-link">chapter[1] B</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III" class="lex-section-link">section III</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121" class="lex-section-link">article 121</a> / <a href="#lex-section-law-U-S--Code-title-26-title-1--A-chapter-1-chapter-1--B-section-III-article-121-paragraph-b" class="lex-section-link">paragraph b</a></span></div></div></div><div class="lex-stmt lex-stmt-note"><div class="row"><div class="col-12"><span class="lex-keyword">note</span><span class="lex-keyword">"</span><span class="lex-string">
+The amount of gain excluded from gross income under subsection (a) with respect to any sale or exchange shall not exceed $250,000.
+</span><span class="lex-keyword">"</span></div></div></div><div class="lex-stmt lex-stmt-rule" id="U-S--Code-121-b-1--"><div class="row"><div class="col-6"><span class="lex-keyword">rule</span><span class="lex-rule-label"></span><div class="lex-rule-if"><span class="lex-keyword">whenever</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-b-1---if-0-1"><a href="#lex-event-gain_from_sale_or_exchange_of_property" class="lex-event-link"><span class="lex-ident">gain_from_sale_or_exchange_of_property</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>, <span class="lex-ident">gain</span>)</span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-b-1---if-1-1"><span class="lex-ident">gain</span> > <span class="lex-const">USD 250000.00</span></span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-b-1---if-2-1"><a href="#lex-event-time_in_principal_residence" class="lex-event-link"><span class="lex-ident">time_in_principal_residence</span></a>(<span class="lex-ident">i</span>, <span class="lex-ident">p</span>) = <span class="lex-ident">t</span></span></div><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-b-1---if-3-1"><span class="lex-ident">t</span> >= <span class="lex-const">2y</span></span></div></div><div class="lex-rule-then"><span class="lex-keyword">replace</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-b-1---then-0"><a href="#lex-section-U-S--Code-121-a---amount_excluded_by_property" class="lex-section-link"><span class="lex-section-kind">paragraph</span>a <span class="lex-section-kind">rule</span>amount_excluded_by_property</a></span></div></div><div class="lex-rule-then"><span class="lex-keyword">constitute</span><div class="lex-formula"><span class="lex-subformula" id="lex-subformula-U-S--Code-121-b-1---then2-0-1"><a href="#lex-event-amount_excluded_from_gross_income_by_property" class="lex-event-link"><span class="lex-ident">amount_excluded_from_gross_income_by_property</span></a>(<span class="lex-ident">_p4</span>, <span class="lex-ident">_p5</span>, <span class="lex-ident">_p6</span>)</span></div></div></div><div class="col-6"><div class="lex-reading card"><div class="card-header">Reading</div><div class="card-body"><p class="lex-reading-if">Whenever all of the following happen:<ul class="lex-reading-if-formulae"><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-b-1---if-0-1"> individual <span class=""><span class="lex-ident">i</span></span> gains <span class=""><span class="lex-ident">gain</span></span> from sale or exchange of their property <span class=""><span class="lex-ident">p</span></span> </div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-b-1---if-1-1"><span class=""><span class="lex-ident">gain</span> is greater than <span class="lex-const">$250000</span></span></div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-b-1---if-2-1"> the amount of time that individual <span class=""><span class="lex-ident">i</span></span> used property <span class=""><span class="lex-ident">p</span></span> as their principal residence  is equal to <span class=""><span class="lex-ident">t</span></span></div></li><li class="lex-reading-if-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-b-1---if-3-1"><span class=""><span class="lex-ident">t</span> is greater or equal to <span class="lex-const">2 years</span></span></div></li></ul></p><p class="lex-reading-then">Then <span class="lex-reading-then-formula"><span class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-b-1---then-0"><a href="#lex-section-U-S--Code-121-a---amount_excluded_by_property" class="lex-section-link"><span class="lex-section-kind">paragraph</span>a <span class="lex-section-kind">rule</span>amount_excluded_by_property</a></span></span> <strong class="lex-reading-verb">shall not apply</strong>.</p><p class="lex-reading-then">Instead, the following <strong class="lex-reading-verb">shall be constituted</strong>:<ul class="lex-reading-then-formulae"><li class="lex-reading-then-formula"><div class="lex-subformula-reading" id="lex-subformula-reading-U-S--Code-121-b-1---then2-0-1"> the amount excluded from gross income of individual <span class=""><span class="lex-ident">_p5</span></span> due to sale or exchange of property <span class=""><span class="lex-ident">_p4</span></span> </div></li></ul></p></div></div></div></div></div></div></body><script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script><script>const PREF_FORMULA = "lex-subformula";
+const PREF_READING = "lex-subformula-reading";
+const LEN_PREF_FORMULA = PREF_FORMULA.length;
+const LEN_PREF_READING = PREF_READING.length;
+
+function mouseenter_formula() {
+    let id = $(this).attr('id');
+    if (id.startsWith(PREF_FORMULA)) {
+	let other_id = PREF_READING + id.substring(LEN_PREF_FORMULA);
+	$("#" + id).addClass("lex-subformula-active");
+	$("#" + other_id).addClass("lex-subformula-reading-active");
+    }
+}
+
+function mouseleave_formula() {
+    let id = $(this).attr('id');
+    if (id.startsWith(PREF_FORMULA)) {
+	let other_id = PREF_READING + id.substring(LEN_PREF_FORMULA);
+	$("#" + id).removeClass("lex-subformula-active");
+	$("#" + other_id).removeClass("lex-subformula-reading-active");
+    }
+}
+
+function mouseenter_reading() {
+    let id = $(this).attr('id');
+    if (id.startsWith(PREF_READING)) {
+	let other_id = PREF_FORMULA + id.substring(LEN_PREF_READING);
+	$("#" + other_id).addClass("lex-subformula-active");
+	$("#" + id).addClass("lex-subformula-reading-active");
+    }
+}
+
+function mouseleave_reading() {
+    let id = $(this).attr('id');
+    if (id.startsWith(PREF_READING)) {
+	let other_id = PREF_FORMULA + id.substring(LEN_PREF_READING);
+	$("#" + other_id).removeClass("lex-subformula-active");
+	$("#" + id).removeClass("lex-subformula-reading-active");
+    }
+}
+
+$(".lex-subformula").on({
+    mouseenter: mouseenter_formula,
+    mouseleave: mouseleave_formula
+})
+
+$(".lex-subformula-reading").on({
+    mouseenter: mouseenter_reading,
+    mouseleave: mouseleave_reading
+})
+
+$(".lex-type-fix").on({
+    mouseenter: mouseenter_formula,
+    mouseleave: mouseleave_formula
+})
+
+$(".lex-type-fix-reading").on({
+    mouseenter: mouseenter_reading,
+    mouseleave: mouseleave_reading
+})
+
+</script></html>

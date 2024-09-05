@@ -90,6 +90,7 @@ rule "principle"
     beurteilt(g, b)
   oblige
     zulaessig(g, b)
+  transparently enforceable
 
 paragraph "1"
 point "a"

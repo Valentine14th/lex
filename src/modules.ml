@@ -83,6 +83,9 @@ let parse_with_error lexbuf =
   | Parser.Error ->
     eprintf "%a: syntax error\n" print_position lexbuf;
     exit (-1)
+  | Sys_error msg ->
+    eprintf "System error: %s\n" msg;
+    exit (-1)
 
 let parse_module filename: Lex.prog =
    let inx = try In_channel.create filename with

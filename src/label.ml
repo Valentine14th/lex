@@ -1,7 +1,7 @@
 open Core
 open Lex
 
-let debug_label = ref true
+let debug_label = ref false
 let debug = if !debug_label then Util.debug_print ~f_name:(Some "label.ml") else ignore
 
 (** First identifier: number, letter, etc. describing

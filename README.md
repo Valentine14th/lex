@@ -105,11 +105,12 @@ lex <path/to/.lex file> [-mode (mfotl|doc)]
 
 
 # known issues
-- [example/tax-code/tax.lex](example/tax%20code/tax.lex) uncaught exception
-  - computation of rules with a shared variable scope needs debugging
-- [example/evaluation/evaluation.lex](example/evaluation/evaluation.lex) Impossible verdict
-  - is the expected outcome `Possible ...`?
-    - if yes: issue with strictly relative past computation when a rule is marked as transparent
+- ~~[example/tax-code/tax.lex](example/tax%20code/tax.lex) uncaught exception~~
+  - ~~computation of rules with a shared variable scope needs debugging~~
+  - ~~'transitive' past-guardedness check with regards to internal events was incorrect and needs fixing~~
+- ~~[example/evaluation/evaluation.lex](example/evaluation/evaluation.lex) Impossible verdict~~
+  - ~~is the expected outcome `Possible ...`?~~
+    - ~~if yes: issue with strictly relative past computation when a rule is marked as transparent~~
 - Parse conflicts
   ```bash
   $ dune build
@@ -120,4 +121,10 @@ lex <path/to/.lex file> [-mode (mfotl|doc)]
   ```
 - Parsing rules `stmts` and `stmt_` might allow for statements that are not separated by new lines
   - but using `separated_list(NEWLINE, stmt) EOF` (as before) does not terminate the list, if there is a newline before `EOF`, i.e. the final line of a `.lex` file must be a statement and cannot be empty or a comment
-- compilation of constitutive rules (`ECDefinitionDis`) is not 100% complete and requires a second look at how parameters in let-bindings should work
+- ~~compilation of constitutive rules (`ECDefinitionDis`) is not 100% complete and requires a second look at how parameters in let-bindings should work~~
+- `example/events.lex` event definition without parameters throws syntax error
+- finish integrating variable/parameter instantiations (with <- ("get") operator) into make formula functions of (t|e)formula.ml
+  - done in tformula.ml, but might require more fine-tuning, because outside of the right-hand side of let-bindings the <- operator is not allowed/makes no sense
+  - but right now let-bindings are not strictly part of formulas, they are rather 'tacked' on at the end (during the compilation phase)
+- ~~passing a directory throws a `Sys_error`~~
+  - ~~TODO: catch this exception and print a more user-friendly error message~~
