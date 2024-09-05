@@ -1240,7 +1240,7 @@ let type_tdisjunct s itl_srp pols pg_map t rule (d: tdisjunct) =
         their potential non-variable actual values in the code, the typing rules
         for EqConst must be changed, or making a definition Cau must be rejected      
       *)
-      let verdict_references = conj v_ex v_sc in
+       let verdict_references = conj v_ex v_sc in
       conj v_pf verdict_references
     | Sup -> (* only one part of the definition must be Sup *)
       let fv_params, fv_unbound = Map.partitioni_tf (fv_of_tcrule rule) ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in
