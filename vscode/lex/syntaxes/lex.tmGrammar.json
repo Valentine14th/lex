@@ -3,12 +3,8 @@
 	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
 	"name": "Lex",
 	"patterns": [
-		{
-			"include": "#comment"
-		},
-		{
-			"include": "#formula"
-		}
+		{ "include": "#comment" },
+		{ "include": "#formula" }
 	],
 	"repository": {
 		"formula": {

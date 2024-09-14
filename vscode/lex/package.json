@@ -4,12 +4,8 @@
   "description": "Lex language extension",
   "publisher": "lex-lang",
   "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "categories": [
-    "Other"
-  ],
+  "engines": { "vscode": "^1.85.0" },
+  "categories": [ "Other" ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
@@ -22,9 +18,8 @@
     "languages": [
       {
         "id": "lex",
-        "extensions": [
-          ".lex"
-        ]
+        "extensions": [".lex"],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
