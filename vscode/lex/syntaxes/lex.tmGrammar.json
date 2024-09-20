@@ -3,12 +3,8 @@
 	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
 	"name": "Lex",
 	"patterns": [
-		{
-			"include": "#comment"
-		},
-		{
-			"include": "#formula"
-		}
+		{ "include": "#comment" },
+		{ "include": "#formula" }
 	],
 	"repository": {
 		"formula": {
@@ -45,11 +41,11 @@
 					"name": "keyword.other"
 				},
 				{
-					"match": "\\b(type|is|event|rule)\\b",
+					"match": "\\b(type|is|event|predicate|rule)\\b",
 					"name": "storage.type"
 				},
 				{
-					"match": "\\b(string|int|float|causable|suppressable|observable|internal|enforceable)\\b",
+					"match": "\\b(string|int|float|causable|suppressable|observable|internal|enforceable|transparently)\\b",
 					"name": "support.type"
 				},
 				{
