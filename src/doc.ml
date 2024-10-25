@@ -389,7 +389,7 @@ let html_of_estmt eprog =
      let html_of_type =
        kw "type"
        ^ typ name
-       ^ (match ty with Some tt -> kw "is" ^ typ (Formula.TypeTerm.to_string tt) | None -> "") in
+       ^ (match ty with Some tt -> kw "is" ^ typ (Formula.TypeTerm.value_to_string tt) | None -> "") in
      div "lex-stmt-type"
        (match doc_string with
         | Some s -> two_column html_of_type (html_of_doc_string s)
@@ -439,9 +439,9 @@ let html_of_eprog title css js eprog =
 
 let to_file input_filename filename eprog =
   let css = In_channel.read_all (
-                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../assets/lexdoc.css") in
+                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../../../../assets/lexdoc.css") in
   let js = In_channel.read_all (
-                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../assets/lexdoc.js") in
+                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../../../../assets/lexdoc.js") in
   let html = html_of_eprog ("Lexdoc: " ^ input_filename) css js eprog in
   print_endline filename;
   Out_channel.write_all filename ~data:html

@@ -69,7 +69,9 @@
 %
 
 %
+\iffalse
 \section{Introduction}
+
 
 \section{Enforcement under refinement}
 
@@ -90,7 +92,7 @@ If $\Phi$
 
 \section{Logical foundations}
 
-\iffalse
+
 \Lex{} has its foundations in runtime enforcement~\cite{Schneider2000} and uses
 Metric First-Order Temporal Logic~\cite{Chomicki1995,Basin2015} as its underlying logic.
 In contrast with other approaches to legal formalization~\cite{...}, its logic is thus `classical,'
@@ -112,9 +114,7 @@ object logic and $\Models$ is the set of models, such that
 \end{align*}
  When $\phi = a \rightarrow b$ and ..., we obtain $\Epsilon(a \rightarrow b, M) \models a \rightarrow b$
 
-
  \fi
-
 \section{Syntax}
 
 \subsection{Modules}
@@ -530,30 +530,6 @@ well as the conversion of $time\_interval$ expressions into intervals:
 
 % fix shift/reduce and reduce/reduce conflicts
 % localization
-
-% Enforcer wishlist
-
-% WP2 (new)
-% - new data structure (= sequence of named formulae with references)
-% - nary constructs
-% - let bindings, including with constants in the terms
-% - efficient handling of data structures
-% - efficient search for subformulae to update
-
-% WP4 (low priority)
-% - conditional Cau/Sup
-
-% WP5 (even lower priority)
-% - complex data types: algebraic / records
-
-% WP7 (done but not tested)
-% - time arithmetics → missing arbitrary functions
-
-% WP8 (done but insufficiently tested)
-% - aggregations
-
-% WP9 (new)
-% - checks
 
 {%\setlength\bibsep{2pt}
 \small
