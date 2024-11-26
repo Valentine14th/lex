@@ -11,21 +11,21 @@ open Core
 open Formula
 
 let debug_eformula = ref true
-let debug msg = if !debug_eformula then Util.debug_print ~f_name:(Some "eformula.ml") msg else ignore msg
+let debug msg = if !debug_eformula then Errors.debug_print ~f_name:(Some "eformula.ml") msg else ignore msg
 
-module ETerm = Tformula.TTerm
+module ETerm = TTerm
 
 type core_t =
   | ETT
   | EFF
-  | EEqConst of ETerm.t * (Dom.t * Lexing.position list)
+  | EEqConst of ETerm.t * (Dom.t * LexingInfo.t)
   | EPredicate of string * ETerm.t list * Lex.event_type
   | EAgg of string * Aggregation.op * ETerm.t * string list * t
   | ENeg of t
   | EAnd of Side.t * (t list)
   | EOr of Side.t * (t list)
   | EImp of Side.t * t * t
-  | EIff of Side.t * Side.t * t * t
+  | EIff of (Side.t * Side.t) * t * t
   | EExists of string * t
   | EForall of string * t
   | EPrev of Interval.t * t
@@ -36,13 +36,14 @@ type core_t =
   | EAlways of Interval.t * bool * t
   | ESince of Side.t * Interval.t * t * t
   | EUntil of Side.t * Interval.t * bool * t * t
-  | EType of t * ty
+  | EType of t * EnfType.t
 
 and t = {
-  f: core_t; enftype: EnfType.t;
-  variable_instantiations: (string * ETerm.t) list;
-  id: int;
-  positions: Lexing.position list
+    f: core_t;
+    enftype: EnfType.t;
+    variable_instantiations: (string * ETerm.t) list;
+    id: int;
+    pos: LexingInfo.t
 }
 
 let rec max_id_core = function
@@ -67,14 +68,14 @@ let rec max_id_core = function
     -> Option.value ~default:0 (
            List.max_elt (List.map fs ~f:max_id) ~compare:Int.compare)
   | EImp (_, f1, f2)
-    | EIff (_, _, f1, f2)
+    | EIff (_, f1, f2)
     | ESince (_, _, f1, f2)
     | EUntil (_, _, _, f1, f2) 
     -> Int.max (max_id f1) (max_id f2)
 
 and max_id f = Int.max f.id (max_id_core f.f)
 
-let make f enftype variable_instantiations id positions = { f; variable_instantiations; enftype; id; positions }
+let make f enftype variable_instantiations id pos = { f; variable_instantiations; enftype; id; pos }
 
 let ett = ETT
 let eff = EFF
@@ -84,7 +85,7 @@ let eneg f = ENeg f
 let econj s f g = EAnd (s, [f; g])
 let edisj s f g = EOr (s, [f; g])
 let eimp s f g = EImp (s, f, g)
-let eiff s t f g = EIff (s, t, f, g)
+let eiff s2 f g = EIff (s2, f, g)
 let eexists x f = EExists (x, f)
 let eforall x f = EForall (x, f)
 let eprev i f = EPrev (i, f)
@@ -97,45 +98,48 @@ let esince s i f g = ESince (s, i, f, g)
 let euntil s i f g = EUntil (s, i, true, f, g)
 let etype s t = EType (s, t)
 
+let dummy = LexingInfo.dummy
+let (+.+) f g = LexingInfo.(f.pos ++ g.pos)
+
 let tbigcauconj = function
-  | [] -> make ett Non [] 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj LR f g) Cau [] 0 f.positions)
+  | [] -> make ett Non [] 0 dummy
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj LR f g) Cau [] 0 (f +.+ g))
 
 let tbigsupconj idx = function
-  | [] -> make ett Non [] 0 []
+  | [] -> make ett Non [] 0 dummy
   | h::t ->
     let aux i f g =
-      if i < idx then make (econj R f g) Non [] 0 f.positions
-      else            make (econj L f g) Non [] 0 f.positions
+      if i < idx then make (econj R f g) Non [] 0 (f +.+ g)
+      else            make (econj L f g) Non [] 0 (f +.+ g)
     in
     List.foldi t ~init:h ~f:aux
 
 let tbignonconj = function
-  | [] -> make ett Non [] 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj N f g) Non [] 0 f.positions)
+  | [] -> make ett Non [] 0 dummy
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (econj N f g) Non [] 0 (f +.+ g))
 
 let tbigcaudisj idx = function
-  | [] -> make ett Non [] 0 []
+  | [] -> make ett Non [] 0 dummy
   | h::t ->
     let aux i f g =
-      if i < idx then make (edisj R f g) Non [] 0 f.positions
-      else            make (edisj L f g) Non [] 0 f.positions
+      if i < idx then make (edisj R f g) Non [] 0 (f +.+ g)
+      else            make (edisj L f g) Non [] 0 (f +.+ g)
     in
     List.foldi t ~init:h ~f:aux
 
 let tbigsupdisj = function
-  | [] -> make ett Non [] 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj LR f g) Sup [] 0 f.positions)
+  | [] -> make ett Non [] 0 dummy
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj LR f g) Sup [] 0 (f +.+ g))
 
 let tbignondisj = function
-  | [] -> make ett Non [] 0 []
-  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj N f g) Non [] 0 f.positions)
+  | [] -> make ett Non [] 0 dummy
+  | h::t -> List.fold t ~init:h ~f:(fun f g -> make (edisj N f g) Non [] 0 (f +.+ g))
 
 let tbigcauforall vars f =
-  List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non [] 0 f.positions)
+  List.fold_right vars ~init:f ~f:(fun x f -> make (eforall x f) Non [] 0 f.pos)
 
 let tbigcauexists vars f =
-  List.fold_right vars ~init:f ~f:(fun x f -> make (eexists x f) Non [] 0 f.positions)
+  List.fold_right vars ~init:f ~f:(fun x f -> make (eexists x f) Non [] 0 f.pos)
 
 let rec core_of_tformula tevents ?id:(id=1) d = 
   let lof_formula = of_tformula tevents ~id:(d*id)
@@ -146,19 +150,19 @@ let rec core_of_tformula tevents ?id:(id=1) d =
   | TFF -> EFF
   | TEqConst (x, y) -> 
      (if ETerm.equal_core y.trm (ETerm.TConst (Dom.Bool true)) then
-       EEqConst (x, (Dom.Bool true, y.positions))
+       EEqConst (x, (Dom.Bool true, y.pos))
      else
-       EEqConst ({ trm = ETerm.TBinop (x, Formula.Term.BEq, y);
+       EEqConst ({ trm = ETerm.TBinop (x, Term.BEq, y);
                    tt = TypeTerm.TypeConst (Dom.TBool);
-                   positions = [] },
-                 (Dom.Bool true, y.positions)))
+                   pos = dummy },
+                 (Dom.Bool true, y.pos)))
   | TPredicate (e, t, et) -> EPredicate (e, t, et)
   | TAgg (s, op, x, y, f) -> EAgg (s, op, x, y, rof_formula f)
   | TNeg f -> ENeg (lof_formula f)
   | TAnd (s, fs) -> EAnd (s, List.mapi ~f:iof_formula fs)
   | TOr (s, fs) -> EOr (s, List.mapi ~f:iof_formula fs)
   | TImp (s, f, g) -> EImp (s, lof_formula f, rof_formula g)
-  | TIff (s, t, f, g) -> EIff (s, t, lof_formula f, rof_formula g)
+  | TIff (s2, f, g) -> EIff (s2, lof_formula f, rof_formula g)
   | TExists (x, f) -> EExists (x, lof_formula f)
   | TForall (x, f) -> EForall (x, lof_formula f)
   | TPrev (i, f) -> EPrev (i, lof_formula f)
@@ -177,16 +181,15 @@ and of_tformula tevents ?id:(id=1) (f: Tformula.t) : t =
     variable_instantiations = []; (* TODO: maybe implement instantiations in (t)formula.ml, but first ensure that the current implementation in eformula.ml is even the best way to implement this *)
     enftype = EnfType.Obs;
     id;
-    positions = f.positions }
+    pos = f.pos }
 
 let of_tformulas tevents = List.map ~f:(of_tformula tevents)
 
 let rec fv ?(map=Map.empty (module String)) f =
-  let aux0 v map p = Map.add_multi map ~key:v ~data:p in
-  let aux1 map (v, ps) = List.fold ps ~init:map ~f:(aux0 v) in
+  let aux1 map (v, p) = Map.update map v ~f:(function Some i -> LexingInfo.(p ++ i) | None -> p) in
   let merge_fun ~key:_ = function
     | `Left x | `Right x -> Some x
-    | `Both (x, y) -> Some (x @ y)
+    | `Both (x, y) -> Some LexingInfo.(x ++ y)
   in
   let merge map1 map2 = Map.merge map1 map2  ~f:merge_fun in
   match f.f with
@@ -196,7 +199,7 @@ let rec fv ?(map=Map.empty (module String)) f =
   | EPredicate (_, trms, _) ->
     ETerm.fv_list trms |> List.fold ~init:map ~f:aux1
   | EAgg (s, _, _, ys, _) ->
-    ((s, f.positions) :: List.map ys ~f:(fun y -> (y, f.positions)))
+    ((s, f.pos) :: List.map ys ~f:(fun y -> (y, f.pos)))
     |> List.fold ~init:map ~f:aux1
   | EExists (x, g)
     | EForall (x, g) ->
@@ -211,7 +214,7 @@ let rec fv ?(map=Map.empty (module String)) f =
     | ENext (_, f)
     | EType (f, _) -> fv ~map f
     | EImp (_, f1, f2)
-    | EIff (_, _, f1, f2)
+    | EIff (_, f1, f2)
     | ESince (_, _, f1, f2)
     | EUntil (_, _, _, f1, f2) -> fv ~map:(fv ~map f2) f1
   | EAnd (_, fs)
@@ -234,7 +237,7 @@ let rec rank = function
     | EAlways (_, _, f)
     | EType (f, _) -> rank f.f
     | EImp (_, f, g)
-    | EIff (_, _, f, g)
+    | EIff (_, f, g)
     | ESince (_, _, f, g)
     | EUntil (_, _, _, f, g) -> rank f.f + rank g.f
   | EAnd (_, fs)
@@ -248,13 +251,13 @@ let fix_side s f g =
 
 let rec to_formula (f: t): Formula.t =
   let insts = List.map f.variable_instantiations ~f:(fun (x, t) -> (x, ETerm.to_formula_term t)) in
-  Formula.make_formula (to_formula_core f.f) insts f.positions
+  Formula.make_formula (to_formula_core f.f) insts f.pos
 
 and to_formula_core: core_t -> Formula.core_t = function
   | ETT -> TT
   | EFF -> FF
   | EEqConst (trm, (c, c_pos)) ->
-    Term (Formula.Term.binop trm.positions (ETerm.to_formula_term trm) Formula.Term.BEq (Formula.Term.const c_pos c))
+    Term (Term.binop trm.pos (ETerm.to_formula_term trm) Term.BEq (Term.const c_pos c))
   | EPredicate (e, trms, _) -> Predicate (e, List.map trms ~f:ETerm.to_formula_term)
   | EAgg (s, op, x, y, f) -> Agg (s, op, ETerm.to_formula_term x, y, to_formula f)
   | ENeg f -> Neg (to_formula f)
@@ -263,7 +266,7 @@ and to_formula_core: core_t -> Formula.core_t = function
   | EOr (s, fs) -> Or (fix_side s (List.hd_exn fs).f (List.last_exn fs).f,
                        List.map fs ~f:to_formula)
   | EImp (s, f, g) -> Imp (fix_side s f.f g.f, to_formula f, to_formula g)
-  | EIff (s, t, f, g) -> Iff (fix_side s f.f g.f, fix_side t f.f g.f, to_formula f, to_formula g)
+  | EIff (s2, f, g) -> Iff ((fix_side (fst s2) f.f g.f, fix_side (snd s2) f.f g.f), to_formula f, to_formula g)
   | EExists (x, f) -> Exists (x, to_formula f)
   | EForall (x, f) -> Forall (x, to_formula f)
   | EPrev (i, f) -> Prev (i, to_formula f)
@@ -286,7 +289,7 @@ let rec op_to_string_core = function
   | EAnd (_, _) -> Printf.sprintf "∧"
   | EOr (_, _) -> Printf.sprintf "∨"
   | EImp (_, _, _) -> Printf.sprintf "→"
-  | EIff (_, _, _, _) -> Printf.sprintf "↔"
+  | EIff (_, _, _) -> Printf.sprintf "↔"
   | EExists (x, _) -> Printf.sprintf "∃ %s." x
   | EForall (x, _) -> Printf.sprintf "∀ %s." x
   | EPrev (i, _) -> Printf.sprintf "●%s" (Interval.to_string i)
@@ -321,7 +324,7 @@ let rec to_string_core_rec l = function
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 3 (String.concat ~sep strings)
   | EImp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | EIff (s, t, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
+  | EIff (s2, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) s2 (fun _ -> to_string_rec 5) g
   | EExists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f
   | EForall (x, f) -> Printf.sprintf (Util.paren l 5 "∀%s. %a") x (fun _ -> to_string_rec 5) f
   | EPrev (i, f) -> Printf.sprintf (Util.paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
@@ -334,7 +337,7 @@ let rec to_string_core_rec l = function
                          (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | EUntil (s, i, _, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
                                 (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | EType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> ty_to_string) ty
+  | EType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> EnfType.to_string) ty
 
 and to_string_rec l form =
   let f_str =
@@ -362,7 +365,7 @@ let rec relative_interval (f: t) =
   | ENeg f | EExists (_, f) | EForall (_, f) -> relative_interval f
   | EAnd (_, fs) | EOr (_, fs)
     -> List.fold_left (List.map fs ~f:relative_interval) ~init:Zinterval.full ~f:Zinterval.lub
-  | EImp (_, f1, f2) | EIff (_, _, f1, f2)
+  | EImp (_, f1, f2) | EIff (_, f1, f2)
     -> Zinterval.lub (relative_interval f1) (relative_interval f2)
   | EPrev (i, f) | EOnce (i, f) | EHistorically (i, f)
     -> let i' = Zinterval.inv (Zinterval.of_interval i) in
@@ -386,7 +389,7 @@ let strict (f: t) =
     || (match f.f with
         | ETT | EFF | EEqConst (_, _) | EPredicate _-> false
         | ENeg f | EExists (_, f) | EForall (_, f) | EAgg (_, _, _, _, f) -> _strict itv fut f
-        | EImp (_, f1, f2) | EIff (_, _, f1, f2)
+        | EImp (_, f1, f2) | EIff (_, f1, f2)
           -> (_strict itv fut f1) || (_strict itv fut f2)
         | EAnd (_, fs) | EOr (_, fs)
           -> List.exists fs ~f:(_strict itv fut)
@@ -417,12 +420,12 @@ let rec is_transparent (f: t) = match f.enftype with
         | EOnce (_, f) | ENext (_, f) | EHistorically (_, f)
           | EAlways (_, _, f) -> is_transparent f
       | EEventually (_, b, f) -> b && is_transparent f
-      | EImp (L, f, g) | EIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
+      | EImp (L, f, g) | EIff ((L, L), f, g) -> is_transparent f && strictly_relative_past g
       | EOr (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | EImp (R, f, g) | EIff (R, R, f, g) -> is_transparent g && strictly_relative_past f
+      | EImp (R, f, g) | EIff ((R, R), f, g) -> is_transparent g && strictly_relative_past f
       | EOr (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
       | EAnd (_, fs) -> List.for_all fs ~f:is_transparent
-      | EIff (_, _, f, g) -> is_transparent f && is_transparent g
+      | EIff (_, f, g) -> is_transparent f && is_transparent g
       | ESince (_, _, f, g) -> is_transparent f && strictly_relative_past g
       | EUntil (R, _, b, f, g) -> b && is_transparent f && strictly_relative_past g
       | EUntil (LR, _, b, f, g) -> b && is_transparent f && is_transparent g
@@ -436,10 +439,10 @@ let rec is_transparent (f: t) = match f.enftype with
         | EEventually (_, _, f) -> is_transparent f
       | EAlways (_, b, f) -> b && is_transparent f
       | EAnd (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | EIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
-      | EIff (R, R, f, g) -> is_transparent g && strictly_relative_past f
+      | EIff ((L, L), f, g) -> is_transparent f && strictly_relative_past g
+      | EIff ((R, R), f, g) -> is_transparent g && strictly_relative_past f
       | EAnd (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
-      | EIff (_, _, f, g) -> is_transparent f && is_transparent g
+      | EIff (_, f, g) -> is_transparent f && is_transparent g
       | EOr (_, fs) -> List.for_all fs ~f:is_transparent
       | ESince (L, _, f, g) -> is_transparent f && strictly_relative_past g
       | ESince (R, _, f, g) -> is_transparent f && is_transparent g

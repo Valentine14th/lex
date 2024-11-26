@@ -9,8 +9,9 @@
 (*******************************************************************)
 
 open Lextime
+open Core
 
-type bound = C of Span.t | O of Span.t
+type bound = C of Span.t | O of Span.t 
 
 let equal_bound b b' = match b, b' with
   | C s, C s' -> Span.equal s s'
@@ -29,7 +30,21 @@ let lt_bounds b b' = match b, b' with
   | C s, O s' -> Span.(s < s')
   | O s, C s' -> Span.(s < s')
 
-type t = B of bound * bound | U of bound
+let compare_bound b b' = match b, b' with
+  | C s, C s' -> Span.compare s s'
+  | O s, O s' -> Span.compare s s'
+  | C _, O _  -> 1
+  | O _, C _ -> -1
+
+let sexp_of_bound = function
+  | C s -> Sexp.List [Sexp.Atom "C"; Span.sexp_of_t s]
+  | O s -> Sexp.List [Sexp.Atom "O"; Span.sexp_of_t s]
+
+let hash_fold_bound state = function
+  | C s -> hash_fold_list hash_fold_int state [0; Span.hash s]
+  | O s -> hash_fold_list hash_fold_int state [1; Span.hash s]
+
+type t = B of bound * bound | U of bound [@@deriving compare, sexp_of, hash]
 
 let equal i i' = match i, i' with
   | B (lb, ub), B (lb', ub') -> equal_bound lb lb' && equal_bound ub ub'

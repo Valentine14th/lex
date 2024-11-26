@@ -76,7 +76,7 @@ point "1"
 subpoint "a"
 rule
     whenever 
-        PersonalDataProcessing(ep, x, z)
+        PersonalDataProcessing(ep, x, z
         HasPurpose(ep, prp)
         (ONCE GiveConsent(w, c) AND Authorizes(c, prp))
         (ONCE Nominates(y, x))

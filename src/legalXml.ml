@@ -119,14 +119,14 @@ end
 (* End XML *)
 
 let rec to_lex_sections t =
-  Lex.SSection (Lexing.dummy_pos, t.kind, t.ident, None) :: to_lex_node_sections t.children
+  Lex.SSection (LexingInfo.dummy, t.kind, t.ident, None) :: to_lex_node_sections t.children
 
 and to_lex_node_sections = function
   | FormexNode ts -> List.concat_map ts ~f:to_lex_sections
-  | FormexData s -> [Lex.SNote (Lexing.dummy_pos, s)]
+  | FormexData s -> [Lex.SNote (LexingInfo.dummy, s)]
 
 let to_lex format name t =
   let sections = to_lex_sections t in
-  let stmts = (Lex.SImport (Lexing.dummy_pos, format, name)) :: sections in
+  let stmts = (Lex.SImport (LexingInfo.dummy, format, name)) :: sections in
   Lex.{stmts}
     

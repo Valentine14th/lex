@@ -1,6 +1,6 @@
 open Base
 
-type op = ASum | AAvg | AMed | ACnt | AMin | AMax [@@deriving compare, sexp_of, hash, equal]
+type op = ASum | AAvg | AMed | ACnt | AMin | AMax | AStd [@@deriving compare, sexp_of, hash, equal]
 
 let op_to_string = function
   | ASum -> "SUM"
@@ -9,6 +9,7 @@ let op_to_string = function
   | ACnt -> "CNT"
   | AMin -> "MIN"
   | AMax -> "MAX"
+  | AStd -> "STD"
 
 let ret_tt op tt =
   match op, tt with
@@ -28,6 +29,9 @@ let ret_tt op tt =
   | AMax, Dom.TInt   -> Some Dom.TInt
   | AMax, Dom.TFloat -> Some Dom.TFloat
   | AMax, Dom.TMoney c -> Some (Dom.TMoney c)
+  | AStd, Dom.TInt   -> Some Dom.TInt
+  | AStd, Dom.TFloat -> Some Dom.TFloat
+  | AStd, Dom.TMoney c -> Some (Dom.TMoney c)
   | _                -> None
 
 let ret_tt_exn op tt =

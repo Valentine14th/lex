@@ -5,21 +5,21 @@ type ident = string
 type pol = TCau | TCauObs | TSup | TObs | TCauSup | TItl
 
 let pol_to_enftype (p: pol) = match p with
-  | TCau -> Formula.EnfType.Cau
-  | TObs -> Formula.EnfType.Obs
-  | TSup -> Formula.EnfType.Sup
-  | TCauObs -> Formula.EnfType.CauObs
-  | TCauSup -> Formula.EnfType.CauSup
-  | TItl -> Formula.EnfType.Itl
+  | TCau -> EnfType.Cau
+  | TObs -> EnfType.Obs
+  | TSup -> EnfType.Sup
+  | TCauObs -> EnfType.CauObs
+  | TCauSup -> EnfType.CauSup
+  | TItl -> EnfType.Itl
 
-let enftype_to_pol (t: Formula.EnfType.t) = match t with
-  | Formula.EnfType.Cau -> TCau
-  | Formula.EnfType.Obs -> TObs
-  | Formula.EnfType.Sup -> TSup
-  | Formula.EnfType.CauObs -> TCauObs
-  | Formula.EnfType.CauSup -> TCauSup
-  | Formula.EnfType.Itl -> TItl
-  | Formula.EnfType.Non -> assert false
+let enftype_to_pol (t: EnfType.t) = match t with
+  | EnfType.Cau -> TCau
+  | EnfType.Obs -> TObs
+  | EnfType.Sup -> TSup
+  | EnfType.CauObs -> TCauObs
+  | EnfType.CauSup -> TCauSup
+  | EnfType.Itl -> TItl
+  | EnfType.Non -> assert false
 
 type section_kind =
   | Law       of int
@@ -32,7 +32,7 @@ type section_kind =
   | Subpoint  of int
 
 type reference = {sks: (section_kind * ident) list; rule: ident option}
-type ref_expr = {ref: reference; pos: Lexing.position}
+type ref_expr = {ref: reference; pos: LexingInfo.t}
 let make_reference sks rule = {sks=sks; rule=rule}
 let make_ref_expr pos sks rule = {ref=make_reference sks rule; pos=pos}
 
@@ -66,14 +66,14 @@ let compare_section_kind kind kind' =
   in
   compare_tuple (rank kind) (rank kind')
 
-type pattern =
+type 'a pattern =
   | PPresent
   | PEventually of Interval.t
   | PAlways of Interval.t
-  | PUntil of Interval.t * Formula.t
+  | PUntil of Interval.t * 'a
   | POnce of Interval.t
   | PHistorically of Interval.t
-  | PSince of Interval.t * Formula.t
+  | PSince of Interval.t * 'a
 
 type rule_type = Vanilla | Enforceable | Transparent
 
@@ -89,16 +89,16 @@ type rule_constr =
   | Suppressing of rule_constr_kind list
   | Causing     of rule_constr_kind list
 
-type pformula = {p: pattern; fs: Formula.t list}
+type 'a pformula = {p: 'a pattern; fs: 'a list}
 let pf p fs = {p; fs}
 
-type rule =
-  | Obligation   of Lexing.position * pformula * pformula * rule_type * rule_constr list
-  | Permission   of Lexing.position * pformula * pformula * rule_type * rule_constr list
-  | Constitutive of Lexing.position * pformula * Formula.t list
-  | Exception    of Lexing.position * pformula * ref_expr list
-  | ExceptionC   of Lexing.position * pformula * ref_expr list * Formula.t list
-  | Scope        of Lexing.position * pformula * ref_expr list
+type 'a rule =
+  | Obligation   of LexingInfo.t * 'a pformula * 'a pformula * rule_type * rule_constr list
+  | Permission   of LexingInfo.t * 'a pformula * 'a pformula * rule_type * rule_constr list
+  | Constitutive of LexingInfo.t * 'a pformula * 'a list
+  | Exception    of LexingInfo.t * 'a pformula * ref_expr list
+  | ExceptionC   of LexingInfo.t * 'a pformula * ref_expr list * 'a list
+  | Scope        of LexingInfo.t * 'a pformula * ref_expr list
 
 type import_format =
   | ILex
@@ -112,18 +112,74 @@ type event_syntax =
 
 type event_type = Event of bool * event_syntax | Predicate
 
-type stmt =
-  | SImport    of Lexing.position * import_format * string list (* location points to beginning of "import" keyword *)
-  | SSection   of Lexing.position * section_kind * string * string option (* location points to beginning of section label *)
-  | SRule      of Lexing.position * string option * (ident * Formula.TypeTerm.t) list * rule * string option (* location points to the beginning of the "rule" keyword *)
-  | SEvent     of Lexing.position * event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option (* location points to beginning of event identifier *)
-  | SType      of Lexing.position * ident * (Formula.TypeTerm.t option) * string option (* location points to beginning of type identifier *)
-  | SFunction  of Lexing.position * ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
-  | SNote      of Lexing.position * string
+type 'a stmt =
+  | SImport    of LexingInfo.t * import_format * string list (* location points to beginning of "import" keyword *)
+  | SSection   of LexingInfo.t * section_kind * string * string option (* location points to beginning of section label *)
+  | SRule      of LexingInfo.t * string option * (ident * TypeTerm.t) list * 'a rule * string option (* location points to the beginning of the "rule" keyword *)
+  | SEvent     of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * pol * string option (* location points to beginning of event identifier *)
+  | SType      of LexingInfo.t * ident * (TypeTerm.t option) * string option (* location points to beginning of type identifier *)
+  | SFunction  of LexingInfo.t * ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
+  | SNote      of LexingInfo.t * string
 
 type signature = ident * (ident * Dom.tt) list
 
-type prog = { stmts: stmt list }
+type 'a prog = { stmts: 'a stmt list }
+
+let map_pattern ~f:(f : 'a -> 'b) (p : 'a pattern) : 'b pattern =
+  match p with
+  | PPresent -> PPresent
+  | PEventually i -> PEventually i
+  | PAlways i -> PAlways i
+  | PUntil (i, e) -> PUntil (i, f e)
+  | POnce i -> POnce i
+  | PHistorically i -> PHistorically i
+  | PSince (i, e) -> PSince (i, f e)
+
+let map_pformula ~f:(f : 'a -> 'b) (pformula : 'a pformula) : 'b pformula =
+  { p = map_pattern ~f pformula.p; fs = List.map ~f pformula.fs }
+
+let map_rule ~f:(f : 'a -> 'b) (rule : 'a rule) : 'b rule =
+  match rule with
+  | Obligation (pos, fp1, fp2, rt, rcs) ->
+     Obligation (pos, map_pformula ~f fp1, map_pformula ~f fp2, rt, rcs)
+  | Permission (pos, fp1, fp2, rt, rcs) ->
+     Permission (pos, map_pformula ~f fp1, map_pformula ~f fp2, rt, rcs)
+  | Constitutive (pos, fp, g) ->
+     Constitutive (pos, map_pformula ~f fp, List.map ~f g)
+  | Exception (pos, fp, refs) ->
+     Exception (pos, map_pformula ~f fp, refs)
+  | ExceptionC (pos, fp1, refs, g) ->
+     ExceptionC (pos, map_pformula ~f fp1, refs, List.map ~f g)
+  | Scope (pos, fp, refs) -> 
+     Scope (pos, map_pformula ~f fp, refs)
+
+let map_stmt ~f:(f : 'a -> 'b) (stmt : 'a stmt) : 'b stmt =
+  match stmt with
+  | SImport (pos, import_format, idents) ->
+     SImport (pos, import_format, idents)
+  | SSection (pos, section_kind, label, title) ->
+     SSection (pos, section_kind, label, title)
+  | SRule (pos, label, type_fixes, rule, doc_string) ->
+     SRule (pos, label, type_fixes, map_rule ~f rule, doc_string)
+  | SEvent (pos, event_type, name, typed_args, pol, doc_string) ->
+     SEvent (pos, event_type, name, typed_args, pol, doc_string)
+  | SType (pos, name, typ, doc_string) ->
+     SType (pos, name, typ, doc_string)
+  | SFunction (pos, name, typed_args, return_typ, doc_string) ->
+     SFunction (pos, name, typed_args, return_typ, doc_string)
+  | SNote (pos, text) ->
+     SNote (pos, text)
+
+let map ~f:(f : 'a -> 'b) (prog : 'a prog) : 'b prog =
+  { stmts = List.map ~f:(map_stmt ~f) prog.stmts }
+
+let pos_of_rule = function
+  | Obligation (pos, _, _, _, _) -> pos
+  | Permission (pos, _, _, _, _) -> pos
+  | Constitutive (pos, _, _) -> pos
+  | Exception (pos, _, _) -> pos
+  | ExceptionC (pos, _, _, _) -> pos
+  | Scope (pos, _, _) -> pos
 
 let formulas_from_pattern = function
   | PPresent
@@ -218,37 +274,37 @@ let string_of_pattern = function
   | PSince (i, f) -> " always since " ^ Formula.to_string f ^ " " ^ Interval.to_string i
 
 let string_of_rule i rule =
-  let to_string (f: Formula.t) = Etc.tabs (i+1) ^ Formula.to_string f in
+  let to_string (f: Formula.t) = Util.tabs (i+1) ^ Formula.to_string f in
   let string_of_formula_list f =
     String.concat ~sep:"\n" (List.map ~f:(fun f -> to_string f) f) ^ "\n" in
   (*let string_of_formula_list_list fs =
-    String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
+    String.concat ~sep:("\n" ^ Util.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb fp1 fp2 rcs rt =
-    Etc.tabs i     ^ "whenever" ^ string_of_pattern fp1.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ string_of_pattern fp1.p ^ "\n"
     ^ string_of_formula_list fp1.fs ^ "\n"
-    ^ Etc.tabs i   ^ verb       ^ string_of_pattern fp2.p ^ "\n"
+    ^ Util.tabs i   ^ verb       ^ string_of_pattern fp2.p ^ "\n"
     ^ string_of_formula_list fp2.fs
-    ^ Etc.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
+    ^ Util.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
     ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
-      else Etc.tabs i ^ (string_of_rule_constrs rcs))
+      else Util.tabs i ^ (string_of_rule_constrs rcs))
   in
   let string_of_cons_rule verb fp g =
-    Etc.tabs i     ^ "whenever" ^ string_of_pattern fp.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ string_of_pattern fp.p ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
-    ^ Etc.tabs i   ^ verb      ^ "\n"
+    ^ Util.tabs i   ^ verb      ^ "\n"
     ^ string_of_formula_list g
   in
-  let string_of_exc_rule verb fp rs = Etc.tabs i     ^ "whenever"  ^ string_of_pattern fp.p ^ "\n"
+  let string_of_exc_rule verb fp rs = Util.tabs i     ^ "whenever"  ^ string_of_pattern fp.p ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
-    ^ Etc.tabs i   ^ verb
+    ^ Util.tabs i   ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:string_of_ref_expr rs)
   in
   let string_of_excc_rule verb fp rs g =
-    Etc.tabs i     ^ "whenever"  ^ string_of_pattern fp.p ^ "\n"
+    Util.tabs i     ^ "whenever"  ^ string_of_pattern fp.p ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
-    ^ Etc.tabs i   ^ verb
+    ^ Util.tabs i   ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:string_of_ref_expr rs)
-    ^ Etc.tabs i   ^ "constitute"
+    ^ Util.tabs i   ^ "constitute"
     ^ string_of_formula_list g
   in
   match rule with
@@ -264,15 +320,15 @@ let string_of_rule i rule =
     -> string_of_excc_rule (verb_of_rule rule) fp references g
 
 let string_of_args args i = 
-    let string_of_arg (_, name, typ_alias) = 
-      Printf.sprintf "%s%s : %s" (Etc.tabs (i+1)) name (Formula.TypeTerm.value_to_string typ_alias)
+    let string_of_arg (name, typ_alias) = 
+      Printf.sprintf "%s%s : %s" (Util.tabs (i+1)) name (TypeTerm.value_to_string typ_alias)
     in
     String.concat ~sep:"\n" (List.map args ~f:string_of_arg)
 
 let make_doc_string ds i = 
     let lines = String.split ~on:'\n' ds in
-    let indented = List.map lines ~f:(fun l -> Etc.tabs i ^ l) in
-    Etc.tabs (i + 1) ^ "\"\"\"" ^ String.concat ~sep:"\n" indented ^ Etc.tabs i ^ "\"\"\"\n"
+    let indented = List.map lines ~f:(fun l -> Util.tabs i ^ l) in
+    Util.tabs (i + 1) ^ "\"\"\"" ^ String.concat ~sep:"\n" indented ^ Util.tabs i ^ "\"\"\"\n"
 
 let string_of_import_format = function
   | ILex -> ""
@@ -291,11 +347,11 @@ let string_of_event_type = function
 let string_of_type_fixes i = function
   | [] -> ""
   | type_fixes ->
-     let f (ident, typ) = Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
      Printf.sprintf "%sfix\n%s%s\n"
-       (Etc.tabs i)
-       (Etc.tabs (i+1))
-       (String.concat (List.map type_fixes ~f) ~sep:("\n" ^ Etc.tabs (i+1)))
+       (Util.tabs i)
+       (Util.tabs (i+1))
+       (String.concat (List.map type_fixes ~f) ~sep:("\n" ^ Util.tabs (i+1)))
 
 let string_of_stmt ?(i=0) =
   function
@@ -305,7 +361,7 @@ let string_of_stmt ?(i=0) =
        (String.concat ~sep:"." idents)
   | SSection (_, section_kind, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"
-       (Etc.tabs i)
+       (Util.tabs i)
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf " \"%s\"" title | None -> "")
@@ -316,7 +372,7 @@ let string_of_stmt ?(i=0) =
        | None -> ""
       in
      Printf.sprintf "%srule%s\n%s%s\n%s"
-       (Etc.tabs i)
+       (Util.tabs i)
        (Option.value_map label ~default:"" ~f:(fun label -> " " ^ label))
        (string_of_type_fixes (i+1) type_fixes)
        (string_of_rule (i+1) rule)
@@ -328,7 +384,7 @@ let string_of_stmt ?(i=0) =
           | None -> ""
       in
       Printf.sprintf "%s%s %s %s\n%s%s"
-          (Etc.tabs i)
+          (Util.tabs i)
           (string_of_pol pol)
           (string_of_event_type event_type)
           name
@@ -341,22 +397,22 @@ let string_of_stmt ?(i=0) =
        | None -> "" in
      let typ_string =
        match typ with
-       | Some tt -> " is " ^ Formula.TypeTerm.to_string tt
+       | Some tt -> " is " ^ TypeTerm.to_string tt
        | None -> "" in
      Printf.sprintf "%stype %s%s%s"
-       (Etc.tabs i) name typ_string description
+       (Util.tabs i) name typ_string description
   | SFunction (_, name, typed_args, return_typ, doc_string) ->
      let description =
           match doc_string with
           | Some s -> "\n" ^ make_doc_string s i
           | None -> ""
      in
-     let f (ident, typ) = Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
      Printf.sprintf "%sfunction %s(%s) -> %s%s"
-       (Etc.tabs i)
+       (Util.tabs i)
        name
        (String.concat ~sep:", " (List.map typed_args ~f))
-       (Formula.TypeTerm.to_string return_typ)
+       (TypeTerm.to_string return_typ)
        description
   | SNote (_, text) -> "note \"" ^ text ^ "\""
 
@@ -376,16 +432,16 @@ let print_prog prog =
 let prog_to_file filename prog =
   Out_channel.write_all filename ~data:(string_of_prog prog)
 
-let unpack_functional tevents trm' (trm: Formula.Term.t) = match trm.trm with
-  | Formula.Term.App (f, trms) ->
+let unpack_functional tevents trm' (trm: Term.t) = match trm.trm with
+  | Term.App (f, trms) ->
      (match Map.find tevents f with
       | Some (Event (_, Functional) as et, _, _, _) ->
          Some (f, trms @ [trm'], et)
       | _ -> None)
   | _ -> None
 
-let unpack_variable tevents trm' (trm: Formula.Term.t) = match trm.trm with
-  | Formula.Term.Var x ->
+let unpack_variable tevents trm' (trm: Term.t) = match trm.trm with
+  | Term.Var x ->
      (match Map.find tevents x with
       | Some (Event (_, Variable) as et, _, _, _) ->
          Some (x, [trm'], et)

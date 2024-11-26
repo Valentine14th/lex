@@ -20,30 +20,30 @@ module Placeholders = struct
 end
 
 let rec html_of_trm ?(l=0) = function
-  | Tformula.TTerm.TVar x -> ident x
+  | TTerm.TVar x -> ident x
   | TConst d -> const (Dom.to_string d)
   | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
   | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                     (Formula.Term.string_of_unop o)
+                     (Term.string_of_unop o)
                      (html_of_trm ~l:10 t.trm)
-  | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+  | TBinop (t, o, t') -> let l' = Term.prio_of_binop o in
                         Printf.sprintf (Util.paren l l' "%s %s %s")
                           (html_of_trm ~l:l' t.trm)
-                          (Formula.Term.string_of_binop o)
+                          (Term.string_of_binop o)
                           (html_of_trm ~l:l' t'.trm)
   | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
   | TRecord kvs ->
-     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.TTerm.(v.trm) in
+     let f (k, v) = k ^ " : " ^ html_of_trm TTerm.(v.trm) in
      Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
 and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
 
 let reading_of_unop = function
-  | Formula.Term.UNot -> "not"
+  | Term.UNot -> "not"
   | USub -> "minus"
 
 let reading_of_binop = function
-  | Formula.Term.BAdd -> "plus"
+  | Term.BAdd -> "plus"
   | BSub -> "minus"
   | BMul -> "multiplied by"
   | BDiv -> "divided by"
@@ -68,18 +68,19 @@ let reading_of_dom = function
   | Money v -> Money.to_string_reading v
 
 let rec reading_of_trm ?(l=0) eprog = function
-  | Tformula.TTerm.TVar x -> ident x
+  | TTerm.TVar x -> ident x
   | TConst d -> const (reading_of_dom d)
   | TApp (f, trms) ->
      (match Map.find Elex.(eprog.efunctions) f with
       | Some (args, _, Some s) ->
          let names = List.map ~f:(fun (name, _) -> name) args in
-         Placeholders.replace_all names (List.map ~f:(reading_of_term eprog) trms) s
+         Placeholders.replace_all names (List.map ~f:
+                                           (reading_of_term eprog) trms) s
       | _ -> Printf.sprintf "%s(%s)" f (html_of_trms trms))
   | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
                      (reading_of_unop o)
                      (reading_of_trm ~l:10 eprog t.trm)
-  | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+  | TBinop (t, o, t') -> let l' = Term.prio_of_binop o in
                         Printf.sprintf (Util.paren l l' "%s %s %s")
                           (reading_of_trm ~l:l' eprog t.trm)
                           (reading_of_binop o)
@@ -88,12 +89,12 @@ let rec reading_of_trm ?(l=0) eprog = function
   | TRecord kvs ->
      let f (k, v) =
        li "lex-reading-record-field"
-         (ident k ^ " is equal to " ^ reading_of_trm eprog Tformula.TTerm.(v.trm)) in
+         (ident k ^ " is equal to " ^ reading_of_trm eprog TTerm.(v.trm)) in
      "a record where" ^ ul "lex-reading-record" (String.concat (List.map kvs ~f))
 
 
 and reading_of_term eprog term =
-  span "" (reading_of_trm eprog Tformula.TTerm.(term.trm))
+  span "" (reading_of_trm eprog TTerm.(term.trm))
 
 let reading_of_span span = const (Lextime.Span.to_string_reading span)
 
@@ -126,6 +127,7 @@ let reading_of_op = function
   | ACnt -> "count"
   | AMin -> "minimum"
   | AMax -> "maximum"
+  | AStd -> "standard deviation"
 
 let rec reading_of_formula formula_id eprog f =
   let inner_html = 
@@ -138,7 +140,7 @@ let rec reading_of_formula formula_id eprog f =
     | EPredicate (name, trms, event_type) as g ->
        (match Map.find Elex.(eprog.eevents) name with
         | Some (_, args, _, doc_string) -> 
-           let names = List.map ~f:(fun (_, name, _) -> name) args in
+           let names = List.map ~f:(fun (name, _) -> name) args in
            (match doc_string, event_type with
             | None, _ -> Formula.to_string (Eformula.to_formula f)
             | Some s, Event (_, Functional) ->
@@ -190,7 +192,7 @@ let rec reading_of_formula formula_id eprog f =
        ^ "then the following is the case:"
        ^ (ul "lex-reading-imp-right"
             (li "lex-reading-imp-right-li" (reading_of_formula formula_id eprog g)))
-    | EIff (_, _, f, g) ->
+    | EIff (_, f, g) ->
        "the following is the case:"
        ^ (ul "lex-reading-iff-left"
             (li "lex-reading-iff-left-li" (reading_of_formula formula_id eprog f)))
@@ -364,7 +366,7 @@ let reading_of_type_fixes eprog rule_id type_fixes =
   let f i (ident_, ty) =
     let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
     let fix_html =
-      match Formula.TypeTerm.eval_with_doc_string Elex.(eprog.ealiases) ty with
+      match TypeTerm.eval_with_doc_string Elex.(eprog.ealiases) ty with
      | (_, Some doc_string) -> ident ident_ ^ doc_string
      | (ty_string, None) -> ident ident_ ^ " of type " ^ typ ty_string
     in li ~id "lex-type-fix-reading" fix_html in

@@ -3,7 +3,7 @@ open Core
 open LegalXml
 
 let debug_formex = ref false
-let debug msg = if !debug_formex then Util.debug_print ~f_name:(Some "formex.ml") msg
+let debug msg = if !debug_formex then Errors.debug_print ~f_name:(Some "formex.ml") msg
 
 let format_ident =
   Re.replace (Re.compile (Re.(alt [char '('; char ')'; char '.']))) ~f:(fun _ -> "")

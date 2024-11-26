@@ -2,16 +2,16 @@ open Core
 open Lexing
 
 let debug_modules = ref false
-let debug msg = if !debug_modules then Util.debug_print ~f_name:(Some "modules.ml") msg
+let debug msg = if !debug_modules then Errors.debug_print ~f_name:(Some "modules.ml") msg
 
 type t =
   | MLex of Elex.eprog
   | MLegalXml of LegalXml.t
 
 type import =
-  | SILex        of Lexing.position * string list
-  | SIFormex     of Lexing.position * string list
-  | SIAkomaNtoso of Lexing.position * string list
+  | SILex        of LexingInfo.t * string list
+  | SIFormex     of LexingInfo.t * string list
+  | SIAkomaNtoso of LexingInfo.t * string list
 
 let string_of_import = function
   | SILex (_, idents) -> String.concat ~sep:"." idents
@@ -56,38 +56,25 @@ let find_filename seq import prefixes suffix =
   match List.find candidates ~f:check_filename with
   | Some (prefix, filename) ->
      (if List.mem seq (Filename.concat prefix filename) ~equal:String.equal then
-        Util.import_error
+        Errors.import_error
           (sprintf "found cyclic dependency %s"
              (String.concat ~sep:" -> " (seq @ [Filename.concat prefix filename])))
           (pos_of_import import)
       else
         (prefix, filename))
-  | None -> Util.import_error
+  | None -> Errors.import_error
               (sprintf "cannot find file for importing %s"
                  (string_of_import import))
               (pos_of_import import)
 
-
-let print_position outx lexbuf =
-  let pos = lexbuf.lex_curr_p in
-  fprintf outx "%s\n" (Util.string_of_pos pos)
-
 let parse_with_error lexbuf =
   try Parser.prog Lexer.read lexbuf with
-  | Lexer.SyntaxError msg ->
-    eprintf "%a: %s\n" print_position lexbuf msg;
-    exit (-1)
-  (* | Parser.ParseError msg ->
-    eprintf "%a: %s\n" print_position lexbuf msg;
-    exit (-1) *)
   | Parser.Error ->
-    eprintf "%a: syntax error\n" print_position lexbuf;
-    exit (-1)
+     Errors.parser_error "invalid character" (LexingInfo.create1 lexbuf.lex_curr_p)
   | Sys_error msg ->
-    eprintf "System error: %s\n" msg;
-    exit (-1)
+     Errors.system_error msg (LexingInfo.create1 lexbuf.lex_curr_p)
 
-let parse_module filename: Lex.prog =
+let parse_module filename: Sformula.t Lex.prog =
    let inx = try In_channel.create filename with
     | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
   in
@@ -137,7 +124,8 @@ let init_tprog_from_modules modules =
 let rec do_type lexpath ?seq:(seq=[]) b filepath filename =
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
-  let prog      = parse_module fullname in
+  let sprog     = parse_module fullname in
+  let prog      = Lex.map ~f:Formula.init sprog in
   let imports   = list_imports prog in
   let prefixes  = filepath :: lexpath in
   let suffixes  = List.map imports ~f:suffix_of_import in

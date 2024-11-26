@@ -370,13 +370,13 @@ The syntax of expressions closely follows MFOTL syntax:
   expr\_itv ::= &~ \kw{[}time\_bound_1\kw{,}(time\_bound_2\mid \kw{*})\kw{]}\\
   term ::= &~(const \mid ident) [\kw{:} ident]\\
   pred ::= &~ident\kw{(}term_1\kw{,}\dots\kw{,}term_k\kw{)}\\
-  expr ::= &~ \kw{TRUE} \mid \kw{FALSE} \mid pred \mid special\_pred \\
+  expr ::= &~ \kw{TRUE} \mid \kw{FALSE} \mid pred\\% \mid special\_pred \\
   \mid &~ \kw{NOT}~expr \mid expr_1~(\kw{AND} \mid \kw{OR} \mid \kw{IMPLIES} \mid \kw{EQUIV})~expr_2 \\
   \mid &~ (\kw{EXISTS} \mid \kw{FORALL})~expr \\
   \mid &~(\kw{ONCE} \mid \kw{EVENTUALLY} \mid \kw{HISTORICALLY} \mid \kw{ALWAYS})~[expr\_itv]~expr\\
-  \mid &~expr_1~(\kw{SINCE} \mid \kw{UNTIL} \mid \kw{TRIGGER} \mid \kw{RELEASE})~[expr\_itv]~expr_2\\
-  special\_pred ::= &~ \kw{obliged}(pred) \mid \kw{permitted}(pred) \mid \kw{prohibited}(pred) \\
-  \mid&~\kw{applicable}(string) \mid \kw{satisfied}(string) \mid \kw{violated}(string) 
+  \mid &~expr_1~(\kw{SINCE} \mid \kw{UNTIL} \mid \kw{TRIGGER} \mid \kw{RELEASE})~[expr\_itv]~expr_2%\\
+  %special\_pred ::= &~ \kw{obliged}(pred) \mid \kw{permitted}(pred) \mid \kw{prohibited}(pred) \\
+  %\mid&~\kw{applicable}(string) \mid \kw{satisfied}(string) \mid \kw{violated}(string) 
 \end{align*}
 
 \subsubsection{Verbs.}

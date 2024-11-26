@@ -8,7 +8,7 @@ let loop filename mode f o b () =
   and basename = Filename.basename filename in
   let b = match b with (* TODO: does this way of extracting an upper bound b make sense? *)
     | None -> Interval.C Lextime.Span.zero
-    | Some b -> Interval.C (Lextime.Span.of_value_with_unit b [] "s") in
+    | Some b -> Interval.C (Lextime.Span.of_value_with_unit b LexingInfo.dummy "s") in
 
   match mode with
   | None | Some "mfotl" -> begin

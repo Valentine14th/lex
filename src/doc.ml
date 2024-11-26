@@ -5,20 +5,20 @@ open Eformula
 
 
 let rec html_of_trm ?(l=0) = function
-  | Tformula.TTerm.TVar x -> ident x
+  | TTerm.TVar x -> ident x
   | TConst d -> const (Dom.to_string d)
   | TApp (f, trms) -> Printf.sprintf "%s(%s)" (ident f) (html_of_trms trms)
   | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                     (Formula.Term.string_of_unop o)
+                     (Term.string_of_unop o)
                      (html_of_trm ~l:10 t.trm)
-  | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
+  | TBinop (t, o, t') -> let l' = Term.prio_of_binop o in
                          Printf.sprintf (Util.paren l l' "%s %s %s")
                            (html_of_trm ~l:l' t.trm)
-                           (Formula.Term.string_of_binop o)
+                           (Term.string_of_binop o)
                            (html_of_trm ~l:l' t'.trm)
   | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
   | TRecord kvs ->
-     let f (k, v) = k ^ " : " ^ html_of_trm Tformula.TTerm.(v.trm) in
+     let f (k, v) = k ^ " : " ^ html_of_trm TTerm.(v.trm) in
      Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
 
@@ -68,7 +68,7 @@ let rec html_of_formula_ formula_id l f =
     | EOr (_, fs) -> Util.paren_string l 3 (
                          String.concat ~sep:(kw "OR") (List.map fs ~f:(html_of_formula_ formula_id 3)))
     | EImp (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
-    | EIff (_, _, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
+    | EIff (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
     | EExists (x, f) -> Util.paren_string l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
     | EForall (x, f) -> Util.paren_string l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
     | EPrev (i, f) -> Util.paren_string l 5  (kw "PREVIOUS" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
@@ -79,7 +79,7 @@ let rec html_of_formula_ formula_id l f =
     | EAlways (i, _, f) -> Util.paren_string l 5 (kw "ALWAYS" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
     | ESince (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
     | EUntil (_, i, _, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
-    | EType (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Formula.ty_to_string t) in
+    | EType (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ EnfType.to_string t) in
   let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
   span ~id "lex-subformula" inner_html 
 
@@ -266,25 +266,25 @@ let html_of_doc_string s =
       ^ div "lex-reading-body" (Reading.reading_of_doc_string s)
     )
 
-let html_of_arg (_, id, ty) =
+let html_of_arg (id, ty) =
   div "lex-event-arg" (
-      ident id ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty)
+      ident id ^ ": " ^ typ (TypeTerm.value_to_string ty)
     )
 
-let html_of_arg2 (_, id, ty) =
+let html_of_arg2 (id, ty) =
   span "lex-event-arg" (
-      ident id ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty)
+      ident id ^ ": " ^ typ (TypeTerm.value_to_string ty)
     )
 
 let html_of_function_arg (id, ty) =
   div "lex-function-arg" (
-      ident id ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty)
+      ident id ^ ": " ^ typ (TypeTerm.value_to_string ty)
     )
 
 let html_of_type_fix rule_id i (ident_, ty) =
   let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
   div "lex-type-fix-outer" (
-      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ (Formula.TypeTerm.value_to_string ty))
+      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ (TypeTerm.value_to_string ty))
     )
 
 let html_of_args args =
@@ -367,14 +367,14 @@ let html_of_estmt eprog =
           ^ html_of_args2 (List.drop_last_exn typed_args)
           ^ ") -> "
           ^ (match List.last_exn typed_args with
-               (_, _, ty) -> typ (Formula.TypeTerm.value_to_string ty))
+               (_, ty) -> typ (TypeTerm.value_to_string ty))
        | Event (_, Variable) ->
           kw (Lex.string_of_pol pol)
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ " : "
           ^ (match List.last_exn typed_args with
-               (_, _, ty) -> typ (Formula.TypeTerm.value_to_string ty))
+               (_, ty) -> typ (TypeTerm.value_to_string ty))
        | _ -> 
           kw (Lex.string_of_pol pol)
           ^ kw (Lex.string_of_event_type event_type)
@@ -389,7 +389,7 @@ let html_of_estmt eprog =
      let html_of_type =
        kw "type"
        ^ typ name
-       ^ (match ty with Some tt -> kw "is" ^ typ (Formula.TypeTerm.value_to_string tt) | None -> "") in
+       ^ (match ty with Some tt -> kw "is" ^ typ (TypeTerm.value_to_string tt) | None -> "") in
      div "lex-stmt-type"
        (match doc_string with
         | Some s -> two_column html_of_type (html_of_doc_string s)
@@ -399,7 +399,7 @@ let html_of_estmt eprog =
        ident name
        ^ html_of_function_args typed_args
        ^ " -> "
-       ^ typ (Formula.TypeTerm.value_to_string return_type)
+       ^ typ (TypeTerm.value_to_string return_type)
      in
      div "lex-stmt-function"
        (match doc_string with

@@ -1,13 +1,13 @@
 open Core
 
-open Formula.Term
+open Term
 open Eformula
 open Lex
 open Elex
 open Clex
 
 let debug_compiler = ref false
-let debug msg = if !debug_compiler then Util.debug_print ~f_name:(Some "compiler.ml") msg else ignore msg
+let debug msg = if !debug_compiler then Errors.debug_print ~f_name:(Some "compiler.ml") msg else ignore msg
 
 (* TODO: constants inside of predicates do not
    actually introduce an unnamed variable for the
@@ -99,33 +99,33 @@ let rec compile_term aliases term =
   in { term with trm }
  *)
 
-let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Formula.EnfType.Cau) (f: Eformula.t) = function
+let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=EnfType.Cau) (f: Eformula.t) = function
   | EPPresent -> f
-  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
-  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
+  | EPEventually i -> { f = EEventually (i, Interval.is_bounded i, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+  | EPAlways i -> { f = EAlways (i, Interval.is_bounded i, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
   | EPUntil (i, g) ->
-    if use_pattern_for_enf then { f = EUntil (LR, i, Interval.is_bounded i, g, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
-    else if only_pattern then   { f = EUntil (L, i, Interval.is_bounded i, g, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
-    else                        { f = EUntil (R, i, Interval.is_bounded i, g, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
-  | EPOnce i -> { f = EOnce (i, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
-  | EPHistorically i -> { f = EHistorically (i, f); variable_instantiations=[]; enftype; id = 0; positions = [] }
+    if use_pattern_for_enf then { f = EUntil (LR, i, Interval.is_bounded i, g, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+    else if only_pattern then   { f = EUntil (L, i, Interval.is_bounded i, g, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+    else                        { f = EUntil (R, i, Interval.is_bounded i, g, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+  | EPOnce i -> { f = EOnce (i, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+  | EPHistorically i -> { f = EHistorically (i, f); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
   | EPSince (i, g) ->
-    if use_pattern_for_enf then { f = ESince (LR, i, f, g); variable_instantiations=[]; enftype; id = 0; positions = [] }
-    else if only_pattern then   { f = ESince (R, i, f, g); variable_instantiations=[]; enftype; id = 0; positions = [] }
-    else                        { f = ESince (L, i, f, g); variable_instantiations=[]; enftype; id = 0; positions = [] }
+    if use_pattern_for_enf then { f = ESince (LR, i, f, g); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+    else if only_pattern then   { f = ESince (R, i, f, g); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
+    else                        { f = ESince (L, i, f, g); variable_instantiations=[]; enftype; id = 0; pos = LexingInfo.dummy }
 
 let compile_eformulas ~f fs = f fs
 
-let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Formula.EnfType.Cau) ~f (epf: epformula): Eformula.t =
+let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=EnfType.Cau) ~f (epf: epformula): Eformula.t =
   compile_epattern ~use_pattern_for_enf ~only_pattern ~enftype (compile_eformulas ~f epf.fs) epf.p
 
-let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Formula.EnfType.t) pf ex sc =
+let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: EnfType.t) pf ex sc =
   match enftype with
   | Cau ->
     let enf_cau = Option.value_exn cau_constr in
     begin match enf_cau with
     | EClhsAll enf_pformula_cau ->
-      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Cau [] 0 x.positions) in
+      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Cau [] 0 x.pos) in
       let f = begin match enf_pformula_cau with
         | ECpfFormulas -> compile_epformula ~f:tbigcauconj pf
         | ECpfPformula -> compile_epformula ~use_pattern_for_enf:true ~f:tbigcauconj pf
@@ -140,32 +140,32 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Formula.EnfType.
       begin match enf_pformula_sup with
       | ESpfFormula i ->
         let cpf = compile_epformula ~enftype:Sup ~f:(tbigsupconj i) pf in (* this is used for enforcement *)
-        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.positions) in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.pos) in
         let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
-        make (EAnd (L, [cpf; ex_neg_and_scope])) Sup [] 0 []
+        make (EAnd (L, [cpf; ex_neg_and_scope])) Sup [] 0 LexingInfo.dummy
       | ESpfPformula i ->
         let cpf = compile_epformula ~use_pattern_for_enf:true ~f:(tbigsupconj i) pf in
-        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.positions) in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.pos) in
         let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in
-        make (EAnd (L, [cpf; ex_neg_and_scope])) Sup [] 0 []
+        make (EAnd (L, [cpf; ex_neg_and_scope])) Sup [] 0 LexingInfo.dummy
       | ESpfPattern ->
         let cpf = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf in
-        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.positions) in
+        let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.pos) in
         let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in
-        make (EAnd (L, [cpf; ex_neg_and_scope])) Sup [] 0 []
+        make (EAnd (L, [cpf; ex_neg_and_scope])) Sup [] 0 LexingInfo.dummy
       end
     | ESlhsCException i ->
       let cpf = compile_epformula ~f:tbignonconj pf in
-      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.positions) in
+      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.pos) in
       let ex_neg_sup = tbigsupconj i ex_neg in
-      let ex_neg_and_scope = make (EAnd (L, ex_neg_sup::sc )) Sup [] 0 [] in
-      make (EAnd (R, [cpf; ex_neg_and_scope])) Sup [] 0 []
+      let ex_neg_and_scope = make (EAnd (L, ex_neg_sup::sc )) Sup [] 0 LexingInfo.dummy in
+      make (EAnd (R, [cpf; ex_neg_and_scope])) Sup [] 0 LexingInfo.dummy
     | ESlhsSScope i ->
       let cpf = compile_epformula ~f:tbignonconj pf in
-      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.positions) in
+      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.pos) in
       let sc_sup = tbigsupconj i sc in
-      let ex_neg_and_scope = make (EAnd (L, sc_sup::ex_neg )) Sup [] 0 [] in
-      make (EAnd (R, [cpf; ex_neg_and_scope])) Sup [] 0 []
+      let ex_neg_and_scope = make (EAnd (L, sc_sup::ex_neg )) Sup [] 0 LexingInfo.dummy in
+      make (EAnd (R, [cpf; ex_neg_and_scope])) Sup [] 0 LexingInfo.dummy
     end
   (* TODO: how to handle other cases (if at all) ? *)
   | _ -> assert false
@@ -174,25 +174,25 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Formula.EnfType.
 let compile_let_binding ?(quantifier=true) (f: Eformula.t) pred : Eformula.t * Eformula.t =
   match pred with
   | { f = EPredicate (p_name, trms, event_type); _} ->
-    let process_term fs (trm: Tformula.TTerm.t) = match trm.trm with
+    let process_term fs (trm: TTerm.t) = match trm.trm with
       | ETerm.TVar _ -> fs, trm
       | _ ->
         let v = ETerm.{
           trm = ETerm.TVar (fresh_var ());
           tt = trm.tt;
-          positions = []
+          pos = LexingInfo.dummy
         } in
         let eq = ETerm.{
-          trm = ETerm.TBinop (v, Formula.Term.BEq, trm);
-          tt = Formula.TypeTerm.TypeConst Dom.TBool;
-          positions = []
+          trm = ETerm.TBinop (v, Term.BEq, trm);
+          tt = TypeTerm.TypeConst Dom.TBool;
+          pos = LexingInfo.dummy
         } in
         let ef = {
-          f = EEqConst (eq, (Dom.Bool true, []));
+          f = EEqConst (eq, (Dom.Bool true, LexingInfo.dummy));
           variable_instantiations = [];
-          enftype = Formula.EnfType.Obs;
+          enftype = EnfType.Obs;
           id = 0;
-          positions = [];
+          pos = LexingInfo.dummy
         } in
         ef :: fs, v
     in
@@ -205,7 +205,7 @@ let compile_let_binding ?(quantifier=true) (f: Eformula.t) pred : Eformula.t * E
     (lhs, rhs)
   | _ -> assert false
 
-let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) (enftype: Formula.EnfType.t) ed: Eformula.t =
+let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) (enftype: EnfType.t) ed: Eformula.t =
   (* let renaming = List.map2 ed.params_new ed.params_original ~f:(fun t1 t2 -> eeqconst t1 t2) in *)
   (* TODO: implement variable renaming using 'gets' operator *)
   let param_names = List.map ed.params_new ~f:(fun t -> match t.trm with
@@ -222,7 +222,7 @@ let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) (enftype: Formula.En
     let compiled = compile_lhs ~sup_constr:(Some c) Sup ed.pf ed.exceptions ed.scopes in
     { compiled with variable_instantiations = renaming }
   | Non ->
-    let ex_neg = List.map ed.exceptions ~f:(fun x -> make (ENeg x) Non [] 0 x.positions) in
+    let ex_neg = List.map ed.exceptions ~f:(fun x -> make (ENeg x) Non [] 0 x.pos) in
     let compiled = tbignonconj (compile_epformula ~f:(tbignonconj) ed.pf :: ex_neg @ ed.scopes) in
     { compiled with variable_instantiations = renaming }
   | _ -> assert false
@@ -237,7 +237,7 @@ let compile_let_rule = function
       let f = compile_lhs ~cau_constr:(Some enf_cau_lhs) Cau pf ex sc in
       compile_let_binding ~quantifier:false f g
     | None ->
-      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Non [] 0 x.positions) in
+      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Non [] 0 x.pos) in
       let pf_comp = compile_epformula ~f:(tbignonconj) pf in
       let f = tbignonconj (pf_comp :: ex_neg @ sc) in
       compile_let_binding ~quantifier:false f g
@@ -259,20 +259,20 @@ let compile_let_rule = function
         ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) Sup d)) in
       compile_let_binding rhs g
     | None ->
-      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct Formula.EnfType.Non)))  in
+      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct EnfType.Non)))  in
       compile_let_binding rhs g
     end
   | _ -> assert false
 
-let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Formula.Side.t) =
+let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) =
   let vars = List.fold [f2; f1] ~init:(Map.empty (module String)) ~f:(fun map f -> fv ~map f)
              |> Map.keys in
   make (EAlways
     (Interval.full,
      true,
      tbigcauforall vars
-       ((make (EImp (s, f1, f2)) Cau [] 0 []))))
-    Cau [] 0 []
+       ((make (EImp (s, f1, f2)) Cau [] 0 LexingInfo.dummy))))
+    Cau [] 0 LexingInfo.dummy
 
 let compile_imp_rule = function
   | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _, Some enf_info) ->
@@ -283,9 +283,9 @@ let compile_imp_rule = function
       compile_imp lhs rhs L
     | ECciRhs enf_cau ->
       let cpf = compile_epformula ~f:tbignonconj pf1 in
-      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.positions) in
+      let ex_neg = List.map ex ~f:(fun x -> make (ENeg x) Sup [] 0 x.pos) in
       let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
-      let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup [] 0 [] in
+      let lhs = make (EAnd (R, [cpf; ex_neg_and_scope])) Sup [] 0 LexingInfo.dummy in
       begin match enf_cau with
       | ECpfFormulas ->
         let rhs = compile_epformula ~f:tbigcauconj pf2 in
@@ -301,22 +301,22 @@ let compile_imp_rule = function
   | _ -> assert false
 
 let rec compile_typeterm = function
-  | Formula.TypeTerm.TypeConst d -> ["", d]
+  | TypeTerm.TypeConst d -> ["", d]
   | TypeVar v -> raise (Invalid_argument ("Cannot compile abstract TypeVar " ^ v))
   | TypeSum kvs -> let f (k, v) =
-                     List.map (compile_typeterm v) ~f:(Etc.concat k) in
+                     List.map (compile_typeterm v) ~f:(Util.concat k) in
                    List.concat (List.map kvs ~f)
 
 let compile_eval_default aliases typeterm =
   compile_typeterm (
-      Formula.TypeTerm.eval_default aliases (Formula.TypeTerm.TypeConst TInt) typeterm)
+      TypeTerm.eval_default aliases (TypeTerm.TypeConst TInt) typeterm)
 
 let compile_events pols events aliases =
   let event_list = Map.to_alist events in
   let compile_event (name, (event_type, args, _, _)) =
-    let type_args (_, name, typ_alias) =
+    let type_args (name, typ_alias) =
       let terms = compile_eval_default aliases typ_alias in
-      List.map terms ~f:(Etc.concat name)
+      List.map terms ~f:(Util.concat name)
     in
     let typed_args = List.concat (List.map args ~f:type_args) in
     let pol' = match Map.find pols name with
@@ -332,7 +332,7 @@ let compile_functions functions aliases =
   let compile_function (name, (typed_args, return_type, _)) =
     let type_args (name, typ_alias) =
       let terms = compile_eval_default aliases typ_alias in
-      List.map terms ~f:(Etc.concat name)
+      List.map terms ~f:(Util.concat name)
     in
     let typed_args = List.concat (List.map typed_args ~f:type_args) in
     let return_type = compile_eval_default aliases return_type in
@@ -361,7 +361,7 @@ let compile_exception_or_scope_signature pols indexed_predicates aliases variabl
       | ETerm.TVar v ->
          let a = Map.find_exn var_types v in
          let terms = compile_eval_default aliases a in
-         List.map terms ~f:(Etc.concat v)
+         List.map terms ~f:(Util.concat v)
       | _ -> assert false
       (* TODO: constants are not actually possible to be part of an exception predicate *)
     in
@@ -416,7 +416,7 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
   let imp_rules = List.filter sorted_c_rules ~f:is_imp_rule in
   let non_vanilla = List.filter imp_rules ~f:(fun r -> not (is_vanilla r)) in
   if List.is_empty non_vanilla then
-    Util.warning "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
+    Errors.warning "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
   debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));
   let formulae = List.map non_vanilla ~f:compile_imp_rule in
   let let_bindings = List.map let_rules ~f:compile_let_rule in

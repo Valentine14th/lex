@@ -1,6 +1,6 @@
 open Core
 
-type t = M of int * string
+type t = M of int * string [@@deriving compare]
 
 let ($) a c = M (int_of_float (a *. 100.), c)
 
@@ -27,6 +27,9 @@ let equal (M (a, c)) (M (a', c')) =
 
 let to_string m =
   Printf.sprintf "%s %d.%02d" (currency m) (units m) (cents m)
+
+let sexp_of_t (M (a, c)) = Sexp.List [Int.sexp_of_t a; String.sexp_of_t c]
+let hash_fold_t s (M (a, c)) = Hash.fold_string (Hash.fold_int s a) c
 
 let currency_reading = function
   | "USD" -> "$"

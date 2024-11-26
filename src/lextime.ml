@@ -13,6 +13,9 @@ module Time = struct
   let of_float = Calendar.from_unixfloat
 
   let equal = Calendar.equal
+  let compare = Calendar.compare
+  let sexp_of_t t = Float.sexp_of_t (Calendar.to_unixfloat t)
+  let hash_fold_t s t = Hash.fold_float s (Calendar.to_unixfloat t)
   
 end
 
@@ -20,13 +23,15 @@ module Span = struct
 
   open Calendar.Period
   
-  type t = Calendar.Period.t
+  type t = Calendar.Period.t 
 
   type unit = Second | Minute | Hour | Day | Month | Year
 
   let zero = make 0 0 0 0 0 0
 
   let equal = Calendar.Period.equal
+  let compare = Calendar.Period.compare
+  let hash = Calendar.Period.hash
   
   let to_string t =
     let value_with_unit x u = if x > 0 then string_of_int x ^ u else "" in
@@ -52,6 +57,9 @@ module Span = struct
     let y, m, d, s = ymds t in
     (y * 365 + m * 30 + d) * 86400 + s
 
+  let sexp_of_t t = sexp_of_int (to_int t)
+  let hash_fold_t s t = Hash.fold_int s (to_int t)
+
   let is_zero t = equal zero t
 
   let seconds = second
@@ -64,8 +72,8 @@ module Span = struct
     | "M" -> month x
     | "y" -> year x
     | "" when x = 0 -> second 0
-    | "" -> Util.type_error (Printf.sprintf "Time span without unit must be zero") pos
-    | s -> Util.type_error (Printf.sprintf "Invalid time span unit %s" s) pos
+    | "" -> Errors.type_error (Printf.sprintf "Time span without unit must be zero") pos
+    | s -> Errors.type_error (Printf.sprintf "Invalid time span unit %s" s) pos
 
   let (+) = add
 

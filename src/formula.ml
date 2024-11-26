@@ -1,318 +1,5 @@
 open Core
 
-module EnfType = struct
-
-  type t = Non | Cau | Obs | Sup | CauObs | CauSup | Itl [@@deriving compare, sexp_of, hash]
-  
-  let to_string = function
-    | Non    -> ""
-    | Cau    -> "causable"
-    | Obs    -> "observable"
-    | Sup    -> "suppressable"
-    | CauObs -> "causable observable"
-    | CauSup -> "causable suppressable"
-    | Itl    -> "internal"
-
-  let equal a b = match a, b with
-    | Non, Non
-    | Cau, Cau
-    | Obs, Obs
-    | Sup, Sup
-    | CauObs, CauObs
-    | CauSup, CauSup
-    | Itl, Itl -> true
-    | _, _ -> false
-
-  let meet a b = match a, b with
-    | _, _ when equal a b -> a
-    | Non, _      | _, Non      -> Non
-    | Cau, Obs    | Obs, Cau    -> Non
-    | Cau, Sup    | Sup, Cau    -> Non
-    | Cau, _      | _, Cau      -> Cau
-    | Obs, _      | _, Obs      -> Obs
-    | Sup, CauObs | CauObs, Sup -> Obs
-    | Sup, _      | _, Sup      -> Sup
-    | CauObs, _   | _, CauObs   -> CauObs
-    | CauSup, _   | _, CauSup   -> CauSup
-    | Itl, _ -> b (* already covered by equal clause, but LSP doesn't understand *)
-
-  let join a b = match a, b with
-    | _, _ when equal a b -> a
-    | Itl, _      | _, Itl      -> Itl (* Does this make sense? *)
-    | CauSup, _   | _, CauSup   -> CauSup
-    | CauObs, Sup | Sup, CauObs -> CauSup
-    | Cau, Sup    | Sup, Cau    -> CauSup
-    | Cau, Obs    | Obs, Cau    -> CauObs
-    | Sup, _      | _, Sup      -> Sup
-    | CauObs, _   | _, CauObs   -> CauObs
-    | Obs, _      | _, Obs      -> Obs
-    | Cau, _      | _, Cau      -> Cau
-    | Non, _ -> b (* already covered by equal clause, but LSP doesn't understand *)
-
-  let leq a b = equal (join a b) a
-  let geq a b = equal (meet a b) b
-
-  let specialize a b = if leq b a then Some b else None
-
-end
-
-
-module Side = struct
-
-  type t = N | L | R | LR
-
-  let equal s s' = match s, s' with
-    | N, N | L, L | R, R | LR, LR -> true
-    | _ -> false
-
-  let to_string = function
-    | N  -> ""
-    | L  -> ":L"
-    | R  -> ":R"
-    | LR -> ":LR"
-
-  let to_string2 =
-    let aux = function N  -> "N" | L  -> "L" | R  -> "R" | LR -> "LR"
-    in function (N, N) -> "" | (a, b) -> ":" ^ aux a ^ "," ^ aux b
-
-  let of_string pos = function
-    | "N"  -> N
-    | "L"  -> L
-    | "R"  -> R
-    | "LR" -> LR
-    | _ as s->
-      let err_msg = Printf.sprintf "expected a side parameter (N, L, R, LR), but got %s" s in
-      Util.syntax_error err_msg pos
-
-end
-
-
-module TypeTerm = struct
-
-  type t =
-    | TypeConst of Dom.tt
-    | TypeVar   of string
-    | TypeSum   of (string * t) list
-
-  let equal t t' =
-    match t, t' with
-    | TypeConst tt, TypeConst tt' -> Dom.tt_equal tt tt'
-    | TypeVar v, TypeVar v' -> String.equal v v'
-    | _, _ -> false
-      
-  let rec to_string = function
-    | TypeConst tt -> "TypeConst " ^ Dom.string_of_tt tt
-    | TypeVar i    -> "TypeVar " ^ i
-    | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ to_string v in
-                      "TypeSum {" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}"
-
-  let value_to_string = function
-    | TypeConst tt -> Dom.string_of_tt tt
-    | TypeVar i    -> i
-    | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ to_string v in
-                      "{" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}"
-
-  let rec eval aliases = function
-    | TypeConst tt -> Some (TypeConst tt)
-    | TypeVar v    -> fst (Map.find_exn aliases v)
-    | TypeSum kvs  -> let f (k, v) = (k, Option.value_exn (eval aliases v)) in
-                      Some (TypeSum (List.map kvs ~f))
-
-  let eval_default aliases default = function
-    | TypeConst tt -> TypeConst tt
-    | TypeVar v    ->
-       (match fst (Map.find_exn aliases v) with
-        | Some tt -> tt
-        | None -> default)
-    | TypeSum kvs  -> let f (k, v) = (k, Option.value_exn (eval aliases v)) in
-                      TypeSum (List.map kvs ~f)
-
-  let rec lub t t' aliases =
-    match t, t' with
-    | TypeConst tt, TypeConst tt' when Dom.tt_equal tt tt' -> Some (TypeConst tt)
-    | TypeVar v , TypeVar v' when String.equal v v' -> Some (TypeVar v)
-    | TypeSum kvs, TypeSum kvs' ->
-       begin
-         if (List.length kvs = List.length kvs')
-            && (List.for_all2_exn kvs kvs' ~f:(fun kv kv' -> String.equal (fst kv) (fst kv')))
-         then
-           let f (k, v) (_, v') = Option.map (lub v v' aliases) ~f:(fun v -> (k, v)) in
-           (match Option.all (List.map2_exn kvs kvs' ~f) with
-            | Some kvs -> Some (TypeSum kvs)
-            | None -> None)
-         else
-           None
-       end
-    | TypeVar v, tt' ->
-       begin
-         match fst (Map.find_exn aliases v) with
-         | Some tt when equal tt tt' -> Some (TypeVar v)
-         | _ -> None
-       end
-    | tt, TypeVar v' ->
-       begin
-         match fst (Map.find_exn aliases v') with
-         | Some tt' when equal tt' tt -> Some (TypeVar v')
-         | _ -> None
-       end
-    | _, _ -> None
-
-  let rec eval_with_doc_string aliases = function
-    | TypeConst tt -> (Dom.string_of_tt tt, None) 
-    | TypeVar v    -> (v, snd (Map.find_exn aliases v))
-    | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ fst (eval_with_doc_string aliases v) in
-                      ("{" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}", None)
-
-end
-
-module Term = struct
-
-  type unop =
-    | USub
-    | UNot [@@deriving compare, sexp_of, hash, equal]
-
-  let string_of_unop = function
-    | USub -> "-"
-    | UNot -> "!"
-
-  type binop =
-    | BAdd | BSub | BMul | BDiv | BPow
-    | BAnd | BOr | BXor
-    | BEq | BNeq | BLt | BLeq | BGt | BGeq  [@@deriving compare, sexp_of, hash, equal]
-
-  let string_of_binop = function
-    | BAdd -> "+"
-    | BSub -> "-"
-    | BMul -> "*"
-    | BDiv -> "/"
-    | BPow -> "^"
-    | BAnd -> "and"
-    | BOr  -> "or"
-    | BXor -> "xor"
-    | BEq  -> "="
-    | BNeq -> "<>"
-    | BLt  -> "<"
-    | BLeq -> "<="
-    | BGt  -> ">"
-    | BGeq -> ">="
-
-  let prio_of_binop = function
-    | BXor | BOr -> 1
-    | BAnd -> 2
-    | BEq | BNeq | BLt | BLeq | BGt | BGeq -> 3
-    | BAdd | BSub -> 4
-    | BMul | BDiv -> 5
-    | BPow -> 6
-    
-  type core_t =
-    | Var of string
-    | Const of Dom.t
-    | App of string * (t list)
-    | Unop of unop * t
-    | Binop of t * binop * t
-    | Proj of t * string
-    | Record of (string * t) list
-  and t = {trm: core_t; positions: Lexing.position list}
-
-  let make_term trm pos = {trm=trm; positions=pos}
-
-  let var pos x = make_term (Var x) pos
-  let const pos d = make_term (Const d) pos
-  let app pos f ts = make_term (App (f, ts)) pos
-  let unop pos o t = make_term (Unop (o, t)) pos
-  let binop pos t1 o t2 = make_term (Binop (t1, o, t2)) pos
-  let proj pos t p = make_term (Proj (t, p)) pos
-  let record pos kvs = make_term (Record kvs) pos
-
-  let unvar t = match t.trm with
-    | Var x -> x
-    | Const _ -> raise (Invalid_argument "unvar is undefined for Consts")
-    | App _ -> raise (Invalid_argument "unvar is undefined for Apps")
-    | Unop _ -> raise (Invalid_argument "unvar is undefined for Unops")
-    | Binop _ -> raise (Invalid_argument "unvar is undefined for Binops")
-    | Proj _ -> raise (Invalid_argument "unvar is undefined for Projs")
-    | Record _ -> raise (Invalid_argument "unvar is undefined for Records")
-
-  let is_const t = match t.trm with
-    | Const _ -> true
-    | _ -> false
-
-  let unconst t = match t.trm with
-    | Var _ -> raise (Invalid_argument "unconst is undefined for Vars")
-    | Const c -> c
-    | App _ -> raise (Invalid_argument "unconst is undefined for Apps")
-    | Unop _ -> raise (Invalid_argument "unconst is undefined for Unops")
-    | Binop _ -> raise (Invalid_argument "unconst is undefined for Binops")
-    | Proj _ -> raise (Invalid_argument "unconst is undefined for Projs")
-    | Record _ -> raise (Invalid_argument "unconst is undefined for Records")
-
-  let fv t = match t.trm with
-    | Var x -> [x]
-    | _ -> []
-
-  let fv_list ts = List.concat_map ts ~f:fv
-
-  let rec equal t t' = match t.trm, t'.trm with
-    | Var x, Var x' -> String.equal x x'
-    | Const d, Const d' -> Dom.equal d d'
-    | App (f, ts), App (f', ts') ->
-       String.equal f f' && (match List.map2 ts ts' ~f:equal with
-                             | Ok e -> List.for_all e ~f:(fun x -> x)
-                             | Unequal_lengths -> false)
-    | Unop (o, t), Unop (o', t') -> equal_unop o o' && equal t t'
-    | Binop (t1, o, t2), Binop (t1', o', t2') ->
-       equal t1 t1' && equal_binop o o' && equal t2 t2'
-    | Proj (t, p), Proj (t', p') ->
-       equal t t' && String.equal p p'
-    | Record kvs, Record kvs' ->
-       let f (k, v) (k', v') = String.equal k k' && equal v v' in
-       List.length kvs = List.length kvs' && List.for_all2_exn kvs kvs' ~f
-    | _ -> false
-
-  let rec to_string t = match t.trm with
-    | Var x -> Printf.sprintf "Var %s" x
-    | Const d -> Printf.sprintf "Const %s" (Dom.to_string d)
-    | App (f, ts) -> Printf.sprintf "App %s(%s)" f
-                       (String.concat ~sep:", " (List.map ts ~f:to_string))
-    | Unop (o, t) -> Printf.sprintf "Unop %s (%s)" (string_of_unop o) (to_string t)
-    | Binop (t, o, t') -> Printf.sprintf "Binop (%s) %s (%s)"
-                            (to_string t) (string_of_binop o) (to_string t')
-    | Proj (t, p) -> Printf.sprintf "Proj (%s).%s" (to_string t) p
-    | Record kvs ->
-       Printf.sprintf "Record { %s }"
-         (String.concat ~sep:", " (List.map kvs ~f:(fun (k, v) -> k ^ " : " ^ to_string v)))
-
-  let rec value_to_string ?(l=0) t = match t.trm with
-    | Var x -> Printf.sprintf "%s" x
-    | Const d -> Printf.sprintf "%s" (Dom.to_string d)
-    | App (f, ts) -> Printf.sprintf "%s(%s)" f
-                       (String.concat ~sep:", " (List.map ts ~f:to_string))
-    | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                       (string_of_unop o)
-                       (value_to_string ~l:10 t)
-    | Binop (t, o, t') -> let l' = prio_of_binop o in
-                          Printf.sprintf (Util.paren l l' "%s %s %s")
-                            (value_to_string ~l:l' t)
-                            (string_of_binop o)
-                            (value_to_string ~l:l' t')
-    | Proj (t, p) -> Printf.sprintf "%s.%s" (value_to_string ~l:10 t) p
-    | Record kvs ->
-       let f (k, v) = k ^ " : " ^ value_to_string v in
-       Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
-
-  let list_to_string trms = String.concat ~sep:", " (List.map trms ~f:value_to_string)
-
-end
-
-
-type ty =
-  | Cau
-  | Sup
-
-let ty_to_string = function
-  | Cau -> "causable"
-  | Sup -> "suppressable"
-
 type core_t =
   | TT
   | FF
@@ -323,7 +10,7 @@ type core_t =
   | And of Side.t * (t list)
   | Or of Side.t * (t list)
   | Imp of Side.t * t * t
-  | Iff of Side.t * Side.t * t * t
+  | Iff of (Side.t * Side.t) * t * t
   | Exists of string * t
   | Forall of string * t
   | Prev of Interval.t * t
@@ -334,15 +21,15 @@ type core_t =
   | Always of Interval.t * t
   | Since of Side.t * Interval.t * t * t
   | Until of Side.t * Interval.t * t * t
-  | Type of t * ty
+  | Type of t * EnfType.t
 
 and t = {
   f: core_t;
   variable_instantiations: (string * Term.t) list;
-  positions: Lexing.position list
+  pos: LexingInfo.t
 }
 
-let make_formula f instantiations pos = {f=f; variable_instantiations=instantiations; positions=pos}
+let make_formula f instantiations pos = {f=f; variable_instantiations=instantiations; pos}
 
 (* TODO: pass add parameter for variable instatntiations in order to correctly convert to Formula.t (for now instantiations are not acutally used in tformulas)*)
 let tt pos = make_formula TT [] pos
@@ -356,9 +43,11 @@ let disj pos s f g = make_formula (Or (s, [f; g])) [] pos
 let conj' pos s fs = make_formula (And (s, fs)) [] pos
 let disj' pos s fs = make_formula (Or (s, fs)) [] pos
 let imp pos s f g = make_formula (Imp (s, f, g)) [] pos
-let iff pos s t f g = make_formula (Iff (s, t, f, g)) [] pos
+let iff pos s2 f g = make_formula (Iff (s2, f, g)) [] pos
 let exists pos x f = make_formula (Exists (x, f)) [] pos
+let exists_list pos xs f = List.fold_right xs ~init:f ~f:(exists pos)
 let forall pos x f = make_formula (Forall (x, f)) [] pos
+let forall_list pos xs f = List.fold_right xs ~init:f ~f:(forall pos)
 let prev pos i f = make_formula (Prev (i, f)) [] pos
 let next pos i f = make_formula (Next (i, f)) [] pos
 let once pos i f = make_formula (Once (i, f)) [] pos
@@ -370,15 +59,99 @@ let until pos s i f g = make_formula (Until (s, i, f, g)) [] pos
 let type_ pos s t = make_formula (Type (s, t)) [] pos
 
 (* Rewriting of non-native operators *)
-let trigger pos s i f g = neg pos (since f.positions s i (neg f.positions f) (neg g.positions g))
-let release pos s i f g = neg pos (until f.positions s i (neg f.positions f) (neg g.positions g))
+let trigger pos s i f g = neg pos (since f.pos s i (neg f.pos f) (neg g.pos g))
+let release pos s i f g = neg pos (until f.pos s i (neg f.pos f) (neg g.pos g))
 
-let bigconj pos = function
-  | [] -> tt pos
-  | h::t -> List.fold_left t ~init:h ~f:(conj pos N)
+let rec init (sf: Sformula.t) : t = match sf.f with
+  | SConst (Dom.Bool true) -> tt sf.pos
+  | SConst (Dom.Bool false) -> ff sf.pos
+  | SApp (s, sfs) -> predicate sf.pos s (List.map sfs ~f:init_term)
+  | SAgg (s, op, x, y, f) -> agg sf.pos s op (init_term x) y (init f)
+  | SBop (None, f, op, g) when Sformula.Bop.is_relational op ->
+     begin
+       let binop = match op with
+         | Sformula.Bop.BEq -> Term.BEq
+         | BNeq -> BNeq
+         | BLt -> BLt
+         | BLeq -> BLeq
+         | BGt -> BGt
+         | BGeq -> BGeq
+         | _ -> assert false in
+       term sf.pos (Term.binop sf.pos (init_term f) binop (init_term g))
+     end
+  | SBop (s_opt, f, op, g) ->
+     begin
+       match op with
+       | Sformula.Bop.BAnd -> conj sf.pos (Side.value s_opt) (init f) (init g)
+       | BOr -> disj sf.pos (Side.value s_opt) (init f) (init g)
+       | BImp -> imp sf.pos (Side.value s_opt) (init f) (init g)
+       | _ -> assert false
+     end
+  | SBop2 (s2_opt, f, op, g) ->
+     begin
+       match op with
+       | Sformula.Bop2.BIff -> iff sf.pos (Side.value2 s2_opt) (init f) (init g)
+     end
+  | SUop (op, f) ->
+     begin
+       match op with
+       | Sformula.Uop.UNot -> neg sf.pos (init f)
+       | _ -> assert false
+     end
+  | SExists (xs, f) -> exists_list sf.pos xs (init f)
+  | SForall (xs, f) -> forall_list sf.pos xs (init f)
+  | SBtop (s_opt, i, f, btop, g) ->
+     begin
+       match btop with
+       | Sformula.Btop.BSince -> since sf.pos (Side.value s_opt) i (init f) (init g)
+       | BUntil -> until sf.pos (Side.value s_opt) i (init f) (init g)
+       | BRelease -> release sf.pos (Side.value s_opt) i (init f) (init g)
+       | BTrigger -> trigger sf.pos (Side.value s_opt) i (init f) (init g)
+     end
+  | SUtop (i, utop, f) ->
+     begin
+       match utop with
+       | Sformula.Utop.UNext -> next sf.pos i (init f)
+       | UPrev -> prev sf.pos i (init f)
+       | UAlways -> always sf.pos i (init f)
+       | UHistorically -> historically sf.pos i (init f)
+       | UEventually -> eventually sf.pos i (init f)
+       | UOnce -> once sf.pos i (init f)
+     end
+  | _ -> assert false
 
-let bigforall pos vars f =
-  List.fold_right vars ~init:f ~f:(forall pos)
+and init_term (sf: Sformula.t) : Term.t = match sf.f with
+  | SConst c -> Term.const sf.pos c
+  | SVar s -> Term.var sf.pos s
+  | SApp (s, sfs) -> Term.app sf.pos s (List.map sfs ~f:init_term)
+  | SBop (None, f, op, g) ->
+     begin
+      let binop = match op with
+        | Sformula.Bop.BAnd -> Term.BAnd
+        | BOr -> BOr
+        | BAdd -> BAdd
+        | BSub -> BSub
+        | BMul -> BMul
+        | BDiv -> BDiv
+        | BPow -> BPow
+        | BEq -> BEq
+        | BNeq -> BNeq
+        | BLt -> BLt
+        | BLeq -> BLeq
+        | BGt -> BGt
+        | BGeq -> BGeq
+        | _ -> assert false in
+      Term.binop sf.pos (init_term f) binop (init_term g)
+     end
+  | SUop (op, f) ->
+     begin
+       let unop = match op with
+         | Sformula.Uop.USub -> Term.USub
+         | UNot -> UNot
+       in
+       Term.unop sf.pos unop (init_term f)
+     end
+  | _ -> assert false
 
 let rec fv (f: t) = match f.f with
   | TT | FF -> Set.empty (module String)
@@ -396,7 +169,7 @@ let rec fv (f: t) = match f.f with
     | Next (_, g)
     | Type (g, _) -> fv g
   | Imp (_, f1, f2)
-    | Iff (_, _, f1, f2)
+    | Iff (_, f1, f2)
     | Since (_, _, f1, f2)
     | Until (_, _, f1, f2) -> Set.union (fv f1) (fv f2)
   | And (_, fs)
@@ -421,7 +194,7 @@ let rec deg f = match f.f with
     | Type (f, _)
     | Agg (_, _, _, _, f) -> deg f
     | Imp (_, f, g)
-    | Iff (_, _, f, g)
+    | Iff (_, f, g)
     | Since (_, _, f, g)
     | Until (_, _, f, g) -> max 2 (max (deg f) (deg g))
     | And (_, fs)
@@ -443,7 +216,7 @@ let rec collect_predicates l f = match f.f with
     | Always(_, f)
     | Agg (_, _, _, _, f) -> collect_predicates l f
     | Imp (_, f, g)
-    | Iff (_, _, f, g)
+    | Iff (_, f, g)
     | Since (_, _, f, g)
     | Until (_, _, f, g) -> collect_predicates (collect_predicates l f) g
   | Type (f, _) -> collect_predicates l f
@@ -452,27 +225,27 @@ let rec collect_predicates l f = match f.f with
 
 let rec flatten_assoc f = match f.f with
   | TT | FF | Term _ | Predicate _ -> f
-  | Agg (s, op, x, y, f) -> agg f.positions s op x y (flatten_assoc f)
-  | Neg f -> neg f.positions (flatten_assoc f)
-  | Exists (x, g) -> exists f.positions x (flatten_assoc g)
-  | Forall (x, g) -> forall f.positions x (flatten_assoc g)
-  | Prev (i, g) -> prev f.positions i (flatten_assoc g)
-  | Next (i, g) -> next f.positions i (flatten_assoc g)
-  | Once (i, g) -> once f.positions i (flatten_assoc g)
-  | Eventually (i, g) -> eventually f.positions i (flatten_assoc g)
-  | Historically (i, g) -> historically f.positions i (flatten_assoc g)
-  | Always(i, g) -> always f.positions i (flatten_assoc g)
-  | Imp (s, g, h) -> imp f.positions s (flatten_assoc g) (flatten_assoc h)
-  | Iff (s, t, g, h) -> iff f.positions s t (flatten_assoc g) (flatten_assoc h)
-  | Since (s, i, g, h) -> since f.positions s i (flatten_assoc g) (flatten_assoc h)
-  | Until (s, i, g, h) -> until f.positions s i (flatten_assoc g) (flatten_assoc h)
-  | Type (g, ty) -> type_ f.positions (flatten_assoc g) ty
+  | Agg (s, op, x, y, f) -> agg f.pos s op x y (flatten_assoc f)
+  | Neg f -> neg f.pos (flatten_assoc f)
+  | Exists (x, g) -> exists f.pos x (flatten_assoc g)
+  | Forall (x, g) -> forall f.pos x (flatten_assoc g)
+  | Prev (i, g) -> prev f.pos i (flatten_assoc g)
+  | Next (i, g) -> next f.pos i (flatten_assoc g)
+  | Once (i, g) -> once f.pos i (flatten_assoc g)
+  | Eventually (i, g) -> eventually f.pos i (flatten_assoc g)
+  | Historically (i, g) -> historically f.pos i (flatten_assoc g)
+  | Always(i, g) -> always f.pos i (flatten_assoc g)
+  | Imp (s, g, h) -> imp f.pos s (flatten_assoc g) (flatten_assoc h)
+  | Iff (s, g, h) -> iff f.pos s (flatten_assoc g) (flatten_assoc h)
+  | Since (s, i, g, h) -> since f.pos s i (flatten_assoc g) (flatten_assoc h)
+  | Until (s, i, g, h) -> until f.pos s i (flatten_assoc g) (flatten_assoc h)
+  | Type (g, ty) -> type_ f.pos (flatten_assoc g) ty
   | And (s, gs) when Side.equal s L || Side.equal s N ->
-    conj' f.positions s (List.concat (List.map gs ~f:(fun g -> match g.f with And (_, gs) -> gs | _ -> [g])))
-  | And (s, gs) -> conj' f.positions s (List.map gs ~f:flatten_assoc)
+    conj' f.pos s (List.concat (List.map gs ~f:(fun g -> match g.f with And (_, gs) -> gs | _ -> [g])))
+  | And (s, gs) -> conj' f.pos s (List.map gs ~f:flatten_assoc)
   | Or (s, gs) when Side.equal s L || Side.equal s N ->
-    disj' f.positions s (List.concat (List.map gs ~f:(fun g -> match g.f with Or (_, gs) -> gs | _ -> [g])))
-  | Or (s, gs) -> disj' f.positions s (List.map gs ~f:flatten_assoc)
+    disj' f.pos s (List.concat (List.map gs ~f:(fun g -> match g.f with Or (_, gs) -> gs | _ -> [g])))
+  | Or (s, gs) -> disj' f.pos s (List.map gs ~f:flatten_assoc)
 
 
 let rec string_of_instantiations = function
@@ -497,7 +270,7 @@ let rec to_string_core_rec l (f: t) = match f.f with
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 3 (String.concat ~sep strings)
   | Imp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | Iff (s, t, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
+  | Iff (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) s (fun _ -> to_string_rec 5) g
   | Exists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f
   | Forall (x, f) -> Printf.sprintf (Util.paren l 5 "∀%s. %a") x (fun _ -> to_string_rec 5) f
   | Prev (i, f) -> Printf.sprintf (Util.paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
@@ -511,7 +284,7 @@ let rec to_string_core_rec l (f: t) = match f.f with
   | Until (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
                             (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | Type (f, t) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f
-                            (fun _ -> ty_to_string) t
+                            (fun _ -> EnfType.to_string) t
 and to_string_rec l f =
   let f_str = to_string_core_rec l f in
   match f.variable_instantiations with

@@ -10,136 +10,7 @@
 open Core
 open Formula
 
-module TTerm = struct
-
-  type core_t =
-    | TVar of string
-    | TConst of Dom.t
-    | TApp of string * (t list)
-    | TUnop of Formula.Term.unop * t
-    | TBinop of t * Formula.Term.binop * t
-    | TProj of t * string
-    | TRecord of (string * t) list
-  and t = { trm: core_t; tt: TypeTerm.t; positions: Lexing.position list }
-
-  let rec to_formula_term_core = function
-    | TVar v -> Term.Var v
-    | TConst d -> Term.Const d
-    | TApp (f, trms) -> Term.App (f, List.map trms ~f:to_formula_term)
-    | TUnop (o, trm) -> Term.Unop (o, to_formula_term trm)
-    | TBinop (trm, o, trm') -> Term.Binop (to_formula_term trm, o, to_formula_term trm')
-    | TProj (trm, p) -> Term.Proj (to_formula_term trm, p)
-    | TRecord kvs -> Term.Record (List.map ~f:(fun (k, v) -> (k, to_formula_term v)) kvs)
-
-  and to_formula_term (t: t): Formula.Term.t = Term.make_term (to_formula_term_core t.trm) t.positions
-
-  let unvar = function
-    | TVar x -> x
-    | TConst _ -> raise (Invalid_argument "unvar is undefined for Consts")
-    | TApp _ -> raise (Invalid_argument "unvar is undefined for Apps")
-    | TUnop _ -> raise (Invalid_argument "unvar is undefined for Unops")
-    | TBinop _ -> raise (Invalid_argument "unvar is undefined for Binops")
-    | TProj _ -> raise (Invalid_argument "unvar is undefined for Projs")
-    | TRecord _ -> raise (Invalid_argument "unvar is undefined for Records")
-
-  let is_const = function
-    | TConst _ -> true
-    | _ -> false
-
-  let unconst = function
-    | TVar _ -> raise (Invalid_argument "unconst is undefined for Vars")
-    | TConst c -> c
-    | TApp _ -> raise (Invalid_argument "unconst is undefined for Apps")
-    | TUnop _ -> raise (Invalid_argument "unconst is undefined for Unops")
-    | TBinop _ -> raise (Invalid_argument "unconst is undefined for Binops")
-    | TProj _ -> raise (Invalid_argument "unconst is undefined for Projs")
-    | TRecord _ -> raise (Invalid_argument "unconst is undefined for Records")
-
-  let rec fv_list_core = function
-    | [] -> []
-    | (TVar x, positions) :: trms -> (x, positions) :: fv_list_core trms
-    | _ :: trms -> fv_list_core trms
-
-  and fv_list trms = fv_list_core (List.map trms ~f:(fun t -> t.trm, t.positions))
-
-  let rec equal_core t t' = match t, t' with
-    | TVar x, TVar x' -> String.equal x x'
-    | TConst d, TConst d' -> Dom.equal d d'
-    | TApp (f, ts), TApp (f', ts') ->
-       String.equal f f' && (match List.map2 ts ts' ~f:equal with
-                             | Ok e -> List.for_all e ~f:(fun x -> x)
-                             | Unequal_lengths -> false)
-    | TUnop (o, t), TUnop (o', t') -> Formula.Term.equal_unop o o' && equal t t'
-    | TBinop (t1, o, t2), TBinop (t1', o', t2') ->
-       equal t1 t1' && Formula.Term.equal_binop o o' && equal t2 t2'
-    | _ -> false
-  
-  and equal t t' = equal_core t.trm t'.trm && TypeTerm.equal t.tt t'.tt
-
-  let rec to_string_core = function
-    | TVar x -> Printf.sprintf "TVar %s" x
-    | TConst d -> Printf.sprintf "TConst %s" (Dom.to_string d)
-    | TApp (f, ts) -> Printf.sprintf "TApp %s(%s)" f
-                       (String.concat ~sep:", " (List.map ts ~f:to_string))
-    | TUnop (o, t) -> Printf.sprintf "TUnop %s (%s)" (Formula.Term.string_of_unop o) (to_string t)
-    | TBinop (t, o, t') -> Printf.sprintf "TBinop (%s) %s (%s)"
-                             (to_string t) (Formula.Term.string_of_binop o) (to_string t')
-    | TProj (t, p) -> Printf.sprintf "Proj (%s).%s" (to_string t) p
-    | TRecord kvs ->
-       Printf.sprintf "Record { %s }"
-         (String.concat ~sep:", " (List.map kvs ~f:(fun (k, v) -> k ^ " : " ^ to_string v)))
-
-
-  and to_string t = Printf.sprintf "%s : %s" (to_string_core t.trm) (TypeTerm.to_string t.tt)
-
-  let rec value_to_string_core ?(l=0) = function
-    | TVar x -> Printf.sprintf "%s" x
-    | TConst d -> Printf.sprintf "%s" (Dom.to_string d)
-    | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (list_to_string trms)
-    | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                       (Formula.Term.string_of_unop o)
-                       (value_to_string ~l:10 t)
-    | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
-                          Printf.sprintf (Util.paren l l' "%s %s %s")
-                            (value_to_string ~l:l' t)
-                            (Formula.Term.string_of_binop o)
-                            (value_to_string ~l:l' t')
-    | TProj (t, p) -> Printf.sprintf "%s.%s" (value_to_string ~l:10 t) p
-    | TRecord kvs ->
-       let f (k, v) = k ^ " : " ^ value_to_string v in
-       Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
-
-  and list_to_string trms = String.concat ~sep:", " (List.map trms ~f:value_to_string)
-  
-  and value_to_string ?(l=0) t = 
-    Printf.sprintf (Util.paren l 0 "%a : %s")
-      (fun _ -> value_to_string_core ~l:5) t.trm (TypeTerm.value_to_string t.tt)
-
-  let rec untyped_value_to_string_core ?(l=0) = function
-    | TVar x -> Printf.sprintf "%s" x
-    | TConst d -> Printf.sprintf "%s" (Dom.to_string d)
-    | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (untyped_list_to_string trms)
-    | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                       (Formula.Term.string_of_unop o)
-                       (untyped_value_to_string ~l:10 t)
-    | TBinop (t, o, t') -> let l' = Formula.Term.prio_of_binop o in
-                           Printf.sprintf (Util.paren l l' "%s %s %s")
-                             (untyped_value_to_string ~l:l' t)
-                             (Formula.Term.string_of_binop o)
-                             (untyped_value_to_string ~l:l' t')
-    | TProj (t, p) -> Printf.sprintf "%s.%s" (untyped_value_to_string ~l:10 t) p
-    | TRecord kvs ->
-       let f (k, v) = k ^ " : " ^ untyped_value_to_string v in
-       Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
-
-  and untyped_list_to_string trms = String.concat ~sep:", " (List.map trms ~f:untyped_value_to_string)
-  
-  and untyped_value_to_string ?(l=0) t = 
-    Printf.sprintf (Util.paren l 0 "%a") (fun _ -> untyped_value_to_string_core ~l:5) t.trm
-
-end
-
-let tterm trm tt positions = TTerm.({ trm; tt; positions })
+let tterm trm tt pos = TTerm.({ trm; tt; pos })
 
 type core_t =
   | TTT
@@ -151,7 +22,7 @@ type core_t =
   | TAnd of Side.t * (t list)
   | TOr of Side.t * (t list)
   | TImp of Side.t * t * t
-  | TIff of Side.t * Side.t * t * t
+  | TIff of (Side.t * Side.t) * t * t
   | TExists of string * t
   | TForall of string * t
   | TPrev of Interval.t * t
@@ -162,15 +33,15 @@ type core_t =
   | TAlways of Interval.t * t
   | TSince of Side.t * Interval.t * t * t
   | TUntil of Side.t * Interval.t * t * t
-  | TType of t * ty
+  | TType of t * EnfType.t
 
 and t = {
   f: core_t;
   variable_instantiations: (string * TTerm.t) list;
-  positions: Lexing.position list
+  pos: LexingInfo.t
 }
 
-let make_tformula f variable_instantiations pos = {f; variable_instantiations; positions=pos}
+let make_tformula f variable_instantiations pos = {f; variable_instantiations; pos}
 
 let ttt insts pos = make_tformula TTT insts pos
 let tff insts pos = make_tformula TFF insts pos
@@ -183,7 +54,7 @@ let tdisj insts pos s f g = make_tformula (TOr (s, [f; g])) insts pos
 let tconj' insts pos s fs = make_tformula (TAnd (s, fs)) insts pos
 let tdisj' insts pos s fs = make_tformula (TOr (s, fs)) insts pos
 let timp insts pos s f g = make_tformula (TImp (s, f, g)) insts pos
-let tiff insts pos s t f g = make_tformula (TIff (s, t, f, g)) insts pos
+let tiff insts pos s2 f g = make_tformula (TIff (s2, f, g)) insts pos
 let texists insts pos x f = make_tformula (TExists (x, f)) insts pos
 let tforall insts pos x f = make_tformula (TForall (x, f)) insts pos
 let tprev insts pos i f = make_tformula (TPrev (i, f)) insts pos
@@ -206,11 +77,10 @@ let tbigcauforall pos vars f =
 module StringMap = Map.Make(String)
 
 let rec fv ?(map=Map.empty (module String)) f =
-  let aux0 v map p = Map.add_multi map ~key:v ~data:p in
-  let aux1 map (v, ps) = List.fold ps ~init:map ~f:(aux0 v) in
+  let aux1 map (v, p) = Map.update map v ~f:(function Some i -> LexingInfo.(p ++ i) | None -> p) in
   let merge_fun ~key:_ = function
     | `Left x | `Right x -> Some x
-    | `Both (x, y) -> Some (x @ y)
+    | `Both (x, y) -> Some LexingInfo.(x ++ y)
   in
   let merge map1 map2 = Map.merge map1 map2  ~f:merge_fun in
   match f.f with
@@ -220,7 +90,7 @@ let rec fv ?(map=Map.empty (module String)) f =
   | TPredicate (_, trms, _) -> 
     TTerm.fv_list trms |> List.fold ~init:map ~f:aux1
   | TAgg (s, _, _, ys, _) ->
-    ((s, f.positions) :: List.map ys ~f:(fun y -> (y, f.positions)))
+    ((s, f.pos) :: List.map ys ~f:(fun y -> (y, f.pos)))
     |> List.fold ~init:map ~f:aux1
   | TExists (x, g)
     | TForall (x, g) ->
@@ -235,7 +105,7 @@ let rec fv ?(map=Map.empty (module String)) f =
     | TNext (_, g)
     | TType (g, _) -> fv ~map g
     | TImp (_, f1, f2)
-    | TIff (_, _, f1, f2)
+    | TIff (_, f1, f2)
     | TSince (_, _, f1, f2)
     | TUntil (_, _, f1, f2) -> fv ~map:(fv ~map f2) f1
   | TAnd (_, fs)
@@ -258,7 +128,7 @@ let rec rank f = match f.f with
     | TType (f, _)
     | TAgg (_, _, _, _, f) -> rank f
     | TImp (_, f, g)
-    | TIff (_, _, f, g)
+    | TIff (_, f, g)
     | TSince (_, _, f, g)
     | TUntil (_, _, f, g) -> rank f + rank g
   | TAnd (_, fs)
@@ -281,7 +151,7 @@ let rec deg f = match f.f with
     | TType (f, _)
     | TAgg (_, _, _, _, f) -> deg f
     | TImp (_, f, g)
-    | TIff (_, _, f, g)
+    | TIff (_, f, g)
     | TSince (_, _, f, g)
     | TUntil (_, _, f, g) -> max 2 (max (deg f) (deg g))
     | TAnd (_, fs)
@@ -295,28 +165,28 @@ let fix_side s f g =
   | _ -> s
 
 let rec to_formula (f: t): Formula.t = match f.f with
-  | TTT -> tt f.positions
-  | TFF -> ff f.positions
+  | TTT -> tt f.pos
+  | TFF -> ff f.pos
   | TEqConst (trm, trm') ->
-    term f.positions (Term.binop f.positions (TTerm.to_formula_term trm) Formula.Term.BEq (TTerm.to_formula_term trm'))
-  | TPredicate (e, trms, _) -> predicate f.positions e (List.map trms ~f:TTerm.to_formula_term)
-  | TAgg (s, op, x, y, g) -> agg f.positions s op (TTerm.to_formula_term x) y (to_formula g)
-  | TNeg g -> neg f.positions (to_formula g)
-  | TAnd (s, fs) -> conj' f.positions (fix_side s (List.hd_exn fs) (List.last_exn fs)) (List.map fs ~f:to_formula)
-  | TOr (s, fs) -> disj' f.positions (fix_side s (List.hd_exn fs) (List.last_exn fs)) (List.map fs ~f:to_formula)
-  | TImp (s, g, h) -> imp f.positions (fix_side s g h) (to_formula g) (to_formula h)
-  | TIff (s, t, g, h) -> iff f.positions (fix_side s g h) (fix_side t g h) (to_formula g) (to_formula h)
-  | TExists (x, g) -> exists f.positions x (to_formula g)
-  | TForall (x, g) -> forall f.positions x (to_formula g)
-  | TPrev (i, g) -> prev f.positions i (to_formula g)
-  | TNext (i, g) -> next f.positions i (to_formula g)
-  | TOnce (i, g) -> once f.positions i (to_formula g)
-  | TEventually (i, g) -> eventually f.positions i (to_formula g)
-  | THistorically (i, g) -> historically f.positions i (to_formula g)
-  | TAlways (i, g) -> always f.positions i (to_formula g)
-  | TSince (s, i, g, h) -> since f.positions (fix_side s g h) i (to_formula g) (to_formula h)
-  | TUntil (s, i, g, h) -> until f.positions s i (to_formula g) (to_formula h)
-  | TType (g, ty) -> type_ f.positions (to_formula g) ty
+    term f.pos (Term.binop f.pos (TTerm.to_formula_term trm) Term.BEq (TTerm.to_formula_term trm'))
+  | TPredicate (e, trms, _) -> predicate f.pos e (List.map trms ~f:TTerm.to_formula_term)
+  | TAgg (s, op, x, y, g) -> agg f.pos s op (TTerm.to_formula_term x) y (to_formula g)
+  | TNeg g -> neg f.pos (to_formula g)
+  | TAnd (s, fs) -> conj' f.pos (fix_side s (List.hd_exn fs) (List.last_exn fs)) (List.map fs ~f:to_formula)
+  | TOr (s, fs) -> disj' f.pos (fix_side s (List.hd_exn fs) (List.last_exn fs)) (List.map fs ~f:to_formula)
+  | TImp (s, g, h) -> imp f.pos (fix_side s g h) (to_formula g) (to_formula h)
+  | TIff (s2, g, h) -> iff f.pos ((fix_side (fst s2) g h, fix_side (snd s2) g h)) (to_formula g) (to_formula h)
+  | TExists (x, g) -> exists f.pos x (to_formula g)
+  | TForall (x, g) -> forall f.pos x (to_formula g)
+  | TPrev (i, g) -> prev f.pos i (to_formula g)
+  | TNext (i, g) -> next f.pos i (to_formula g)
+  | TOnce (i, g) -> once f.pos i (to_formula g)
+  | TEventually (i, g) -> eventually f.pos i (to_formula g)
+  | THistorically (i, g) -> historically f.pos i (to_formula g)
+  | TAlways (i, g) -> always f.pos i (to_formula g)
+  | TSince (s, i, g, h) -> since f.pos (fix_side s g h) i (to_formula g) (to_formula h)
+  | TUntil (s, i, g, h) -> until f.pos s i (to_formula g) (to_formula h)
+  | TType (g, ty) -> type_ f.pos (to_formula g) ty
 
 let op_to_string f = match f.f with
   | TTT -> Printf.sprintf "⊤"
@@ -328,7 +198,7 @@ let op_to_string f = match f.f with
   | TAnd (_, _) -> Printf.sprintf "∧"
   | TOr (_, _) -> Printf.sprintf "∨"
   | TImp (_, _, _) -> Printf.sprintf "→"
-  | TIff (_, _, _, _) -> Printf.sprintf "↔"
+  | TIff (_, _, _) -> Printf.sprintf "↔"
   | TExists (x, _) -> Printf.sprintf "∃ %s." x
   | TForall (x, _) -> Printf.sprintf "∀ %s." x
   | TPrev (i, _) -> Printf.sprintf "●%s" (Interval.to_string i)
@@ -362,7 +232,7 @@ let rec to_string_core_rec l f = match f.f with
      let strings = List.map fs ~f:(to_string_rec 4) in
      Util.paren_string l 3 (String.concat ~sep strings)
   | TImp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | TIff (s, t, f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
+  | TIff ((s, t), f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
   | TExists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f
   | TForall (x, f) -> Printf.sprintf (Util.paren l 5 "∀%s. %a") x (fun _ -> to_string_rec 5) f
   | TPrev (i, f) -> Printf.sprintf (Util.paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
@@ -375,7 +245,7 @@ let rec to_string_core_rec l f = match f.f with
                          (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
   | TUntil (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
                              (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | TType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> ty_to_string) ty
+  | TType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> EnfType.to_string) ty
 and to_string_rec l f =
   let f_str = to_string_core_rec l f in
   match f.variable_instantiations with
@@ -401,7 +271,7 @@ let rec collect_tpredicates l f = match f.f with
   | THistorically (_, f)
     | TAlways (_, f) -> collect_tpredicates l f
   | TImp (_, f, g)
-  | TIff (_, _, f, g)
+  | TIff (_, f, g)
   | TSince (_, _, f, g)
     | TUntil (_, _, f, g) -> collect_tpredicates (collect_tpredicates l f) g
 
@@ -420,7 +290,7 @@ let rec relative_interval ?(itl_itvs=Map.empty (module String)) (f: t): Zinterva
   | TNeg f | TExists (_, f) | TForall (_, f) -> relative_interval f
   | TAnd (_, fs) | TOr (_, fs)
     -> List.fold_left (List.map fs ~f:relative_interval) ~init:Zinterval.full ~f:Zinterval.lub
-  | TImp (_, f1, f2) | TIff (_, _, f1, f2)
+  | TImp (_, f1, f2) | TIff (_, f1, f2)
     -> Zinterval.lub (relative_interval f1) (relative_interval f2)
   | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
     -> let i' = Zinterval.inv (Zinterval.of_interval i) in
@@ -449,7 +319,7 @@ let strict ?(itl_strict=Map.empty (module String)) ?(itv=Zinterval.singleton 0) 
             | None -> false
           end
         | TNeg f | TExists (_, f) | TForall (_, f) | TAgg (_, _, _, _, f) -> _strict itv fut f
-        | TImp (_, f1, f2) | TIff (_, _, f1, f2)
+        | TImp (_, f1, f2) | TIff (_,f1, f2)
           -> (_strict itv fut f1) || (_strict itv fut f2)
         | TAnd (_, fs) | TOr (_, fs)
           -> List.exists fs ~f:(_strict itv fut)
@@ -489,12 +359,12 @@ let rec is_transparent (t: EnfType.t) (f: t) =
         | TOnce (_, f) | TNext (_, f) | THistorically (_, f)
           | TAlways (_, f) -> is_transparent f
       | TEventually (i, f) -> Interval.is_bounded i && is_transparent f
-      | TImp (L, f, g) | TIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
+      | TImp (L, f, g) | TIff ((L, L), f, g) -> is_transparent f && strictly_relative_past g
       | TOr (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | TImp (R, f, g) | TIff (R, R, f, g) -> is_transparent g && strictly_relative_past f
+      | TImp (R, f, g) | TIff ((R, R), f, g) -> is_transparent g && strictly_relative_past f
       | TOr (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
       | TAnd (_, fs) -> List.for_all fs ~f:is_transparent
-      | TIff (_, _, f, g) -> is_transparent f && is_transparent g
+      | TIff (_, f, g) -> is_transparent f && is_transparent g
       | TSince (_, _, f, g) -> is_transparent f && strictly_relative_past g
       | TUntil (R, i, f, g) -> Interval.is_bounded i && is_transparent f && strictly_relative_past g
       | TUntil (LR, i, f, g) -> Interval.is_bounded i && is_transparent f && is_transparent g
@@ -508,10 +378,10 @@ let rec is_transparent (t: EnfType.t) (f: t) =
         | TEventually (_, f) -> is_transparent f
       | TAlways (i, f) -> Interval.is_bounded i && is_transparent f
       | TAnd (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | TIff (L, L, f, g) -> is_transparent f && strictly_relative_past g
-      | TIff (R, R, f, g) -> is_transparent g && strictly_relative_past f
+      | TIff ((L, L), f, g) -> is_transparent f && strictly_relative_past g
+      | TIff ((R, R), f, g) -> is_transparent g && strictly_relative_past f
       | TAnd (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
-      | TIff (_, _, f, g) -> is_transparent f && is_transparent g
+      | TIff (_, f, g) -> is_transparent f && is_transparent g
       | TOr (_, fs) -> List.for_all fs ~f:is_transparent
       | TSince (L, _, f, g) -> is_transparent f && strictly_relative_past g
       | TSince (R, _, f, g) -> is_transparent f && is_transparent g

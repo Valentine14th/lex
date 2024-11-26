@@ -2,7 +2,7 @@ open Core
 open Lex
 
 let debug_label = ref false
-let debug = if !debug_label then Util.debug_print ~f_name:(Some "label.ml") else ignore
+let debug = if !debug_label then Errors.debug_print ~f_name:(Some "label.ml") else ignore
 
 (** First identifier: number, letter, etc. describing
                       the section in question (e.g. "2")
@@ -105,8 +105,8 @@ let remove_highest_level = function
   | _ -> empty
 
 let valid_rule_label pos = function
-  | { law = []; _ } -> Util.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos
-  | { article = []; _ } -> Util.label_error "No 'article section defined (yet). A rule must be inside of an 'article' section" pos
+  | { law = []; _ } -> Errors.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos
+  | { article = []; _ } -> Errors.label_error "No 'article section defined (yet). A rule must be inside of an 'article' section" pos
   | _ -> ()
 
 let set pos section_kind label_name l = try match section_kind with
@@ -122,7 +122,7 @@ let set pos section_kind label_name l = try match section_kind with
     | Invalid_argument idx ->
       (* TODO: give more complete error message with a string representation of the entire label *)
       let err_msg = Printf.sprintf "wrong sub-level index '%s' in '%s'" idx (string_of_section_kind section_kind) in
-      Util.label_error err_msg pos
+      Errors.label_error err_msg pos
 
 let set_rule_id rule_id l = { l with rule_id = rule_id }
 
@@ -213,15 +213,15 @@ let qualified_name l = match
 
 let qualified_id l =
   Printf.sprintf "%s-%s-%s-%s-%s-%s"
-    (Etc.sanitize_string (qualified_name_of_law l.law))
-    (Etc.sanitize_string (qualified_name_of_article l.article))
-    (Etc.sanitize_string (qualified_name_of_level_simple l.paragraph))
-    (Etc.sanitize_string (qualified_name_of_level_simple l.point))
-    (Etc.sanitize_string (qualified_name_of_level_simple l.subpoint))
-    (Etc.sanitize_string (string_of_rule_id2 l.rule_id))
+    (Util.sanitize_string (qualified_name_of_law l.law))
+    (Util.sanitize_string (qualified_name_of_article l.article))
+    (Util.sanitize_string (qualified_name_of_level_simple l.paragraph))
+    (Util.sanitize_string (qualified_name_of_level_simple l.point))
+    (Util.sanitize_string (qualified_name_of_level_simple l.subpoint))
+    (Util.sanitize_string (string_of_rule_id2 l.rule_id))
 
 let id_of_sks sks =
-  let f (s, n) = Etc.sanitize_string (Lex.string_of_section_kind s ^ "-" ^ n) in
+  let f (s, n) = Util.sanitize_string (Lex.string_of_section_kind s ^ "-" ^ n) in
   String.concat ~sep:"-" (List.map sks ~f)
   
 let reference_id l =
@@ -289,25 +289,25 @@ module RuleTree = struct
     | Leaf
 
   let rec level_tree_to_string ?(i=0) = function
-    | Leaf -> Etc.tabs i ^ "Leaf"
+    | Leaf -> Util.tabs i ^ "Leaf"
     | Intermediate map ->
-       Etc.tabs i ^ "[\n" ^ Etc.tabs (i+1)
-       ^ String.concat ~sep:("\n" ^ Etc.tabs (i+1))
+       Util.tabs i ^ "[\n" ^ Util.tabs (i+1)
+       ^ String.concat ~sep:("\n" ^ Util.tabs (i+1))
            (List.map ~f:(fun (loc, (tree, rules)) ->
                 Printf.sprintf "%s ->\n%s%s%s%s"
                   (Location.string_of_t loc)
-                  (Etc.tabs (i+2))
+                  (Util.tabs (i+2))
                   (if Map.is_empty rules then
                      "Rules: none\n"
                    else
                      Printf.sprintf "Rules:\n%s%s\n"
-                       (Etc.tabs (i+3))
-                       (String.concat ~sep:("\n" ^ Etc.tabs (i+3))
+                       (Util.tabs (i+3))
+                       (String.concat ~sep:("\n" ^ Util.tabs (i+3))
                           (List.map ~f:(fun (s, i) ->
                                Printf.sprintf "%s -> %d"
                                  (if String.is_empty s then "[unnamed]" else s) i)
                              (Map.to_alist rules))))
-                  (Etc.tabs (i+2))
+                  (Util.tabs (i+2))
                   (match tree with Leaf -> "Tree: none"
                                  | _ -> Printf.sprintf "Tree:\n%s\n"
                                           (level_tree_to_string ~i:(i+3) tree)))
@@ -316,11 +316,11 @@ module RuleTree = struct
 
   type rtref_expr = { label: t;
                       ref: Lex.reference;
-                      pos: Lexing.position }
+                      pos: LexingInfo.t }
 
   type s = 
     {
-      label_of_rule: (int, (t * Lexing.position), Int.comparator_witness) Map.t;
+      label_of_rule: (int, (t * LexingInfo.t), Int.comparator_witness) Map.t;
       tree: level_tree; (* entire tree, specifically containing every level between law[0] and article[0] *)
       exceptions: (int, int list, Int.comparator_witness) Map.t; (* map from rule index i to list of rule indeces of except-rules for rule i *)
       scopes: (int, int list, Int.comparator_witness) Map.t; (* map from rule index i to list of rule indeces of scope-rules for rule i *)
@@ -336,8 +336,8 @@ module RuleTree = struct
 
   let update_rule_map pos m k v = try Map.add_exn m ~key:k ~data:v with | _ ->
     begin match k with
-    | "" -> Util.label_error "An unlabeled rule already exists in this section, consider using labels" pos
-    | _ -> Util.label_error ("A rule with the label '" ^ k ^ "' already exists in this section") pos
+    | "" -> Errors.label_error "An unlabeled rule already exists in this section, consider using labels" pos
+    | _ -> Errors.label_error ("A rule with the label '" ^ k ^ "' already exists in this section") pos
     end
 
   let rec insert_section_in_tree ?(previous_sk=Law 0) pos tree l =
@@ -376,7 +376,7 @@ module RuleTree = struct
       | LNone -> assert false
       | LRule r -> "Rule '" ^ r ^ "' is outside of any section"
       | LSection _ -> assert false
-      in Util.label_error err_msg pos
+      in Errors.label_error err_msg pos
     | false -> () in
     begin match is_empty (remove_highest_level l') with
     | true ->
@@ -476,7 +476,7 @@ module RuleTree = struct
       let map', inferred_levels = match sub_maps with
       | [] ->
         let err_msg = Printf.sprintf "Section { %s %s } was not found" (string_of_section_kind sk) n in
-        Util.reference_error err_msg pos
+        Errors.reference_error err_msg pos
       | [m, ils] -> m, ils
       | _ ->
         let err_msg = Printf.sprintf "Multiple possible intermediate levels (%s) found for section { %s \"%s\" }"
@@ -484,7 +484,7 @@ module RuleTree = struct
                         | 0 -> Printf.sprintf "%s \"%s\"" sk n
                         | _ -> Printf.sprintf "%s[%d] \"%s\"" sk i n)) ^ " }")) )
                       (string_of_section_kind sk) n in
-        Util.reference_error err_msg pos
+        Errors.reference_error err_msg pos
       in
       let _ = match List.is_empty inferred_levels with
       | true -> ()
@@ -494,17 +494,17 @@ module RuleTree = struct
                        (Lex.string_of_section_kind sk)
                        (n)
         in
-        Util.warning warn_msg (Some pos)
+        Errors.warning warn_msg (Some pos)
       in
       begin match highest_level label' with
       | LRule r -> begin try [Map.find_exn map' key |> snd |> (fun x -> Map.find_exn x r)]
-                   with _ -> Util.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos end
+                   with _ -> Errors.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos end
       | LNone -> let tree, rules = begin try Map.find_exn map' key
-                 with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos
+                 with _ -> Errors.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos
                           end in
                  Map.data rules @ collect_rules_in_tree tree
       | _ -> let tree' = begin try Map.find_exn map' key |> fst
-             with _ -> Util.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos end
+             with _ -> Errors.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos end
         in find_rules_in_tree pos label' tree'
       end
     end
@@ -528,12 +528,12 @@ module RuleTree = struct
     debug (String.concat ~sep:"\n" (List.map refs ~f:(fun r -> string_of_label r.label)));
     let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
     debug (String.concat ~sep:", " (List.map rule_idxs ~f:string_of_int));
-    if List.is_empty rule_idxs then Util.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
+    if List.is_empty rule_idxs then Errors.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
     { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
   let add_scope idx (refs: rtref_expr list) s =
     let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
-    if List.is_empty rule_idxs then Util.warning ("No rules found for scope " ^ string_of_rule_idx s idx) None;
+    if List.is_empty rule_idxs then Errors.warning ("No rules found for scope " ^ string_of_rule_idx s idx) None;
     { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
 

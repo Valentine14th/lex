@@ -3,7 +3,7 @@ open Core
 open LegalXml
 
 let debug_akomaNtoso = ref false
-let debug msg = if !debug_akomaNtoso then Util.debug_print ~f_name:(Some "akomaNtoso.ml") msg else ignore msg
+let debug msg = if !debug_akomaNtoso then Errors.debug_print ~f_name:(Some "akomaNtoso.ml") msg else ignore msg
 
 let format_ident =
   Re.replace (Re.compile (Re.(alt [char '('; char ')'; char '.']))) ~f:(fun _ -> "")

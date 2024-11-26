@@ -12,12 +12,12 @@ type epattern =
   | EPSince of Interval.t * Eformula.t
 
 type erule =
-  | EObligation   of Lexing.position * int
-  | EPermission   of Lexing.position * int
-  | EConstitutive of Lexing.position * (int * int) list
-  | EException    of Lexing.position * int
-  | EExceptionC   of Lexing.position * int * (int * int) list
-  | EScope        of Lexing.position * int
+  | EObligation   of LexingInfo.t * int
+  | EPermission   of LexingInfo.t * int
+  | EConstitutive of LexingInfo.t * (int * int) list
+  | EException    of LexingInfo.t * int
+  | EExceptionC   of LexingInfo.t * int * (int * int) list
+  | EScope        of LexingInfo.t * int
 
 type erule_type = ERTObligation | ERTPermission | ERTConstitutive | ERTException | ERTExceptionC | ERTScope
 
@@ -51,14 +51,14 @@ let epformula_of_tpformula tevents (tpf: tpformula): epformula = {
 type edisjunct = {
   rule_id: int;
   et: erule_type;
-  rule_pos: Lexing.position;
-  def_positions: Lexing.position list;
+  rule_pos: LexingInfo.t;
+  def_positions: LexingInfo.t;
   pf: epformula;
   exceptions: Eformula.t list; (* list of predicate *)
   scopes: Eformula.t list; (* list of predicate *)
   fv_renaming: (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
-  params_original: Tformula.TTerm.t list; (* list of the original terms*)
-  params_new: Tformula.TTerm.t list; (* list of the new terms*)
+  params_original: TTerm.t list; (* list of the original terms*)
+  params_new: TTerm.t list; (* list of the new terms*)
 }
 
 let edisjunct_of_tdisjunct tevents (td: tdisjunct) = {
@@ -110,32 +110,32 @@ type enf_ecdefinition_dis =
   | ECdd of int * enf_cau_lhs
 
 type ecrule =
-  | ECImplication   of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option
-  | ECDefinition    of int * erule_type * Lexing.position * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t * enf_ecdefinition option
+  | ECImplication   of int * erule_type * LexingInfo.t * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option
+  | ECDefinition    of int * erule_type * LexingInfo.t * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t * enf_ecdefinition option
   | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * enf_ecdefinition_dis option
 
 type estmt =
-  | ESImport  of Lexing.position * string list * import_format
+  | ESImport  of LexingInfo.t * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
-  | ESRule    of Lexing.position * int * Label.t * (ident * Formula.TypeTerm.t) list * erule * string tannot option
-  | ESEvent   of event_type * ident * (Lexing.position * ident * Formula.TypeTerm.t) list * pol * string option
-  | ESType    of ident * Formula.TypeTerm.t option * string option
-  | ESFunction of ident * (ident * Formula.TypeTerm.t) list * Formula.TypeTerm.t * string option
+  | ESRule    of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * erule * string tannot option
+  | ESEvent   of event_type * ident * (ident * TypeTerm.t) list * pol * string option
+  | ESType    of ident * TypeTerm.t option * string option
+  | ESFunction of ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | ESNote    of string
 
-type var_types = (ident, Formula.TypeTerm.t, Base.String.comparator_witness) Map.t
+type var_types = (ident, TypeTerm.t, Base.String.comparator_witness) Map.t
 
 type eprog =
   {
     estmts: estmt list;
-    ealiases: (ident, Formula.TypeTerm.t option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
+    ealiases: (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
     eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
     efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
     variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
     rule_tree: Label.RuleTree.s;
     ecrules: (int, ecrule, Int.comparator_witness) Map.t;
     compilation_order: int list;
-    pols: (string, Formula.EnfType.t, Base.String.comparator_witness) Map.t;
+    pols: (string, EnfType.t, Base.String.comparator_witness) Map.t;
   }
 
 let tempty =
@@ -260,40 +260,40 @@ let string_of_epattern = function
 
 
 let string_of_erule ecrules i erule =
-  let to_string f = Etc.tabs (i+1) ^ Eformula.to_string f in
-  let reference_to_string ref_ = Etc.tabs (i+1) ^ Lex.string_of_reference ref_ in
+  let to_string f = Util.tabs (i+1) ^ Eformula.to_string f in
+  let reference_to_string ref_ = Util.tabs (i+1) ^ Lex.string_of_reference ref_ in
   let string_of_formula_list f =
     String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n" in
   let string_of_reference_list refs =
     String.concat ~sep:"\n" (List.map ~f:reference_to_string refs) ^ "\n" in
   (*let string_of_formula_list_list fs =
-    String.concat ~sep:("\n" ^ Etc.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
+    String.concat ~sep:("\n" ^ Util.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb pf1 pf2 rcs rt =
-    Etc.tabs i     ^ "whenever" ^ string_of_epattern pf1.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ string_of_epattern pf1.p ^ "\n"
     ^ string_of_formula_list pf1.fs                         
-    ^ Etc.tabs i   ^ verb       ^ string_of_epattern pf2.p ^ "\n"
+    ^ Util.tabs i   ^ verb       ^ string_of_epattern pf2.p ^ "\n"
     ^ string_of_formula_list pf2.fs
-    ^ Etc.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
+    ^ Util.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
     ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
-      else Etc.tabs i ^ (string_of_rule_constrs rcs))
+      else Util.tabs i ^ (string_of_rule_constrs rcs))
   in
   let string_of_cons_rule verb pf g =
-    Etc.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
-    ^ string_of_formula_list pf.fs  ^ Etc.tabs i   ^ verb  ^ "\n"
+    Util.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
+    ^ string_of_formula_list pf.fs  ^ Util.tabs i   ^ verb  ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_ref_rule verb pf refs =
-    Etc.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
     ^ string_of_formula_list pf.fs                         ^ "\n"
-    ^ Etc.tabs i   ^ verb                              ^ "\n"
+    ^ Util.tabs i   ^ verb                              ^ "\n"
     ^ string_of_reference_list refs
   in
   let string_of_refc_rule verb pf refs g =
-    Etc.tabs i     ^ "whenever"  ^ string_of_epattern pf.p ^ "\n"
+    Util.tabs i     ^ "whenever"  ^ string_of_epattern pf.p ^ "\n"
     ^ string_of_formula_list pf.fs
-    ^ Etc.tabs i   ^ verb                               ^ "\n"
+    ^ Util.tabs i   ^ verb                               ^ "\n"
     ^ string_of_reference_list refs                     
-    ^ Etc.tabs i   ^ "constitute"                       ^ "\n"
+    ^ Util.tabs i   ^ "constitute"                       ^ "\n"
     ^ string_of_formula_list g
   in
   match erule with
@@ -323,7 +323,7 @@ let string_of_estmt ecrules ?(i=0) =
        (String.concat ~sep:"." idents)
   | ESSection (section_kind, _, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"
-       (Etc.tabs i)
+       (Util.tabs i)
        (string_of_section_kind section_kind)
        label
        (match title with Some title -> Printf.sprintf ": \"%s\"" (of_annot title) | None -> "")
@@ -334,7 +334,7 @@ let string_of_estmt ecrules ?(i=0) =
           | None -> ""
       in
       Printf.sprintf "%srule %s\n%s%s\n%s"
-        (Etc.tabs i)
+        (Util.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_erule ecrules (i+1) rule)
@@ -346,7 +346,7 @@ let string_of_estmt ecrules ?(i=0) =
           | None -> ""
       in
       Printf.sprintf "%s%s %s %s\n%s%s"
-          (Etc.tabs i)
+          (Util.tabs i)
           (string_of_pol pol)
           (string_of_event_type event_type)
           name
@@ -359,10 +359,10 @@ let string_of_estmt ecrules ?(i=0) =
           | None -> "" in
       let typ_string =
        match typ with
-       | Some tt -> " is " ^ Formula.TypeTerm.to_string tt
+       | Some tt -> " is " ^ TypeTerm.to_string tt
        | None -> "" in
      Printf.sprintf "%stype %s%s%s"
-       (Etc.tabs i) name typ_string description
+       (Util.tabs i) name typ_string description
   | ESFunction (name, typed_args, return_typ, doc_string) ->
      let description =
           match doc_string with
@@ -370,12 +370,12 @@ let string_of_estmt ecrules ?(i=0) =
           | None -> ""
      in
      let f (ident, typ) =
-       Printf.sprintf "%s : %s" ident (Formula.TypeTerm.value_to_string typ) in
+       Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
      Printf.sprintf "%sfunction %s(%s) -> %s%s"
-       (Etc.tabs i)
+       (Util.tabs i)
        name
        (String.concat ~sep:", " (List.map typed_args ~f))
-       (Formula.TypeTerm.value_to_string return_typ)
+       (TypeTerm.value_to_string return_typ)
        description
   | ESNote text -> "note \"" ^ text ^ "\""
     
