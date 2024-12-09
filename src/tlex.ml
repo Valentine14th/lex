@@ -1,69 +1,12 @@
 open Core
+
+module Patt = Pattern
+
 open Lex
 
-type tpattern =
-  | TPPresent
-  | TPEventually of Interval.t
-  | TPAlways of Interval.t
-  | TPUntil of Interval.t * Tformula.t
-  | TPOnce of Interval.t
-  | TPHistorically of Interval.t
-  | TPSince of Interval.t * Tformula.t
+module Zinterval = MFOTL_lib.Zinterval
 
-let tpattern_to_string = function
-  | TPPresent -> ""
-  | TPEventually i -> Printf.sprintf "◊%s" (Interval.to_string i)
-  | TPAlways i -> Printf.sprintf "□%s" (Interval.to_string i) 
-  | TPUntil (i, f) -> Printf.sprintf "%s U%s" (Tformula.to_string f) (Interval.to_string i)
-  | TPOnce i -> Printf.sprintf "⧫%s" (Interval.to_string i)
-  | TPHistorically i -> Printf.sprintf "■%s" (Interval.to_string i)
-  | TPSince (i, f) -> Printf.sprintf "%s S%s" (Tformula.to_string f) (Interval.to_string i)
-
-type tref_expr = {
-  label: Label.t;
-  ref: Lex.reference;
-  pos: LexingInfo.t
-}
-let to_rtref_expr (tref: tref_expr) = Label.RuleTree.{label = tref.label; ref = tref.ref; pos = tref.pos}
-
-let make_tref_expr pos label sks rule = { label; ref = Lex.make_reference sks rule; pos }
-
-type tpformula = {p: tpattern; fs: Tformula.t list}
-
-let tpf p fs = {p; fs}
-
-let tpformula_to_string tpf =
-  Printf.sprintf "{p = %s; fs = [%s]}"
-    (tpattern_to_string tpf.p)
-    (String.concat ~sep:", " (List.map tpf.fs ~f:Tformula.to_string))
-
-type trule =
-  | TObligation   of LexingInfo.t * tpformula * tpformula * rule_type * rule_constr list
-  | TPermission   of LexingInfo.t * tpformula * tpformula * rule_type * rule_constr list
-  | TConstitutive of LexingInfo.t * tpformula * Tformula.t list
-  | TException    of LexingInfo.t * tpformula * tref_expr list * Tformula.t
-  | TExceptionC   of LexingInfo.t * tpformula * tref_expr list * Tformula.t * Tformula.t list
-  | TScope        of LexingInfo.t * tpformula * tref_expr list * Tformula.t
-
-type trule_type = TRTObligation | TRTPermission | TRTConstitutive | TRTException | TRTExceptionC | TRTScope
-
-type tdisjunct = {
-  rule_id: int;
-  tt: trule_type;
-  rule_pos: LexingInfo.t;
-  def_positions: LexingInfo.t;
-  pf: tpformula;
-  exceptions: Tformula.t list; (* list of predicate *)
-  scopes: Tformula.t list; (* list of predicate *)
-  fv_renaming: (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
-  params_original: TTerm.t list; (* list of the original terms*)
-  params_new: TTerm.t list; (* list of the new terms *)
-}
-
-type tcrule =
-  | TCImplication   of int * trule_type * LexingInfo.t * tpformula * Tformula.t list * Tformula.t list * tpformula * rule_type * rule_constr list
-  | TCDefinition    of int * trule_type * LexingInfo.t * tpformula * Tformula.t list * Tformula.t list * tref_expr list * Tformula.t
-  | TCDefinitionDis of (int, tdisjunct, Int.comparator_witness) Map.t * Tformula.t
+(* Imports *)
 
 type 'a tannot =
   | TALex of 'a
@@ -73,78 +16,120 @@ let of_annot = function
   | TALex x -> x
   | TAFormex (_, x) -> x
 
+(* References to a section / rule *)
+
+module Ref = struct
+
+  type t = { sks:   (section_kind * ident) list;
+             rule:  ident option;
+             label: Label.t;
+             pos:   LexingInfo.t }
+
+  let make sks rule label pos = { sks; rule; label; pos }
+
+  let from_lex_ref (ref: Lex.Ref.t) label =
+    make ref.sks ref.rule label ref.pos
+
+  let to_string (ref : t) =
+    let rule_id = match ref.rule with
+      | Some r -> " rule \"" ^ r ^ "\""
+      | None ->  "" in 
+    let string_of_section_kind_and_name (s, n) =
+      string_of_section_kind s ^ " \"" ^ n ^ "\"" in
+    String.concat ~sep:" " (List.map ~f:string_of_section_kind_and_name ref.sks) ^ rule_id 
+
+  let to_lex_ref (ref: t) : Lex.Ref.t =
+    Lex.Ref.make ref.sks ref.rule ref.pos
+    
+  let to_rtref_expr (ref_expr: t) =
+    Label.RuleTree.{label = ref_expr.label; ref = to_lex_ref ref_expr; pos = ref_expr.pos}
+
+end
+
+(* Temporal patterns *)
+
+module Pattern = Patt.Make(Tformula.Info)(Formula.StringVar)(Dom)(TTerm)
+
+(* Rule declarations *)
+
+type trule =
+  | TObligation   of LexingInfo.t * Pattern.t * Pattern.t * rule_type * rule_constr list
+  | TPermission   of LexingInfo.t * Pattern.t * Pattern.t * rule_type * rule_constr list
+  | TConstitutive of LexingInfo.t * Pattern.t * Tformula.t list
+  | TException    of LexingInfo.t * Pattern.t * Ref.t list * Tformula.t
+  | TExceptionC   of LexingInfo.t * Pattern.t * Ref.t list * Tformula.t * Tformula.t list
+  | TScope        of LexingInfo.t * Pattern.t * Ref.t list * Tformula.t
+
+type trule_type =
+  | TRTObligation
+  | TRTPermission
+  | TRTConstitutive
+  | TRTException
+  | TRTExceptionC
+  | TRTScope
+
+type tdisjunct = {
+  rule_id:         int;
+  rule_type:       trule_type;
+  rule_pos:        LexingInfo.t;
+  def_pos:         LexingInfo.t;
+  pf:              Pattern.t;
+  exceptions:      Tformula.t list;                                   (* list of predicates *)
+  scopes:          Tformula.t list;                                   (* list of predicates *)
+  fv_renaming:     (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
+  params_original: TTerm.t list;                                      (* list of the original terms *)
+  params_new:      TTerm.t list;                                      (* list of the new terms *)
+}
+
+type tcrule =
+  | TCImplication   of int * trule_type * LexingInfo.t * Pattern.t * Tformula.t list * Tformula.t list * Pattern.t * rule_type * rule_constr list
+  | TCDefinition    of int * trule_type * LexingInfo.t * Pattern.t * Tformula.t list * Tformula.t list * Ref.t list * Tformula.t
+  | TCDefinitionDis of (int, tdisjunct, Int.comparator_witness) Map.t * Tformula.t
+
+(* Statements and programs *)
+
 type tstmt =
-  | TSImport  of LexingInfo.t * string list * import_format
-  | TSSection of section_kind * Label.t * string * string tannot option
-  | TSRule    of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * trule * string tannot option
-  | TSEvent   of event_type * ident * (ident * TypeTerm.t) list * pol * string option
-  | TSType    of ident * TypeTerm.t option * string option
+  | TSImport   of LexingInfo.t * string list * import_format
+  | TSSection  of section_kind * Label.t * string * string tannot option
+  | TSRule     of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * trule * string tannot option
+  | TSEvent    of event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
+  | TSType     of ident * TypeTerm.t option * string option
   | TSFunction of ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
-  | TSNote    of string
+  | TSNote     of string
 
-type tevent = event_type * (ident * TypeTerm.t) list * pol * string option
+type tevent = event_type * (ident * TypeTerm.t) list * Enftype.t * string option
 type tfunction = (ident * TypeTerm.t) list * TypeTerm.t * string option
-
 type var_types = (ident, TypeTerm.t, Base.String.comparator_witness) Map.t
 
 type tprog =
   {
-    tstmts: tstmt list;
-    taliases: (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
+    tstmts:               tstmt list;
+    taliases:             (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
     (* maps type aliases to their underlying type *)
-    tevents: (ident, tevent, Base.String.comparator_witness) Map.t;
+    tevents:              (ident, tevent, Base.String.comparator_witness) Map.t;
     (* maps event names to their definitions *)
-    tfunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
+    tfunctions:           (ident, tfunction, Base.String.comparator_witness) Map.t;
     (* maps function names to their definitions *)
-    variables: (int, var_types, Int.comparator_witness) Map.t;
+    variables:            (int, var_types, Int.comparator_witness) Map.t;
     (* maps rule labels to variables used in section *)
-    rule_tree: Label.RuleTree.s;
+    rule_tree:            Label.RuleTree.s;
     exception_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
-    scope_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
+    scope_predicates:     (int, Tformula.t, Int.comparator_witness) Map.t;
   }
 
 let tempty =
   {
-    tstmts = [];
-    taliases = Map.empty (module String);
-    tevents = Builtin.events_map;
-    tfunctions = Builtin.functions_map;
-    variables = Map.empty (module Int); 
-    rule_tree = Label.RuleTree.empty;
+    tstmts               = [];
+    taliases             = Map.empty (module String);
+    tevents              = Builtin.events_map;
+    tfunctions           = Builtin.functions_map;
+    variables            = Map.empty (module Int); 
+    rule_tree            = Label.RuleTree.empty;
     exception_predicates = Map.empty (module Int);
-    scope_predicates = Map.empty (module Int);
+    scope_predicates     = Map.empty (module Int);
   }
 
-let formulas_from_tpattern = function
-  | TPPresent
-  | TPEventually _
-  | TPAlways _
-  | TPOnce _
-  | TPHistorically _ -> []
-  | TPUntil (_, f) 
-  | TPSince (_, f) -> [f]
-
-let fv_of_tpattern ?(map=Map.empty (module String)) = function
-  | TPPresent
-  | TPEventually _
-  | TPOnce _
-  | TPAlways _
-  | TPHistorically _ -> map
-  | TPUntil (_, f)
-  | TPSince (_, f) -> Tformula.fv ~map f
-
-let fv_of_tpformula ?(map=Map.empty (module String)) {p; fs} =
-  List.fold fs ~init:(fv_of_tpattern ~map p)
-    ~f:(fun acc f -> Tformula.fv ~map:acc f)
-
-let trule_map tprog =
-  List.fold tprog.tstmts ~init:(Map.empty (module Int))
-    ~f:(fun acc -> function
-        | TSRule (_, i, _, _, rule, _) -> Map.add_exn acc ~key:i ~data:rule
-        | _ -> acc)
-
-let pol_map tprog =
-  Map.map tprog.tevents ~f:(fun (_, _, pol, _) -> pol)
+(* Functions to extend programs *)
 
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
@@ -156,14 +141,14 @@ let add_talias name typ doc_string tprog pos =
   in
   { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
 
-let add_tevent event_type name (args : (ident * TypeTerm.t) list) pol ds tprog pos =
-  let event = (event_type, args, pol, ds) in
+let add_tevent event_type name (args : (ident * TypeTerm.t) list) enftype ds tprog pos =
+  let event = (event_type, args, enftype, ds) in
   (* TODO: (potentially in the future) allow for overwriting/reusing event names *)
   let events =
     try Map.add_exn tprog.tevents ~key:name ~data:event
     with _ -> Errors.type_error (Printf.sprintf "event %s already exists" name) pos
   in
-  { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, pol, ds)::tprog.tstmts}
+  { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, enftype, ds)::tprog.tstmts}
 
 let add_tfunction name arg_types return_type ds tprog pos =
   let function_ = (arg_types, return_type, ds) in
@@ -174,23 +159,13 @@ let add_tfunction name arg_types return_type ds tprog pos =
   in
   { tprog with tfunctions = functions; tstmts = TSFunction (name, arg_types, return_type, ds)::tprog.tstmts}
 
-(*let add_vars vs name tprog pos =
-  let variables =
-    try Map.add_exn tprog.variables ~key:name ~data:vs
-    with _ -> let err_msg = Printf.sprintf
-                "rule label '%s' has already been defined"
-                name in
-      Util.label_error err_msg pos
-  in
-  { tprog with variables = variables }*)
-
-let add_exception i f (trefs: tref_expr list) tprog =
+let add_exception i f (trefs: Ref.t list) tprog =
   { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f;
-               rule_tree = Label.RuleTree.add_exception i (List.map ~f:to_rtref_expr trefs) tprog.rule_tree }
+               rule_tree = Label.RuleTree.add_exception i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree }
 
-let add_scope i f (trefs: tref_expr list) tprog =
+let add_scope i f (trefs: Ref.t list) tprog =
   { tprog with scope_predicates = Map.add_exn tprog.scope_predicates ~key:i ~data:f;
-               rule_tree = Label.RuleTree.add_scope i (List.map ~f:to_rtref_expr trefs) tprog.rule_tree }
+               rule_tree = Label.RuleTree.add_scope i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree }
 
 let set_labels pos label tprog =
   { tprog with rule_tree = Label.RuleTree.add_label pos tprog.rule_tree label }
@@ -208,10 +183,58 @@ let add_rule pos rule_num label tprog =
 let add_section pos label tprog =
   { tprog with rule_tree = Label.RuleTree.add_section pos label tprog.rule_tree }
 
+(* Signature *)
 
-let is_trule = function
-  | TSRule _ -> true
-  | _ -> false
+module Sig = struct
+
+  type term
+
+  type pred_kind = Trace | Predicate | External | Builtin | Let
+                   [@@deriving compare, sexp_of, hash, equal]
+
+  let prog = ref tempty
+
+  let set_prog p = prog := p
+  
+  let rank_of_pred p_name =
+    let _, args, _, _ = Map.find_exn !prog.tevents p_name in
+    List.length args
+  
+  let mem p_name =
+    Map.mem !prog.tevents p_name
+
+  let enftype_of_pred p_name =
+    let _, _, enftype, _ = Map.find_exn !prog.tevents p_name in
+    enftype
+
+  let kind_of_pred p_name =
+    let event_type, _, _, _ = Map.find_exn !prog.tevents p_name in
+    match event_type with
+    | Event _ -> Trace
+    | Predicate -> Predicate
+
+  let pred_enftype_map () =
+    Map.map !prog.tevents
+      ~f:(fun data -> let _, args, enftype, _ = data in
+                      (enftype, List.init (List.length args) ~f:(fun x -> x)))
+
+  let strict_of_func _ = false
+  
+  let add_letpred_empty _ = assert false
+  
+  let update_enftype p_name enftype =
+    prog := {
+        !prog with
+        tevents = Map.update !prog.tevents p_name
+                    ~f:(function
+                      | Some data -> let event_type, args, _, ds = data in
+                                     (event_type, args, enftype, ds)
+                      | None -> assert false)
+      }
+
+end
+
+(* Printing functions *)
 
 let verb_of_trule = function
   | TObligation _ -> "oblige"
@@ -221,58 +244,40 @@ let verb_of_trule = function
     | TExceptionC _ -> "except"
   | TScope _ -> "scope"
 
-
-let string_of_tpattern = function
-  | TPPresent -> ""
-  | TPEventually i -> " eventually " ^ Interval.to_string i 
-  | TPAlways i -> " always in the future " ^ Interval.to_string i 
-  | TPUntil (i, f) -> " eventually delaying if " ^ Tformula.to_string f ^ " " ^ Interval.to_string i
-  | TPOnce i -> " once " ^ Interval.to_string i
-  | TPHistorically i -> " always in the past " ^ Interval.to_string i
-  | TPSince (i, f) -> " always since " ^ Tformula.to_string f ^ " " ^ Interval.to_string i
-
-let predicates_of_tpattern = function
-  | TPPresent
-  | TPEventually _
-  | TPAlways _
-  | TPHistorically _
-    | TPOnce _ -> []
-  | TPUntil (_, f)
-    | TPSince (_, f) -> Tformula.collect_tpredicates [] f
-
 let string_of_trule i trule =
+  let open Pattern in
   let to_string f = Util.tabs (i+1) ^ Tformula.to_string f in
   let string_of_formula_list f =
     String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Util.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb fp1 fp2 rcs rt =
-    Util.tabs i     ^ "whenever" ^ string_of_tpattern fp1.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string fp1.patt ^ "\n"
     ^ string_of_formula_list fp1.fs ^ "\n"
-    ^ Util.tabs i   ^ verb     ^ string_of_tpattern fp2.p ^ "\n"
+    ^ Util.tabs i   ^ verb     ^ Pattern.patt_to_string fp2.patt ^ "\n"
     ^ string_of_formula_list fp2.fs
     ^ Util.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
     ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
       else Util.tabs i ^ (string_of_rule_constrs rcs))
   in
   let string_of_cons_rule verb fp g =
-    Util.tabs i     ^ "whenever" ^ string_of_tpattern fp.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string fp.patt ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
     ^ Util.tabs i   ^ verb      ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_ref_rule verb fp refs =
     (* let refs = List.map trefs ~f:Label.reference_of_label in *)
-    Util.tabs i     ^ "whenever" ^ string_of_tpattern fp.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string fp.patt ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
     ^ Util.tabs i   ^ verb                             ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
+    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string)
   in
   let string_of_refc_rule verb fp refs g =
-    Util.tabs i     ^ "whenever"  ^ string_of_tpattern fp.p ^ "\n"
+    Util.tabs i     ^ "whenever"  ^ Pattern.patt_to_string fp.patt ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
     ^ Util.tabs i   ^ verb
-    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.string_of_reference)
+    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string)
     ^ Util.tabs i   ^ "constitute"
     ^ string_of_formula_list g
   in
@@ -284,9 +289,9 @@ let string_of_trule i trule =
     -> string_of_cons_rule (verb_of_trule trule) fp g
   | TException (_, fp, trefs, _)
   | TScope (_, fp, trefs, _)
-    -> string_of_ref_rule (verb_of_trule trule) fp (List.map ~f:(fun tref -> tref.ref) trefs)
+    -> string_of_ref_rule (verb_of_trule trule) fp (List.map ~f:Ref.to_lex_ref trefs)
   | TExceptionC (_, fp, trefs, _, g)
-    -> string_of_refc_rule (verb_of_trule trule) fp (List.map ~f:(fun tref -> tref.ref) trefs) g
+    -> string_of_refc_rule (verb_of_trule trule) fp (List.map ~f:Ref.to_lex_ref trefs) g
 
 let string_of_tstmt ?(i=0) =
   function
@@ -311,7 +316,7 @@ let string_of_tstmt ?(i=0) =
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_trule (i+1) rule)
        description
-  | TSEvent (event_type, name, typed_args, pol, doc_string) ->
+  | TSEvent (event_type, name, typed_args, enftype, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
@@ -319,7 +324,7 @@ let string_of_tstmt ?(i=0) =
       in
       Printf.sprintf "%s%s %s %s\n%s%s"
           (Util.tabs i)
-          (string_of_pol pol)
+          (Enftype.to_string enftype)
           (string_of_event_type event_type)
           name
           description
@@ -367,133 +372,3 @@ let string_of_var_types var_types =
 
 let print_tprog tprog =
   Stdio.printf "%s\n" (string_of_tprog tprog)
-
-
-let unpack_functional tevents trm' trm =
-  match TTerm.(trm.trm) with
-  | TTerm.TApp (f, trms) ->
-     (match Map.find tevents f with
-      | Some (Event (_, Functional), _, _, _) ->
-         Some (f, trms @ [trm'])
-      | _ -> None)
-  | _ -> None
-
-let unpack_variable tevents trm' trm =
-  match TTerm.(trm.trm) with
-  | TTerm.TVar x ->
-     (match Map.find tevents x with
-      | Some (Event (_, Variable), _, _, _) ->
-         Some (x, [trm'])
-      | _ -> None)
-  | _ -> None
-
-let unpack_special_eq tevents trm trm' =
-  List.find_map
-    [unpack_functional tevents trm trm';
-     unpack_functional tevents trm' trm;
-     unpack_variable tevents trm trm';
-     unpack_variable tevents trm' trm]
-    ~f:(fun x -> x)
-
-let strict_of_tformulas stricts itv fut fs =
-  List.for_all fs ~f:(Tformula.strict ~itl_strict:stricts ~itv:itv ~fut:fut)
-
-let strict_of_tpformula stricts (tpf: tpformula) =
-  match tpf.p with
-  | TPPresent -> strict_of_tformulas stricts (Zinterval.singleton 0) false tpf.fs
-  | TPEventually i
-    | TPAlways i -> strict_of_tformulas stricts (Zinterval.of_interval i) true tpf.fs
-  | TPOnce i
-    | TPHistorically i -> strict_of_tformulas stricts (Zinterval.inv (Zinterval.of_interval i)) false tpf.fs
-  | TPUntil (i, g) -> (strict_of_tformulas stricts (Zinterval.inv (Zinterval.of_interval i)) true tpf.fs)
-                      || (Tformula.strict ~itl_strict:stricts ~itv:(Zinterval.inv (Zinterval.of_interval i)) ~fut:true g)
-  | TPSince (i, g) -> (strict_of_tformulas stricts (Zinterval.inv (Zinterval.of_interval i)) false tpf.fs)
-                      || (Tformula.strict ~itl_strict:stricts ~itv:(Zinterval.inv (Zinterval.of_interval i)) ~fut:false g)
-
-let relative_interval_of_tpformula itvls (tpf: tpformula) =
-  let j =
-    let aux f = Tformula.relative_interval ~itl_itvs:itvls f in
-    Zinterval.lubs (List.map tpf.fs ~f:aux)
-  in
-  match tpf.p with
-  | TPPresent -> j
-  | TPEventually i
-  | TPAlways i ->
-    let i = Zinterval.of_interval i in
-    Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
-  | TPOnce i
-  | TPHistorically i ->
-    let i = Zinterval.of_interval i |> Zinterval.inv in
-    Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
-  | TPUntil (i, g) ->
-    let i = Zinterval.of_interval i in
-    let k = Tformula.relative_interval ~itl_itvs:itvls g in
-    (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i) k)
-      (Zinterval.sum i j))
-  | TPSince (i, g) ->
-    let i = Zinterval.of_interval i in
-    let k = Tformula.relative_interval ~itl_itvs:itvls g in
-    (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i) j)
-      (Zinterval.sum i k))
-
-let srp_of_tpformula (itvls, stricts) tpf =
-  (Zinterval.is_nonpositive (relative_interval_of_tpformula itvls tpf))
-  && (strict_of_tpformula stricts tpf)
-
-let fv_of_tformulas ?(map=Map.empty (module String)) fs =
-  List.fold fs ~init:map ~f:(fun map f -> Tformula.fv ~map f)
-
-let fv_of_tpformulas ?(map=Map.empty (module String)) ({fs; p}: tpformula) =
-  fv_of_tformulas ~map (fs@formulas_from_tpattern p)
-
-let relative_interval_of_tformulas itl_itvs (fs: Tformula.t list): Zinterval.t =
-  let itvs = (List.map fs ~f:(Tformula.relative_interval ~itl_itvs:itl_itvs)) in
-  List.fold itvs ~init:Zinterval.full ~f:Zinterval.lub
-
-let relative_interval_of_tpformula itl_itvs (tpf: tpformula): Zinterval.t =
-  match tpf.p with
-  | TPPresent -> relative_interval_of_tformulas itl_itvs tpf.fs
-  | TPEventually i
-  | TPAlways i ->
-    let i = Zinterval.of_interval i in
-    let j = relative_interval_of_tformulas itl_itvs tpf.fs in
-    Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
-  | TPUntil (i, g) ->
-    let i = Zinterval.of_interval i in
-    let j = relative_interval_of_tformulas itl_itvs tpf.fs in
-    Zinterval.lub 
-      (Zinterval.sum (Zinterval.to_zero i) (Tformula.relative_interval ~itl_itvs:itl_itvs g))
-      (Zinterval.sum i j)
-  | TPOnce i
-  | TPHistorically i ->
-    let i = Zinterval.of_interval i in
-    let j = relative_interval_of_tformulas itl_itvs tpf.fs in
-    Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i j)
-  | TPSince (i, g) ->
-    let i = Zinterval.of_interval i in
-    let j = relative_interval_of_tformulas itl_itvs tpf.fs in
-    Zinterval.lub
-      (Zinterval.sum (Zinterval.to_zero i) j)
-      (Zinterval.sum i (Tformula.relative_interval ~itl_itvs:itl_itvs g))
-
-let strict_of_tformulas itl_strict (fs: Tformula.t list) =
-  List.for_all fs ~f:(Tformula.strict ~itl_strict:itl_strict)
-
-let strict_of_tpformula itl_strict (tpf: tpformula): bool =
-  match tpf.p with
-  | TPPresent -> strict_of_tformulas itl_strict tpf.fs
-  | TPEventually i
-  | TPAlways i ->
-    let i = Zinterval.of_interval i in
-    not (Zinterval.mem 0 i)
-    && strict_of_tformulas itl_strict tpf.fs
-  | TPUntil (i, g) ->
-    let i = Zinterval.of_interval i in
-    not (Zinterval.mem 0 (Zinterval.inv i))
-    && strict_of_tformulas itl_strict tpf.fs
-    && Tformula.strict ~itl_strict:itl_strict g
-  | TPOnce _
-  | TPHistorically _ -> strict_of_tformulas itl_strict tpf.fs
-  | TPSince (_, g) ->
-    strict_of_tformulas itl_strict tpf.fs
-    && Tformula.strict ~itl_strict:itl_strict g

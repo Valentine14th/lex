@@ -1,3 +1,4 @@
+
 (*******************************************************************)
 (*     This is part of WhyEnf, and it is distributed under the     *)
 (*     terms of the GNU Lesser General Public License version 3    *)
@@ -8,165 +9,50 @@
 (*******************************************************************)
 
 open Core
-open Formula
 
-let tterm trm tt pos = TTerm.({ trm; tt; pos })
+module Modules = MFOTL_lib.Modules
+module Side = MFOTL_lib.Side
 
-type core_t =
-  | TTT
-  | TFF
-  | TEqConst of TTerm.t * TTerm.t
-  | TPredicate of string * TTerm.t list * Lex.event_type
-  | TAgg of string * Aggregation.op * TTerm.t * string list * t
-  | TNeg of t
-  | TAnd of Side.t * (t list)
-  | TOr of Side.t * (t list)
-  | TImp of Side.t * t * t
-  | TIff of (Side.t * Side.t) * t * t
-  | TExists of string * t
-  | TForall of string * t
-  | TPrev of Interval.t * t
-  | TNext of Interval.t * t
-  | TOnce of Interval.t * t
-  | TEventually of Interval.t * t
-  | THistorically of Interval.t * t
-  | TAlways of Interval.t * t
-  | TSince of Side.t * Interval.t * t * t
-  | TUntil of Side.t * Interval.t * t * t
-  | TType of t * EnfType.t
+module StringVar = Term.StringVar
 
-and t = {
-  f: core_t;
-  variable_instantiations: (string * TTerm.t) list;
-  pos: LexingInfo.t
-}
+type tinfo_type = {
+    variable_instantiations: (string * TTerm.t) list;
+    pos: LexingInfo.t;
+    event_type_opt: Lex.event_type option;
+  } [@@deriving compare, sexp_of, hash, equal]
 
-let make_tformula f variable_instantiations pos = {f; variable_instantiations; pos}
+module Info : MFOTL_lib.Modules.I with type t = tinfo_type = struct
+  
+  type t = tinfo_type [@@deriving compare, sexp_of, hash, equal]
 
-let ttt insts pos = make_tformula TTT insts pos
-let tff insts pos = make_tformula TFF insts pos
-let teqconst insts pos x d = make_tformula (TEqConst (x, d)) insts pos
-let tpredicate insts pos p_name trms event_type = make_tformula (TPredicate (p_name, trms, event_type)) insts pos
-let tagg insts pos u op x y f = make_tformula (TAgg (u, op, x, y, f)) insts pos
-let tneg insts pos f = make_tformula (TNeg f) insts pos
-let tconj insts pos s f g = make_tformula (TAnd (s, [f; g])) insts pos
-let tdisj insts pos s f g = make_tformula (TOr (s, [f; g])) insts pos
-let tconj' insts pos s fs = make_tformula (TAnd (s, fs)) insts pos
-let tdisj' insts pos s fs = make_tformula (TOr (s, fs)) insts pos
-let timp insts pos s f g = make_tformula (TImp (s, f, g)) insts pos
-let tiff insts pos s2 f g = make_tformula (TIff (s2, f, g)) insts pos
-let texists insts pos x f = make_tformula (TExists (x, f)) insts pos
-let tforall insts pos x f = make_tformula (TForall (x, f)) insts pos
-let tprev insts pos i f = make_tformula (TPrev (i, f)) insts pos
-let tnext insts pos i f = make_tformula (TNext (i, f)) insts pos
-let tonce insts pos i f = make_tformula (TOnce (i, f)) insts pos
-let teventually insts pos i f = make_tformula (TEventually (i, f)) insts pos
-let thistorically insts pos i f = make_tformula (THistorically (i, f)) insts pos
-let talways insts pos i f = make_tformula (TAlways (i, f)) insts pos
-let tsince insts pos s i f g = make_tformula (TSince (s, i, f, g)) insts pos
-let tuntil insts pos s i f g = make_tformula (TUntil (s, i, f, g)) insts pos
-let ttype insts pos s t = make_tformula (TType (s, t)) insts pos
+  let rec string_of_instantiations = function
+    | [] -> ""
+    | [(x, t)] -> Printf.sprintf "%s <- %s" x (TTerm.value_to_string t)
+    | (x, t) :: insts ->  Printf.sprintf "%s <- %s; %s" x (TTerm.value_to_string t) (string_of_instantiations insts)
 
-let tbigcauconj pos = function
-  | [] -> ttt [] pos
-  | h::t -> List.fold_left t ~init:h ~f:(tconj [] pos N) (*TODO: assign correct type to formula, not just Non*)
+  let to_string _ s info =
+    match info.variable_instantiations with
+    | [] -> s
+    | _ -> Printf.sprintf "(%s; %s)" s (string_of_instantiations info.variable_instantiations)
+  
+  let dummy = { variable_instantiations = []; pos = LexingInfo.dummy; event_type_opt = None }
 
-let tbigcauforall pos vars f =
-  List.fold_right vars ~init:f ~f:(tforall [] pos)
+end
+
+include MFOTL_lib.MFOTL.Make(Info)(StringVar)(Dom)(TTerm)
 
 module StringMap = Map.Make(String)
 
-let rec fv ?(map=Map.empty (module String)) f =
-  let aux1 map (v, p) = Map.update map v ~f:(function Some i -> LexingInfo.(p ++ i) | None -> p) in
-  let merge_fun ~key:_ = function
-    | `Left x | `Right x -> Some x
-    | `Both (x, y) -> Some LexingInfo.(x ++ y)
-  in
-  let merge map1 map2 = Map.merge map1 map2  ~f:merge_fun in
-  match f.f with
-  | TTT | TFF -> map
-  | TEqConst (x, _) ->
-    TTerm.fv_list [x] |> List.fold ~init:map ~f:aux1
-  | TPredicate (_, trms, _) -> 
-    TTerm.fv_list trms |> List.fold ~init:map ~f:aux1
-  | TAgg (s, _, _, ys, _) ->
-    ((s, f.pos) :: List.map ys ~f:(fun y -> (y, f.pos)))
-    |> List.fold ~init:map ~f:aux1
-  | TExists (x, g)
-    | TForall (x, g) ->
-      Map.filter_keys (fv ~map g) ~f:(fun y -> not (String.equal x y))
-      |> merge map (* merge with original map - doing it this way, instead of passing the map as an argument to fv above, we can avoid filtering out variables that are bound inside the quantifier, but free outside of it *)
-  | TNeg g
-    | TPrev (_, g)
-    | TOnce (_, g)
-    | THistorically (_, g) 
-    | TEventually (_, g)
-    | TAlways (_, g)
-    | TNext (_, g)
-    | TType (g, _) -> fv ~map g
-    | TImp (_, f1, f2)
-    | TIff (_, f1, f2)
-    | TSince (_, _, f1, f2)
-    | TUntil (_, _, f1, f2) -> fv ~map:(fv ~map f2) f1
-  | TAnd (_, fs)
-    | TOr (_, fs) ->
-      List.fold_left fs ~init:map ~f:(fun map f -> fv ~map f)
-
-let rec rank f = match f.f with
-  | TTT | TFF -> 0
-  | TEqConst _ -> 0
-  | TPredicate (_, args, _) -> List.length args
-  | TNeg f
-    | TExists (_, f)
-    | TForall (_, f)
-    | TPrev (_, f)
-    | TNext (_, f)
-    | TOnce (_, f)
-    | TEventually (_, f)
-    | THistorically (_, f)
-    | TAlways (_, f)
-    | TType (f, _)
-    | TAgg (_, _, _, _, f) -> rank f
-    | TImp (_, f, g)
-    | TIff (_, f, g)
-    | TSince (_, _, f, g)
-    | TUntil (_, _, f, g) -> rank f + rank g
-  | TAnd (_, fs)
-    | TOr (_, fs) -> List.fold_left (List.map fs ~f:(fun f -> rank f)) ~init:0 ~f:(+)
-
-let rec deg f = match f.f with
-  | TTT
-    | TFF
-    | TEqConst _ 
-    | TPredicate _ -> 2
-  | TNeg f 
-    | TExists (_, f)
-    | TForall (_, f)
-    | TPrev (_, f)
-    | TNext (_, f)
-    | TOnce (_, f)
-    | TEventually (_, f)
-    | THistorically (_, f)
-    | TAlways (_, f)
-    | TType (f, _)
-    | TAgg (_, _, _, _, f) -> deg f
-    | TImp (_, f, g)
-    | TIff (_, f, g)
-    | TSince (_, _, f, g)
-    | TUntil (_, _, f, g) -> max 2 (max (deg f) (deg g))
-    | TAnd (_, fs)
-    | TOr (_, fs) -> List.fold_left (List.map fs ~f:deg) ~init:1 ~f:max
-
-
+(*
 let fix_side s f g =
   match s with
   | Side.LR -> if rank f < rank g then Side.L
                else Side.R
   | _ -> s
 
-let rec to_formula (f: t): Formula.t = match f.f with
-  | TTT -> tt f.pos
-  | TFF -> ff f.pos
+let rec to_formula (f: t): Formula.t = match f.form with
+  | TT -> Formula.tt
+  | FF -> ff f.pos
   | TEqConst (trm, trm') ->
     term f.pos (Term.binop f.pos (TTerm.to_formula_term trm) Term.BEq (TTerm.to_formula_term trm'))
   | TPredicate (e, trms, _) -> predicate f.pos e (List.map trms ~f:TTerm.to_formula_term)
@@ -187,207 +73,5 @@ let rec to_formula (f: t): Formula.t = match f.f with
   | TSince (s, i, g, h) -> since f.pos (fix_side s g h) i (to_formula g) (to_formula h)
   | TUntil (s, i, g, h) -> until f.pos s i (to_formula g) (to_formula h)
   | TType (g, ty) -> type_ f.pos (to_formula g) ty
-
-let op_to_string f = match f.f with
-  | TTT -> Printf.sprintf "⊤"
-  | TFF -> Printf.sprintf "⊥"
-  | TEqConst _ -> Printf.sprintf "="
-  | TPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (TTerm.list_to_string trms)
-  | TAgg (_, op, x, y, _) -> Printf.sprintf "%s(%s; %s)" (Aggregation.op_to_string op) (TTerm.value_to_string x) (String.concat ~sep:", " y)
-  | TNeg _ -> Printf.sprintf "¬"
-  | TAnd (_, _) -> Printf.sprintf "∧"
-  | TOr (_, _) -> Printf.sprintf "∨"
-  | TImp (_, _, _) -> Printf.sprintf "→"
-  | TIff (_, _, _) -> Printf.sprintf "↔"
-  | TExists (x, _) -> Printf.sprintf "∃ %s." x
-  | TForall (x, _) -> Printf.sprintf "∀ %s." x
-  | TPrev (i, _) -> Printf.sprintf "●%s" (Interval.to_string i)
-  | TNext (i, _) -> Printf.sprintf "○%s" (Interval.to_string i)
-  | TOnce (i, _) -> Printf.sprintf "⧫%s" (Interval.to_string i)
-  | TEventually (i, _) -> Printf.sprintf "◊%s" (Interval.to_string i)
-  | THistorically (i, _) -> Printf.sprintf "■%s" (Interval.to_string i)
-  | TAlways (i, _) -> Printf.sprintf "□%s" (Interval.to_string i)
-  | TSince (_, i, _, _) -> Printf.sprintf "S%s" (Interval.to_string i)
-  | TUntil (_, i,  _, _) -> Printf.sprintf "U%s" (Interval.to_string i)
-  | TType (_, _) -> Printf.sprintf ":"
-
-let rec string_of_instantiations = function
-  | [] -> ""
-  | [(x, t)] -> Printf.sprintf "%s <- %s" x (TTerm.value_to_string t)
-  | (x, t) :: insts ->  Printf.sprintf "%s <- %s, %s" x (TTerm.value_to_string t) (string_of_instantiations insts)
-
-let rec to_string_core_rec l f = match f.f with
-  | TTT -> Printf.sprintf "⊤"
-  | TFF -> Printf.sprintf "⊥"
-  | TEqConst (trm, trm') -> Printf.sprintf "%s = %s" (TTerm.to_string trm) (TTerm.to_string trm')
-  | TAgg (s, op, x, y, f) -> Printf.sprintf "%s = %s(%s; %s; %s)" s (Aggregation.op_to_string op) (TTerm.value_to_string x) (String.concat ~sep:", " y) (to_string_rec 5 f)
-  | TPredicate (r, trms, _) -> Printf.sprintf "%s(%s)" r (TTerm.list_to_string trms)
-  | TNeg f -> Printf.sprintf "¬%a" (fun _ -> to_string_rec 5) f
-  | TAnd (s, fs) ->
-     let sep = Printf.sprintf " ∧%s " (Side.to_string s) in
-     let strings = List.map fs ~f:(to_string_rec 4) in
-     Util.paren_string l 4 (String.concat ~sep strings)
-  | TOr (s, fs) ->
-     let sep = Printf.sprintf " ∨%s " (Side.to_string s) in
-     let strings = List.map fs ~f:(to_string_rec 4) in
-     Util.paren_string l 3 (String.concat ~sep strings)
-  | TImp (s, f, g) -> Printf.sprintf (Util.paren l 5 "%a →%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | TIff ((s, t), f, g) -> Printf.sprintf (Util.paren l 5 "%a ↔%a %a") (fun _ -> to_string_rec 5) f (fun _ -> Side.to_string2) (s, t) (fun _ -> to_string_rec 5) g
-  | TExists (x, f) -> Printf.sprintf (Util.paren l 5 "∃%s. %a") x (fun _ -> to_string_rec 5) f
-  | TForall (x, f) -> Printf.sprintf (Util.paren l 5 "∀%s. %a") x (fun _ -> to_string_rec 5) f
-  | TPrev (i, f) -> Printf.sprintf (Util.paren l 5 "●%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TNext (i, f) -> Printf.sprintf (Util.paren l 5 "○%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TOnce (i, f) -> Printf.sprintf (Util.paren l 5 "⧫%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TEventually (i, f) -> Printf.sprintf (Util.paren l 5 "◊%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | THistorically (i, f) -> Printf.sprintf (Util.paren l 5 "■%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TAlways (i, f) -> Printf.sprintf (Util.paren l 5 "□%a %a") (fun _ -> Interval.to_string) i (fun _ -> to_string_rec 5) f
-  | TSince (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a S%a%a %a") (fun _ -> to_string_rec 5) f
-                         (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | TUntil (s, i, f, g) -> Printf.sprintf (Util.paren l 0 "%a U%a%a %a") (fun _ -> to_string_rec 5) f
-                             (fun _ -> Interval.to_string) i (fun _ -> Side.to_string) s (fun _ -> to_string_rec 5) g
-  | TType (f, ty) -> Printf.sprintf (Util.paren l 0 "%a : %a") (fun _ -> to_string_rec 5) f (fun _ -> EnfType.to_string) ty
-and to_string_rec l f =
-  let f_str = to_string_core_rec l f in
-  match f.variable_instantiations with
-  | [] -> f_str
-  | _ -> Printf.sprintf "(%s; %s)" f_str (string_of_instantiations f.variable_instantiations)
-
-let rec collect_tpredicates l f = match f.f with
-  | TTT
-  | TFF
-  | TEqConst _ 
-  | TType _
-    | TAgg _ -> l
-  | TPredicate (name, terms, t) -> (name, terms, t) :: l
-  | TAnd (_, fs)
-    | TOr (_, fs) -> List.fold fs ~init:l ~f:collect_tpredicates
-  | TNeg f
-  | TExists (_, f)
-  | TForall (_, f)
-  | TPrev (_, f)
-  | TNext (_, f)
-  | TOnce (_, f)
-  | TEventually (_, f)
-  | THistorically (_, f)
-    | TAlways (_, f) -> collect_tpredicates l f
-  | TImp (_, f, g)
-  | TIff (_, f, g)
-  | TSince (_, _, f, g)
-    | TUntil (_, _, f, g) -> collect_tpredicates (collect_tpredicates l f) g
-
-let to_string = to_string_rec 0
-
-let rec relative_interval ?(itl_itvs=Map.empty (module String)) (f: t): Zinterval.t =
-  let relative_interval = relative_interval ~itl_itvs:itl_itvs in
-  match f.f with
-  | TTT | TFF | TEqConst _ -> Zinterval.singleton 0
-  | TPredicate (n, _, _) ->
-    begin match Map.find itl_itvs n with
-      | Some i -> i
-      | None -> Zinterval.singleton 0
-    end
-  | TAgg (_, _, _, _, f) -> Zinterval.to_zero (relative_interval f)
-  | TNeg f | TExists (_, f) | TForall (_, f) -> relative_interval f
-  | TAnd (_, fs) | TOr (_, fs)
-    -> List.fold_left (List.map fs ~f:relative_interval) ~init:Zinterval.full ~f:Zinterval.lub
-  | TImp (_, f1, f2) | TIff (_, f1, f2)
-    -> Zinterval.lub (relative_interval f1) (relative_interval f2)
-  | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
-    -> let i' = Zinterval.inv (Zinterval.of_interval i) in
-       Zinterval.lub (Zinterval.to_zero i') (Zinterval.sum i' (relative_interval f))
-  | TNext (i, f) | TEventually (i, f) | TAlways (i, f)
-    -> let i = Zinterval.of_interval i in
-       Zinterval.lub (Zinterval.to_zero i) (Zinterval.sum i (relative_interval f))
-  | TSince (_, i, f1, f2) ->
-     let i' = Zinterval.inv (Zinterval.of_interval i) in
-     (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i') (relative_interval f1))
-        (Zinterval.sum i' (relative_interval f2)))
-  | TUntil (_, i, f1, f2) ->
-     let i' = Zinterval.of_interval i in
-     (Zinterval.lub (Zinterval.sum (Zinterval.to_zero i') (relative_interval f1))
-        (Zinterval.sum i' (relative_interval f2)))
-  | TType (f, _) -> relative_interval f
-
-let strict ?(itl_strict=Map.empty (module String)) ?(itv=Zinterval.singleton 0) ?(fut=false) (f: t) =
-  let rec _strict itv fut (f: t) =
-    ((Zinterval.mem 0 itv) && fut)
-    || (match f.f with
-        | TTT | TFF | TEqConst (_, _) -> false
-        | TPredicate (name, _, _) ->
-          begin match Map.find itl_strict name with
-            | Some b -> not b
-            | None -> false
-          end
-        | TNeg f | TExists (_, f) | TForall (_, f) | TAgg (_, _, _, _, f) -> _strict itv fut f
-        | TImp (_, f1, f2) | TIff (_,f1, f2)
-          -> (_strict itv fut f1) || (_strict itv fut f2)
-        | TAnd (_, fs) | TOr (_, fs)
-          -> List.exists fs ~f:(_strict itv fut)
-        | TPrev (i, f) | TOnce (i, f) | THistorically (i, f)
-          -> _strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f
-        | TNext (i, f) | TEventually (i, f) | TAlways (i, f)
-          -> _strict (Zinterval.sum (Zinterval.of_interval i) itv) true f
-        | TSince (_, i, f1, f2)
-          -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f1)
-             || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) fut f2)
-        | TUntil (_, i, f1, f2)
-          -> (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f1)
-             || (_strict (Zinterval.sum (Zinterval.inv (Zinterval.of_interval i)) itv) true f2)
-        | TType (f, _) -> _strict itv fut f)
-  in not (_strict itv fut f)
-
-let relative_past ?(itl_itvs=Map.empty (module String)) (f: t): bool =
-  Zinterval.is_nonpositive (relative_interval ~itl_itvs:itl_itvs f)
-
-let strictly_relative_past ?(itl_itvs_and_strict=Map.empty (module String), Map.empty (module String)) (f: t): bool =
-  (relative_past ~itl_itvs:(fst itl_itvs_and_strict) f) && (strict ~itl_strict:(snd itl_itvs_and_strict) f)
-
-let get_predicate_name_exn f = match f.f with
-  | TPredicate (n,_,_) -> n
-  | _ -> assert false
-let get_predicate_params_exn f = match f.f with
-  | TPredicate (_,ts,_) -> ts
-  | _ -> assert false
-
-let rec is_transparent (t: EnfType.t) (f: t) =
-  let is_transparent = is_transparent t in
-  match t with
-  | Cau -> begin
-    match f.f with
-      | TTT | TPredicate _ -> true
-      | TNeg f | TExists (_, f) | TForall (_, f)
-        | TOnce (_, f) | TNext (_, f) | THistorically (_, f)
-          | TAlways (_, f) -> is_transparent f
-      | TEventually (i, f) -> Interval.is_bounded i && is_transparent f
-      | TImp (L, f, g) | TIff ((L, L), f, g) -> is_transparent f && strictly_relative_past g
-      | TOr (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | TImp (R, f, g) | TIff ((R, R), f, g) -> is_transparent g && strictly_relative_past f
-      | TOr (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
-      | TAnd (_, fs) -> List.for_all fs ~f:is_transparent
-      | TIff (_, f, g) -> is_transparent f && is_transparent g
-      | TSince (_, _, f, g) -> is_transparent f && strictly_relative_past g
-      | TUntil (R, i, f, g) -> Interval.is_bounded i && is_transparent f && strictly_relative_past g
-      | TUntil (LR, i, f, g) -> Interval.is_bounded i && is_transparent f && is_transparent g
-      | _ -> false
-    end
-  | Sup -> begin
-    match f.f with
-      | TFF | TPredicate _ -> true
-      | TNeg f | TExists (_, f) | TForall (_, f)
-        | TOnce (_, f) | TNext (_, f) | THistorically (_, f)
-        | TEventually (_, f) -> is_transparent f
-      | TAlways (i, f) -> Interval.is_bounded i && is_transparent f
-      | TAnd (L, f :: fs) -> is_transparent f && List.for_all fs ~f:strictly_relative_past
-      | TIff ((L, L), f, g) -> is_transparent f && strictly_relative_past g
-      | TIff ((R, R), f, g) -> is_transparent g && strictly_relative_past f
-      | TAnd (R, fs) -> is_transparent (List.last_exn fs) && List.for_all (List.drop_last_exn fs) ~f:strictly_relative_past
-      | TIff (_, f, g) -> is_transparent f && is_transparent g
-      | TOr (_, fs) -> List.for_all fs ~f:is_transparent
-      | TSince (L, _, f, g) -> is_transparent f && strictly_relative_past g
-      | TSince (R, _, f, g) -> is_transparent f && is_transparent g
-      | TUntil (R, _, f, g) -> is_transparent f && strictly_relative_past g
-      | TUntil (_, _, f, g) -> is_transparent g && strictly_relative_past f
-      | _ -> false
-    end
-  | _ -> assert false
+ *)
 

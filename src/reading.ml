@@ -2,6 +2,10 @@ open Core
 open Elex
 open Html
 
+module Time = MFOTL_lib.Time
+module Interval = MFOTL_lib.Interval
+module Aggregation = MFOTL_lib.Aggregation
+
 module Placeholders = struct
   
   let regex =
@@ -19,31 +23,31 @@ module Placeholders = struct
 
 end
 
-let rec html_of_trm ?(l=0) = function
-  | TTerm.TVar x -> ident x
-  | TConst d -> const (Dom.to_string d)
-  | TApp (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
-  | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                     (Term.string_of_unop o)
-                     (html_of_trm ~l:10 t.trm)
-  | TBinop (t, o, t') -> let l' = Term.prio_of_binop o in
+let rec html_of_trm ?(l=0) (t : TTerm.t) = match t.trm with
+  | TTerm.Var x -> ident x
+  | Const d -> const (Dom.to_string d)
+  | App (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
+  | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                     (Term.Uop.to_string o)
+                     (html_of_trm ~l:10 t)
+  | Binop (t, o, t') -> let l' = Term.Bop.prio o in
                         Printf.sprintf (Util.paren l l' "%s %s %s")
-                          (html_of_trm ~l:l' t.trm)
-                          (Term.string_of_binop o)
-                          (html_of_trm ~l:l' t'.trm)
-  | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
-  | TRecord kvs ->
-     let f (k, v) = k ^ " : " ^ html_of_trm TTerm.(v.trm) in
+                          (html_of_trm ~l:l' t)
+                          (Term.Bop.to_string o)
+                          (html_of_trm ~l:l' t')
+  | Proj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t) p
+  | Record kvs ->
+     let f (k, v) = k ^ " : " ^ html_of_trm v in
      Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
-and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
+and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t))
 
 let reading_of_unop = function
-  | Term.UNot -> "not"
+  | Term.Uop.UNot -> "not"
   | USub -> "minus"
 
 let reading_of_binop = function
-  | Term.BAdd -> "plus"
+  | Term.Bop.BAdd -> "plus"
   | BSub -> "minus"
   | BMul -> "multiplied by"
   | BDiv -> "divided by"
@@ -58,67 +62,72 @@ let reading_of_binop = function
   | BGt  -> "is greater than"
   | BGeq -> "is greater or equal to"
 
+let reading_of_span =
+  let open Time.Span in
+  let s = function true -> "" | false -> "s" in
+  function
+  | Second u -> Second.to_string u ^ " second" ^ s (Second.is_one u)
+  | Minute u -> Minute.to_string u ^ " minute" ^ s (Minute.is_one u)
+  | Hour   u -> Hour.to_string   u ^ " hour"   ^ s (Hour.is_one   u)
+  | Day    u -> Day.to_string    u ^ " day"    ^ s (Day.is_one    u)
+  | Month  u -> Month.to_string  u ^ " month"  ^ s (Month.is_one  u)
+  | Year   u -> Year.to_string   u ^ " year"   ^ s (Year.is_one   u)
+
 let reading_of_dom = function
   | Dom.Int v -> Int.to_string v
   | Str v -> String.to_string v
   | Float v -> Float.to_string v
   | Bool v -> Bool.to_string v
-  | Time v -> Lextime.Time.to_string v
-  | Span v -> Lextime.Span.to_string_reading v
+  | Time v -> Time.to_string v
+  | Span v -> reading_of_span v
   | Money v -> Money.to_string_reading v
 
-let rec reading_of_trm ?(l=0) eprog = function
-  | TTerm.TVar x -> ident x
-  | TConst d -> const (reading_of_dom d)
-  | TApp (f, trms) ->
+let rec reading_of_trm ?(l=0) eprog (t : TTerm.t) = match t.trm with
+  | Var x -> ident x
+  | Const d -> const (reading_of_dom d)
+  | App (f, trms) ->
      (match Map.find Elex.(eprog.efunctions) f with
       | Some (args, _, Some s) ->
          let names = List.map ~f:(fun (name, _) -> name) args in
          Placeholders.replace_all names (List.map ~f:
                                            (reading_of_term eprog) trms) s
       | _ -> Printf.sprintf "%s(%s)" f (html_of_trms trms))
-  | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+  | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
                      (reading_of_unop o)
-                     (reading_of_trm ~l:10 eprog t.trm)
-  | TBinop (t, o, t') -> let l' = Term.prio_of_binop o in
+                     (reading_of_trm ~l:10 eprog t)
+  | Binop (t, o, t') -> let l' = Term.Bop.prio o in
                         Printf.sprintf (Util.paren l l' "%s %s %s")
-                          (reading_of_trm ~l:l' eprog t.trm)
+                          (reading_of_trm ~l:l' eprog t)
                           (reading_of_binop o)
-                          (reading_of_trm ~l:l' eprog t'.trm)
-  | TProj (t, p) -> Printf.sprintf "the field %s of %s" p (html_of_trm ~l:10 t.trm) 
-  | TRecord kvs ->
+                          (reading_of_trm ~l:l' eprog t')
+  | Proj (t, p) -> Printf.sprintf "the field %s of %s" p (html_of_trm ~l:10 t) 
+  | Record kvs ->
      let f (k, v) =
        li "lex-reading-record-field"
-         (ident k ^ " is equal to " ^ reading_of_trm eprog TTerm.(v.trm)) in
+         (ident k ^ " is equal to " ^ reading_of_trm eprog v) in
      "a record where" ^ ul "lex-reading-record" (String.concat (List.map kvs ~f))
 
 
-and reading_of_term eprog term =
-  span "" (reading_of_trm eprog TTerm.(term.trm))
+and reading_of_term eprog t =
+  span "" (reading_of_trm eprog t)
 
-let reading_of_span span = const (Lextime.Span.to_string_reading span)
+let reading_of_span span = const (reading_of_span span)
 
-let reading_of_past_interval default = function
-  | Interval.U (C s) when Lextime.Span.is_zero s -> default  ^ " in the past"
-  | U (C s) -> Printf.sprintf "%s at least %s ago" default (reading_of_span s)
-  | U (O s) -> Printf.sprintf "%s strictly more than %s ago" default (reading_of_span s)
-  | B (C ls, C rs) when Lextime.Span.is_zero ls -> Printf.sprintf "%s within %s (included) in the past" default (reading_of_span rs)
-  | B (C ls, O rs) when Lextime.Span.is_zero ls -> Printf.sprintf "%s within %s (excluded) in the past" default (reading_of_span rs)
-  | B (C ls, C rs) -> Printf.sprintf "%s between %s (included) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
-  | B (C ls, O rs) -> Printf.sprintf "%s between %s (included) and %s (excluded) ago" default (reading_of_span ls) (reading_of_span rs)
-  | B (O ls, C rs) -> Printf.sprintf "%s between %s (excluded) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
-  | B (O ls, O rs) -> Printf.sprintf "%s between %s (excluded) and %s (excluded) ago" default (reading_of_span ls) (reading_of_span rs)
+let reading_of_past_interval default =
+  let open Time in
+  function
+  | Interval.U s when Span.is_zero s -> default  ^ " in the past"
+  | U s -> Printf.sprintf "%s at least %s ago" default (reading_of_span s)
+  | B (ls, rs) when Span.is_zero ls -> Printf.sprintf "%s within %s (included) in the past" default (reading_of_span rs)
+  | B (ls, rs) -> Printf.sprintf "%s between %s (included) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
 
-let reading_of_future_interval default = function
-  | Interval.U (C s) when Lextime.Span.is_zero s -> default ^ " in the future"
-  | U (C s) -> Printf.sprintf "%s in at least %s" default (reading_of_span s)
-  | U (O s) -> Printf.sprintf "%s in strictly more than %s" default (reading_of_span s)
-  | B (C ls, C rs) when Lextime.Span.is_zero ls -> Printf.sprintf "%s within %s (included) in the future" default (reading_of_span rs)
-  | B (C ls, O rs) when Lextime.Span.is_zero ls -> Printf.sprintf "%s within %s (excluded) in the future" default (reading_of_span rs)
-  | B (C ls, C rs) -> Printf.sprintf "%s in between %s (included) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
-  | B (C ls, O rs) -> Printf.sprintf "%s in between %s (included) and %s (excluded) ago" default (reading_of_span ls) (reading_of_span rs)
-  | B (O ls, C rs) -> Printf.sprintf "%s in between %s (excluded) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
-  | B (O ls, O rs) -> Printf.sprintf "%s in between %s (excluded) and %s (excluded) ago" default (reading_of_span ls) (reading_of_span rs)
+let reading_of_future_interval default =
+  let open Time in
+  function
+  | Interval.U s when Span.is_zero s -> default ^ " in the future"
+  | U s -> Printf.sprintf "%s in at least %s" default (reading_of_span s)
+  | B (ls, rs) when Span.is_zero ls -> Printf.sprintf "%s within %s (included) in the future" default (reading_of_span rs)
+  | B (ls, rs) -> Printf.sprintf "%s in between %s (included) and %s (included) ago" default (reading_of_span ls) (reading_of_span rs)
 
 let reading_of_op = function
   | Aggregation.ASum -> "sum"
@@ -128,33 +137,34 @@ let reading_of_op = function
   | AMin -> "minimum"
   | AMax -> "maximum"
   | AStd -> "standard deviation"
+  | AAssign -> "assign"
 
-let rec reading_of_formula formula_id eprog f =
+let rec reading_of_formula formula_id eprog (f : Eformula.t) =
   let inner_html = 
-    match Eformula.(f.f) with
-    | Eformula.ETT -> const "true"
-    | EFF -> const "false"
-    | EEqConst (x, (Dom.Bool true, _)) -> reading_of_term eprog x
-    | EEqConst (x, (d, _)) ->
+    match f.form with
+    | TT -> const "true"
+    | FF -> const "false"
+    | EqConst (x, Dom.Bool true) -> reading_of_term eprog x
+    | EqConst (x, d) ->
        Printf.sprintf "%s is equal to %s" (reading_of_term eprog x) (const (reading_of_dom d))
-    | EPredicate (name, trms, event_type) as g ->
+    | Predicate (name, trms) ->
        (match Map.find Elex.(eprog.eevents) name with
         | Some (_, args, _, doc_string) -> 
            let names = List.map ~f:(fun (name, _) -> name) args in
-           (match doc_string, event_type with
+           (match doc_string, f.info.event_type_opt with
             | None, _ -> Formula.to_string (Eformula.to_formula f)
-            | Some s, Event (_, Functional) ->
+            | Some s, Some (Event (_, Functional)) ->
                Printf.sprintf "%s is equal to %s"
                  (Placeholders.replace_all (List.drop_last_exn names)
                     (List.map ~f:(reading_of_term eprog) (List.drop_last_exn trms)) s)
                  (reading_of_term eprog (List.last_exn trms))
-            | Some s, Event (_, Variable) ->
+            | Some s, Some (Event (_, Variable)) ->
                Printf.sprintf "%s is equal to %s"
                  s
                  (reading_of_term eprog (List.last_exn trms))
             | Some s, _ -> Placeholders.replace_all names (List.map ~f:(reading_of_term eprog) trms) s)
-        | None -> Eformula.to_string_core g)
-    | EAgg (s, op, x, y, f) ->
+        | None -> Eformula.to_string f)
+    | Agg (s, op, x, y, f) ->
        let reading_of_groupby =
          if List.is_empty y then
             ""
@@ -169,75 +179,68 @@ let rec reading_of_formula formula_id eprog f =
        ^ " such that the following is the case:"
        ^ (ul "lex-reading-neg"
             (li "lex-reading-neg-li" (reading_of_formula formula_id eprog f)))
-    | ENeg f ->
+    | Neg f ->
        "the following is not the case: "
        ^ (ul "lex-reading-neg"
             (li "lex-reading-neg-li" (reading_of_formula formula_id eprog f)))
-    | EAnd (_, fs) ->
+    | And (_, fs) ->
        "all of the following are the case:"
        ^ (ul "lex-reading-and"
             (String.concat
                (List.map fs ~f:(fun f -> 
                     ((li "lex-reading-and-li" (reading_of_formula formula_id eprog f)))))))
-    | EOr (_, fs) ->
+    | Or (_, fs) ->
        "at least one of the following is the case:"
        ^ (ul "lex-reading-or"
             (String.concat
                (List.map fs ~f:(fun f -> 
                     ((li "lex-reading-and-li" (reading_of_formula formula_id eprog f)))))))
-    | EImp (_, f, g) ->
+    | Imp (_, f, g) ->
        "if the following is the case:"
        ^ (ul "lex-reading-imp-left"
             (li "lex-reading-imp-left-li" (reading_of_formula formula_id eprog f)))
        ^ "then the following is the case:"
        ^ (ul "lex-reading-imp-right"
             (li "lex-reading-imp-right-li" (reading_of_formula formula_id eprog g)))
-    | EIff (_, f, g) ->
-       "the following is the case:"
-       ^ (ul "lex-reading-iff-left"
-            (li "lex-reading-iff-left-li" (reading_of_formula formula_id eprog f)))
-       ^ "if, and only if, the following is the case:"
-       ^ (ul "lex-reading-iff-right"
-            (li "lex-reading-iff-right-li" (reading_of_formula formula_id eprog g)))
-    | EExists (x, f) ->
+    | Exists (x, f) ->
        "there exists " ^ ident x ^ " such that the following is the case:"
        ^ (ul "lex-reading-exists"
             (li "lex-reading-exists-li" (reading_of_formula formula_id eprog f)))
-    | EForall (x, f) ->
+    | Forall (x, f) ->
        "for all " ^ ident x ^ ", the following is the case:"
        ^ (ul "lex-reading-forall"
             (li "lex-reading-forall-li" (reading_of_formula formula_id eprog f)))
-    | EPrev (i, f) ->
+    | Prev (i, f) ->
        reading_of_past_interval "at the previous time point" i
        ^ ", the following happened:"
        ^ (ul "lex-reading-prev"
             (li "lex-reading-prev-li" (reading_of_formula formula_id eprog f)))
-    | ENext (i, f) ->
+    | Next (i, f) ->
        reading_of_future_interval "at the next time point" i
        ^ ", the following will happen:"
        ^ (ul "lex-reading-next"
             (li "lex-reading-next-li" (reading_of_formula formula_id eprog f)))
-    | EOnce (i, f) ->
+    | Once (i, f) ->
        reading_of_past_interval "at some point" i
        ^ ", the following happened: "
        ^ (ul "lex-reading-once"
             (li "lex-reading-once-li" (reading_of_formula formula_id eprog f)))
-    | EEventually (i, _, f) ->
+    | Eventually (i, f) ->
        reading_of_future_interval "at some point" i
        ^ ", the following will happen: "
        ^ (ul "lex-reading-eventually"
             (li "lex-reading-eventually-li" (reading_of_formula formula_id eprog f)))
-    | EHistorically (i, f) ->
+    | Historically (i, f) ->
        reading_of_past_interval "at all time points" i
        ^ ", the following happened: "
        ^ (ul "lex-reading-historically"
             (li "lex-reading-historically-li" (reading_of_formula formula_id eprog f)))
-    | EAlways (i, _, f) ->
+    | Always (i, f) ->
        reading_of_future_interval "at all time points" i
        ^ ", the following happened: "
        ^ (ul "lex-reading-always"
             (li "lex-reading-always-li" (reading_of_formula formula_id eprog f)))
-    | ESince (_, i, f, g) ->
+    | Since (_, i, f, g) ->
        reading_of_past_interval "at some point" i
        ^ ", the following happened: "
        ^ (ul "lex-reading-since-left"
@@ -246,7 +249,7 @@ let rec reading_of_formula formula_id eprog f =
        ^ ", the following happened: "
        ^ (ul "lex-reading-since-right"
             (li "lex-reading-since-right-li" (reading_of_formula formula_id eprog g)))
-    | EUntil (_, i, _, f, g) ->
+    | Until (_, i, f, g) ->
        reading_of_future_interval "at some point" i
        ^ ", the following will happen: "
        ^ (ul "lex-reading-until-left"
@@ -256,43 +259,43 @@ let rec reading_of_formula formula_id eprog f =
        ^ (ul "lex-reading-until-right"
             (li "lex-reading-until-right-li" (reading_of_formula formula_id eprog g)))
     | _ -> Formula.to_string (Eformula.to_formula f) in
-  let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
+  let id = Some (Printf.sprintf "%s-%d" formula_id f.info.id) in
   div ~id "lex-subformula-reading" inner_html
 
 let reading_of_pattern formula_id eprog = function
-  | EPPresent -> ""
-  | EPEventually i -> reading_of_future_interval "at some point" i
-  | EPAlways i -> reading_of_future_interval "at all time points" i
-  | EPUntil (i, f) -> reading_of_future_interval "at some point" i
+  | Pattern.PPresent -> ""
+  | PEventually i -> reading_of_future_interval "at some point" i
+  | PAlways i -> reading_of_future_interval "at all time points" i
+  | PUntil (i, f) -> reading_of_future_interval "at some point" i
                       ^ "delaying while"
                       ^ reading_of_formula formula_id eprog f
-  | EPOnce i -> reading_of_future_interval "at some point" i
-  | EPHistorically i -> reading_of_future_interval "at all time points" i
-  | EPSince (i, f) -> reading_of_future_interval "at all times point" i
+  | POnce i -> reading_of_future_interval "at some point" i
+  | PHistorically i -> reading_of_future_interval "at all time points" i
+  | PSince (i, f) -> reading_of_future_interval "at all times point" i
                       ^ "since"
                       ^ reading_of_formula formula_id eprog f
 
 
-let reading_of_rule_if prefix_id eprog pf =
+let reading_of_rule_if prefix_id eprog (pf: Pattern.t) =
   let formula_id = Printf.sprintf "%s-%d" prefix_id in
   let f i g =
     li "lex-reading-if-formula" (reading_of_formula (formula_id i) eprog g) in
   p "lex-reading-if" (
       "Whenever all of the following happen"
-      ^ reading_of_pattern "if-since" eprog pf.p
+      ^ reading_of_pattern "if-since" eprog pf.patt
       ^ ":"
       ^ ul "lex-reading-if-formulae"
           (String.concat ~sep:"" (List.mapi ~f pf.fs))
     )
 
-let reading_of_rule_then prefix_id eprog verb pf =
+let reading_of_rule_then prefix_id eprog verb (pf: Pattern.t) =
   let formula_id = Printf.sprintf "%s-%d" prefix_id in
   let f i g =
     li "lex-reading-then-formula" (reading_of_formula (formula_id i) eprog g) in
   p "lex-reading-then" (
       "Then the following "
       ^ strong "lex-reading-verb" verb
-      ^ reading_of_pattern "if-then" eprog pf.p
+      ^ reading_of_pattern "if-then" eprog pf.patt
       ^ ":"
       ^ ul "lex-reading-then-formulae"
           (String.concat ~sep:"" (List.mapi ~f pf.fs))
@@ -310,10 +313,10 @@ let reading_of_rule_then2 prefix_id eprog g =
           (String.concat ~sep:"" (List.mapi ~f g))
     )
 
-let reading_of_reference (eref: eref_expr) =
+let reading_of_reference (eref: Tlex.Ref.t) =
   let l = eref.label in
-  let rs = eref.ref.sks in
-  let rule = eref.ref.rule in
+  let rs = eref.sks in
+  let rule = eref.rule in
   let rule_id = match rule with
     | Some r -> " " ^ span "lex-section-kind" "rule" ^ r
     | None ->  "" in
@@ -323,10 +326,10 @@ let reading_of_reference (eref: eref_expr) =
     (String.concat ~sep:" " (List.map ~f:reading_of_section_kind_and_name rs) ^ rule_id)
 
 (* let reading_of_ref ref_id (l, r) = *)
-let reading_of_ref ref_id (eref: eref_expr) =
+let reading_of_ref ref_id (eref: Tlex.Ref.t) =
   span "lex-subformula-reading" ~id:(Some ref_id) (reading_of_reference eref)
 
-let reading_of_rule_except prefix_id (refs: eref_expr list) =
+let reading_of_rule_except prefix_id (refs: Tlex.Ref.t list) =
   let ref_id = Printf.sprintf "%s-%d" prefix_id in
   let f i r =
     li "lex-reading-then-formula" (reading_of_ref (ref_id i) r) in
@@ -396,7 +399,7 @@ let reading_of_erule rule_id eprog type_fixes erule =
   let reading_of_cons_rule verb pf g =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog pf
-    ^ reading_of_rule_then (prefix_id "then") eprog verb { fs=g; p=EPPresent} in
+    ^ reading_of_rule_then (prefix_id "then") eprog verb { fs=g; patt=PPresent } in
   let reading_of_exc_rule pf refs =
     reading_of_type_fixes eprog rule_id type_fixes
     ^ reading_of_rule_if (prefix_id "if") eprog pf

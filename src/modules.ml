@@ -74,7 +74,7 @@ let parse_with_error lexbuf =
   | Sys_error msg ->
      Errors.system_error msg (LexingInfo.create1 lexbuf.lex_curr_p)
 
-let parse_module filename: Sformula.t Lex.prog =
+let parse_module filename: Slex.sprog =
    let inx = try In_channel.create filename with
     | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
   in
@@ -125,7 +125,7 @@ let rec do_type lexpath ?seq:(seq=[]) b filepath filename =
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
   let sprog     = parse_module fullname in
-  let prog      = Lex.map ~f:Formula.init sprog in
+  let prog      = Slex.to_prog sprog in
   let imports   = list_imports prog in
   let prefixes  = filepath :: lexpath in
   let suffixes  = List.map imports ~f:suffix_of_import in

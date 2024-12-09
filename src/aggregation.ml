@@ -1,15 +1,6 @@
 open Base
 
-type op = ASum | AAvg | AMed | ACnt | AMin | AMax | AStd [@@deriving compare, sexp_of, hash, equal]
-
-let op_to_string = function
-  | ASum -> "SUM"
-  | AAvg -> "AVG"
-  | AMed -> "MED"
-  | ACnt -> "CNT"
-  | AMin -> "MIN"
-  | AMax -> "MAX"
-  | AStd -> "STD"
+open MFOTL_lib.Aggregation
 
 let ret_tt op tt =
   match op, tt with

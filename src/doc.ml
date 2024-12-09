@@ -3,131 +3,127 @@ open Elex
 open Html
 open Eformula
 
+module Time = MFOTL_lib.Time
+module Interval = MFOTL_lib.Interval
+module Aggregation = MFOTL_lib.Aggregation
 
-let rec html_of_trm ?(l=0) = function
-  | TTerm.TVar x -> ident x
-  | TConst d -> const (Dom.to_string d)
-  | TApp (f, trms) -> Printf.sprintf "%s(%s)" (ident f) (html_of_trms trms)
-  | TUnop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
-                     (Term.string_of_unop o)
-                     (html_of_trm ~l:10 t.trm)
-  | TBinop (t, o, t') -> let l' = Term.prio_of_binop o in
+let rec html_of_trm ?(l=0) (f : TTerm.t) = match f.trm with
+  | Var x -> ident x
+  | Const d -> const (Dom.to_string d)
+  | App (f, trms) -> Printf.sprintf "%s(%s)" (ident f) (html_of_trms trms)
+  | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
+                     (Term.Uop.to_string o)
+                     (html_of_trm ~l:10 t)
+  | Binop (t, o, t') -> let l' = Term.Uop.prio o in
                          Printf.sprintf (Util.paren l l' "%s %s %s")
-                           (html_of_trm ~l:l' t.trm)
-                           (Term.string_of_binop o)
-                           (html_of_trm ~l:l' t'.trm)
-  | TProj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t.trm) p
-  | TRecord kvs ->
-     let f (k, v) = k ^ " : " ^ html_of_trm TTerm.(v.trm) in
+                           (html_of_trm ~l:l' t)
+                           (Term.Bop.to_string o)
+                           (html_of_trm ~l:l' t')
+  | Proj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t) p
+  | Record kvs ->
+     let f (k, v) = k ^ " : " ^ html_of_trm v in
      Printf.sprintf "{ %s }" (String.concat ~sep:", " (List.map kvs ~f))
 
 
-and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t.trm))
+and html_of_trms trms = String.concat ~sep:", " (List.map trms ~f:(fun t -> html_of_trm t))
 
-let html_of_interval = function
-  | Interval.U (C s) when Lextime.Span.equal s Lextime.Span.zero -> ""
-  | U (C s) -> Printf.sprintf "[%s,∞)" (const (Lextime.Span.to_string s))
-  | U (O s) -> Printf.sprintf "(%s,∞)" (const (Lextime.Span.to_string s))
-  | B (C ls, C rs) -> Printf.sprintf "[%s,%s]" (const (Lextime.Span.to_string ls)) (const (Lextime.Span.to_string rs))
-  | B (C ls, O rs) -> Printf.sprintf "[%s,%s)" (const (Lextime.Span.to_string ls)) (const (Lextime.Span.to_string rs))
-  | B (O ls, C rs) -> Printf.sprintf "(%s,%s]" (const (Lextime.Span.to_string ls)) (const (Lextime.Span.to_string rs))
-  | B (O ls, O rs) -> Printf.sprintf "(%s,%s)" (const (Lextime.Span.to_string ls)) (const (Lextime.Span.to_string rs))
+let html_of_interval =
+  let open Time in
+  function
+  | Interval.U s when Span.is_zero s -> ""
+  | U s -> Printf.sprintf "[%s,∞)" (const (Span.to_string s))
+  | B (ls, rs) -> Printf.sprintf "[%s,%s]" (const (Span.to_string ls)) (const (Span.to_string rs))
 
-let rec html_of_formula_ formula_id l f =
+let rec html_of_formula_ formula_id l (f : Eformula.t) =
   let inner_html = 
-    match f.f with
-    | ETT -> const "true"
-    | EFF -> const "false"
-    | EEqConst (x, (Dom.Bool true, _)) -> Printf.sprintf "%s" (html_of_trm x.trm)
-    | EEqConst (x, (c, _)) -> Printf.sprintf "%s = %s" (html_of_trm x.trm) (const (Dom.to_string c))
-    | EPredicate (r, trms, Event (_, Functional)) ->
-       let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
-       Printf.sprintf "%s(%s) = %s"
-         event_name
-         (html_of_trms (List.drop_last_exn trms))
-         (html_of_trm (List.last_exn trms).trm)
-    | EPredicate (r, trms, Event (_, Variable)) ->
-       let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
-       Printf.sprintf "%s = %s"
-         event_name
-         (html_of_trm (List.last_exn trms).trm)
-    | EPredicate (r, trms, _) ->
-       let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
-       Printf.sprintf "%s(%s)" event_name (html_of_trms trms)
-    | EAgg (s, op, x, [], f) ->
+    match f.form with
+    | TT -> const "true"
+    | FF -> const "false"
+    | EqConst (x, Dom.Bool true) -> Printf.sprintf "%s" (html_of_trm x)
+    | EqConst (x, c) -> Printf.sprintf "%s = %s" (html_of_trm x) (const (Dom.to_string c))
+    | Predicate (r, trms) ->
+       (match f.info.event_type_opt with
+        | Some (Event (_, Functional)) ->
+           let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
+           Printf.sprintf "%s(%s) = %s"
+             event_name
+             (html_of_trms (List.drop_last_exn trms))
+             (html_of_trm (List.last_exn trms))
+        | Some (Event (_, Variable)) -> 
+           let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
+           Printf.sprintf "%s = %s"
+             event_name
+             (html_of_trm (List.last_exn trms))
+        | _ -> 
+           let event_name = a ("#lex-event-" ^ r) "lex-event-link" (ident r) in
+           Printf.sprintf "%s(%s)" event_name (html_of_trms trms))
+    | Agg (s, op, x, [], f) ->
        Printf.sprintf "%s <-%s(%s; %s)"
-         (ident s) (kw (Aggregation.op_to_string op)) (html_of_trm x.trm)
+         (ident s) (kw (Aggregation.op_to_string op)) (html_of_trm x)
          (html_of_formula_ formula_id 5 f)
-    | EAgg (s, op, x, y, f) ->
+    | Agg (s, op, x, y, f) ->
        Printf.sprintf "%s <-%s(%s; %s; %s)"
-         (ident s) (kw (Aggregation.op_to_string op)) (html_of_trm x.trm)
+         (ident s) (kw (Aggregation.op_to_string op)) (html_of_trm x)
          (String.concat ~sep:", "  (List.map y ~f:ident)) (html_of_formula_ formula_id 5 f)
-    | ENeg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
-    | EAnd (_, fs) -> Util.paren_string l 4 (
+    | Neg f -> kw "NOT" ^ html_of_formula_ formula_id 5 f
+    | And (_, fs) -> Util.paren_string l 4 (
                           String.concat ~sep:(kw "AND") (List.map fs ~f:(html_of_formula_ formula_id 4)))
-    | EOr (_, fs) -> Util.paren_string l 3 (
+    | Or (_, fs) -> Util.paren_string l 3 (
                          String.concat ~sep:(kw "OR") (List.map fs ~f:(html_of_formula_ formula_id 3)))
-    | EImp (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
-    | EIff (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "EQUIV" ^ html_of_formula_ formula_id 5 g)
-    | EExists (x, f) -> Util.paren_string l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
-    | EForall (x, f) -> Util.paren_string l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
-    | EPrev (i, f) -> Util.paren_string l 5  (kw "PREVIOUS" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
-    | ENext (i, f) -> Util.paren_string l 5 (kw "NEXT" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
-    | EOnce (i, f) -> Util.paren_string l 5 (kw "ONCE" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
-    | EEventually (i, _, f) -> Util.paren_string l 5 (kw "EVENTUALLY" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
-    | EHistorically (i, f) -> Util.paren_string l 5 (kw "HISTORICALLY" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
-    | EAlways (i, _, f) -> Util.paren_string l 5 (kw "ALWAYS" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
-    | ESince (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
-    | EUntil (_, i, _, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
-    | EType (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ EnfType.to_string t) in
-  let id = Some (Printf.sprintf "%s-%d" formula_id f.id) in
+    | Imp (_, f, g) -> Util.paren_string l 5 (html_of_formula_ formula_id 5 f ^ kw "IMPLIES" ^ html_of_formula_ formula_id 5 g)
+    | Exists (x, f) -> Util.paren_string l 5 (kw "EXISTS" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | Forall (x, f) -> Util.paren_string l 5 (kw "FORALL" ^ ident x ^ kw "." ^ html_of_formula_ formula_id 5 f)
+    | Prev (i, f) -> Util.paren_string l 5  (kw "PREVIOUS" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
+    | Next (i, f) -> Util.paren_string l 5 (kw "NEXT" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
+    | Once (i, f) -> Util.paren_string l 5 (kw "ONCE" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
+    | Eventually (i, f) -> Util.paren_string l 5 (kw "EVENTUALLY" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
+    | Historically (i, f) -> Util.paren_string l 5 (kw "HISTORICALLY" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
+    | Always (i, f) -> Util.paren_string l 5 (kw "ALWAYS" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 f)
+    | Since (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
+    | Until (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
+    | Type (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Enftype.to_string t)
+    | Predicate' _ | Let _ | Let' _ | Top _ ->
+       raise (Invalid_argument (Printf.sprintf "HTML not implemented for %s" (Eformula.to_string f)))
+  in
+  let id = Some (Printf.sprintf "%s-%d" formula_id f.info.id) in
   span ~id "lex-subformula" inner_html 
 
 let html_of_formula formula_id f =
   div "lex-formula" (html_of_formula_ formula_id 0 f)
 
-let html_of_span s = const (Lextime.Span.to_string s)
+let html_of_span s = const (Time.Span.to_string s)
 
-let html_of_interval future = function
-  | Interval.U (C s) when Interval.is_zero s -> ""
-  | U (C s) ->
-     (if future then kw "after" else kw "before") ^ html_of_span s
-  | U (O s) ->
-     kw "strictly" ^ (if future then kw "after" else kw "before") ^ html_of_span s
-  | B (C ls, C rs) when Interval.is_zero ls -> kw "within" ^ html_of_span rs
-  | B (C ls, C rs) ->
-     kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs
-  | B (O ls, O rs) ->
-     kw "strictly" ^ kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs
-  | B (C ls, O rs) ->
-     kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs ^ kw "excluded"
-  | B (O ls, C rs) ->
-     kw "between" ^ html_of_span ls ^ kw "excluded" ^ kw "and" ^ html_of_span rs
-    
+let html_of_interval future =
+  let open Time in
+  function
+  | Interval.U s when Span.is_zero s -> ""
+  | U s -> (if future then kw "after" else kw "before") ^ html_of_span s
+  | B (ls, rs) when Span.is_zero ls -> kw "within" ^ html_of_span rs
+  | B (ls, rs) -> kw "between" ^ html_of_span ls ^ kw "and" ^ html_of_span rs
 
-let html_of_pattern formula_id = function
-  | EPPresent -> ""
-  | EPEventually i -> kw "eventually"
-                      ^ html_of_interval true i
-  | EPAlways i -> kw "always" ^ kw "in" ^ kw "the" ^ kw "past"
-                  ^ html_of_interval true i
-  | EPUntil (i, f) -> kw "eventually" ^ kw "delaying" ^ kw "if"
-                      ^ html_of_formula formula_id f
-                      ^ html_of_interval true i
-  | EPOnce i -> kw "once"
-                ^ html_of_interval false i
-  | EPHistorically i -> kw "always" ^ kw "in" ^ kw "the" ^ kw "future"
-                        ^ html_of_interval false i
-  | EPSince (i, f) -> kw "always" ^ kw "since"
-                      ^ html_of_formula formula_id f
-                      ^ html_of_interval false i
+let html_of_pattern formula_id (pf: Pattern.t) = match pf.patt with
+  | PPresent -> ""
+  | PEventually i -> kw "eventually"
+                     ^ html_of_interval true i
+  | PAlways i -> kw "always" ^ kw "in" ^ kw "the" ^ kw "past"
+                 ^ html_of_interval true i
+  | PUntil (i, f) -> kw "eventually" ^ kw "delaying" ^ kw "if"
+                     ^ html_of_formula formula_id f
+                     ^ html_of_interval true i
+  | POnce i -> kw "once"
+               ^ html_of_interval false i
+  | PHistorically i -> kw "always" ^ kw "in" ^ kw "the" ^ kw "future"
+                       ^ html_of_interval false i
+  | PSince (i, f) -> kw "always" ^ kw "since"
+                     ^ html_of_formula formula_id f
+                     ^ html_of_interval false i
 
 let section_id l = "lex-section-" ^ Label.doc_id l 
 
-let html_of_reference (eref: eref_expr) =
+let html_of_reference (eref: Tlex.Ref.t) =
   let l = eref.label in
-  let rs = eref.ref.sks in
-  let rule = eref.ref.rule in
+  let rs = eref.sks in
+  let rule = eref.rule in
   let rule_id = match rule with
     | Some r -> " " ^ span "lex-section-kind" "rule" ^ r
     | None ->  ""
@@ -171,15 +167,15 @@ let html_of_rule_constrs rule_constrs =
 let html_of_erule ecrules rule_id erule =
   let formula_id infix =
     Printf.sprintf "%s-%s-%d" rule_id infix in
-  let string_of_imp_rule verb pf1 pf2 rcs rt =
+  let string_of_imp_rule verb (pf1: Pattern.t) (pf2: Pattern.t) rcs rt =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" pf1.p
+        ^ html_of_pattern "if-pattern" pf1
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf1.fs)
       )
     ^ div "lex-rule-then" (
           kw verb
-          ^ html_of_pattern "then-pattern" pf2.p
+          ^ html_of_pattern "then-pattern" pf2
           ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "then" i) f) pf2.fs)
         )
     ^ kw (html_of_rule_type rt)
@@ -188,7 +184,7 @@ let html_of_erule ecrules rule_id erule =
   let string_of_cons_rule verb pf g =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" pf.p
+        ^ html_of_pattern "if-pattern" pf
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf.fs)
       )
     ^ div "lex-rule-then" (
@@ -199,7 +195,7 @@ let html_of_erule ecrules rule_id erule =
   let string_of_ref_rule verb pf refs =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" pf.p
+        ^ html_of_pattern "if-pattern" pf
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf.fs)
       )
     ^ div "lex-rule-then" (
@@ -210,7 +206,7 @@ let html_of_erule ecrules rule_id erule =
   let string_of_refc_rule _ pf refs g =
     div "lex-rule-if" (
         kw "whenever"
-        ^ html_of_pattern "if-pattern" pf.p
+        ^ html_of_pattern "if-pattern" pf
         ^ String.concat ~sep:"" (List.mapi ~f:(fun i f -> html_of_formula (formula_id "if" i) f) pf.fs)
       )
     ^ div "lex-rule-then" (
@@ -315,7 +311,7 @@ let html_of_label label =
       let sks' = sks' @ [(s, n)] in
       sks', a ("#lex-section-" ^ Label.id_of_sks sks') "lex-section-link" (Lex.string_of_section_kind s ^ " " ^ n) in
     String.concat ~sep:" / " (snd (List.fold_map ~init:[] ~f:html_of_section_kind_and_name sks)) in
-  let reference = Util.butlast (Label.reference_of_label label).sks in
+  let reference = Util.butlast ((Label.reference_of_label label LexingInfo.dummy)).sks in
   if List.is_empty reference then "" else span "lex-section-links" (html_of_label_reference reference)
 
 let html_of_estmt eprog =
@@ -355,12 +351,12 @@ let html_of_estmt eprog =
           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id)
              eprog type_fixes erule doc_string)
       )
-  | ESEvent (event_type, name, typed_args, pol, doc_string) ->
+  | ESEvent (event_type, name, typed_args, enftype, doc_string) ->
      let event_id = "lex-event-" ^ name in
      let html_of_event =
        match event_type with
        | Event (_, Functional) ->
-          kw (Lex.string_of_pol pol)
+          kw (Enftype.to_string enftype)
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ " ("
@@ -369,14 +365,14 @@ let html_of_estmt eprog =
           ^ (match List.last_exn typed_args with
                (_, ty) -> typ (TypeTerm.value_to_string ty))
        | Event (_, Variable) ->
-          kw (Lex.string_of_pol pol)
+          kw (Enftype.to_string enftype)
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ " : "
           ^ (match List.last_exn typed_args with
                (_, ty) -> typ (TypeTerm.value_to_string ty))
        | _ -> 
-          kw (Lex.string_of_pol pol)
+          kw (Enftype.to_string enftype)
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ html_of_args typed_args

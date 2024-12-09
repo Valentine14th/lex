@@ -1,94 +1,78 @@
 open Core
+
+module Patt = Pattern
+
 open Lex
 open Tlex
+ 
+(* Temporal patterns *)
 
-type epattern =
-  | EPPresent
-  | EPEventually of Interval.t
-  | EPAlways of Interval.t
-  | EPUntil of Interval.t * Eformula.t
-  | EPOnce of Interval.t
-  | EPHistorically of Interval.t
-  | EPSince of Interval.t * Eformula.t
+module Pattern = Patt.Make(Eformula.Info)(Formula.StringVar)(Dom)(TTerm)
+
+let epatt_of_tpatt = function
+  | Tlex.Pattern.PPresent -> Pattern.PPresent
+  | PEventually i         -> PEventually i
+  | PAlways i             -> PAlways i
+  | PUntil (i, f)         -> PUntil (i, Eformula.of_tformula f)
+  | POnce i               -> POnce i
+  | PHistorically i       -> PHistorically i
+  | PSince (i, f)         -> PSince (i, Eformula.of_tformula f)
+
+let epf_of_tpf (tpf: Tlex.Pattern.t): Pattern.t =
+  { fs   = List.map tpf.fs ~f:Eformula.of_tformula;
+    patt = epatt_of_tpatt tpf.patt }
+
+(* Rule declarations *)
 
 type erule =
   | EObligation   of LexingInfo.t * int
   | EPermission   of LexingInfo.t * int
   | EConstitutive of LexingInfo.t * (int * int) list
   | EException    of LexingInfo.t * int
-  | EExceptionC   of LexingInfo.t * int * (int * int) list
   | EScope        of LexingInfo.t * int
-
-type erule_type = ERTObligation | ERTPermission | ERTConstitutive | ERTException | ERTExceptionC | ERTScope
-
-let erule_type_from_trule_type = function
-  | TRTObligation -> ERTObligation
-  | TRTPermission -> ERTPermission
-  | TRTConstitutive -> ERTConstitutive
-  | TRTException -> ERTException
-  | TRTExceptionC -> ERTExceptionC
-  | TRTScope -> ERTScope
-
-type eref_expr = tref_expr
-type epformula = {p: epattern; fs: Eformula.t list}
-let epf p fs = {p; fs}
-
-let epattern_of_tpattern tevents = function
-  | TPPresent -> EPPresent
-  | TPEventually i -> EPEventually i
-  | TPAlways i -> EPAlways i
-  | TPUntil (i, f) -> EPUntil (i, Eformula.of_tformula tevents f)
-  | TPOnce i -> EPOnce i
-  | TPHistorically i -> EPHistorically i
-  | TPSince (i, f) -> EPSince (i, Eformula.of_tformula tevents f)
-
-
-let epformula_of_tpformula tevents (tpf: tpformula): epformula = {
-  fs = List.map tpf.fs ~f:(Eformula.of_tformula tevents);
-  p = epattern_of_tpattern tevents tpf.p
-}
+  | EExceptionC   of LexingInfo.t * int * (int * int) list
 
 type edisjunct = {
-  rule_id: int;
-  et: erule_type;
-  rule_pos: LexingInfo.t;
-  def_positions: LexingInfo.t;
-  pf: epformula;
-  exceptions: Eformula.t list; (* list of predicate *)
-  scopes: Eformula.t list; (* list of predicate *)
-  fv_renaming: (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
-  params_original: TTerm.t list; (* list of the original terms*)
-  params_new: TTerm.t list; (* list of the new terms*)
+  rule_id:         int;
+  rule_type:       trule_type;
+  rule_pos:        LexingInfo.t;
+  def_pos:         LexingInfo.t;
+  pf:              Pattern.t;
+  exceptions:      Eformula.t list;                                   (* list of predicates *)
+  scopes:          Eformula.t list;                                   (* list of predicates *)
+  fv_renaming:     (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
+  params_original: TTerm.t list;                                      (* list of the original terms*)
+  params_new:      TTerm.t list;                                      (* list of the new terms*)
 }
 
-let edisjunct_of_tdisjunct tevents (td: tdisjunct) = {
-  rule_id = td.rule_id;
-  et = erule_type_from_trule_type td.tt;
-  rule_pos = td.rule_pos;
-  def_positions = td.def_positions;
-  pf = epformula_of_tpformula tevents td.pf;
-  exceptions = List.map td.exceptions ~f:(Eformula.of_tformula tevents);
-  scopes = List.map td.scopes ~f:(Eformula.of_tformula tevents);
-  fv_renaming = td.fv_renaming;
+let edisjunct_of_tdisjunct (td: tdisjunct) = {
+  rule_id         = td.rule_id;
+  rule_type       = td.rule_type;
+  rule_pos        = td.rule_pos;
+  def_pos         = td.def_pos;
+  pf              = epf_of_tpf td.pf;
+  exceptions      = List.map td.exceptions ~f:Eformula.of_tformula;
+  scopes          = List.map td.scopes ~f:Eformula.of_tformula;
+  fv_renaming     = td.fv_renaming;
   params_original = td.params_original;
-  params_new = td.params_new;
+  params_new      = td.params_new;
 }
 
 type enf_pformula_sup =
-  | ESpfFormula of int
+  | ESpfFormula  of int
   | ESpfPformula of int (* for until and since, if both sides must be used for enforcement *)
-  | ESpfPattern (* for until and since, if it suffices to use the formula in the pattern for enforcement *)
+  | ESpfPattern         (* for until and since, if it suffices to use the formula in the pattern for enforcement *)
 
 type enf_pformula_cau =
   | ECpfFormulas
-  | ECpfPformula (* for until and since, if the formula of the pattern must also be used for enforcement *)
-  | ECpfPattern (* for until and since, if it suffices to enforce the formula in the pattern *)
+  | ECpfPformula        (* for until and since, if the formula of the pattern must also be used for enforcement *)
+  | ECpfPattern         (* for until and since, if it suffices to enforce the formula in the pattern *)
 
 (* A 'lhs' (left-hand side) consists of exception predicates, scope predicates, and a pformula (pattern + formulas) *)
 type enf_sup_lhs =
-  | ESlhsSPformula of enf_pformula_sup
+  | ESlhsSPformula  of enf_pformula_sup
   | ESlhsCException of int (* leads to suppressing the constitution of an event *)
-  | ESlhsSScope of int
+  | ESlhsSScope     of int
 
 type enf_cau_lhs =
   | EClhsAll of enf_pformula_cau
@@ -110,15 +94,17 @@ type enf_ecdefinition_dis =
   | ECdd of int * enf_cau_lhs
 
 type ecrule =
-  | ECImplication   of int * erule_type * LexingInfo.t * epformula * Eformula.t list * Eformula.t list * epformula * rule_type * rule_constr list * enf_ecimplication option
-  | ECDefinition    of int * erule_type * LexingInfo.t * epformula * Eformula.t list * Eformula.t list * eref_expr list * Eformula.t * enf_ecdefinition option
+  | ECImplication   of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Pattern.t * rule_type * rule_constr list * enf_ecimplication option
+  | ECDefinition    of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Ref.t list * Eformula.t * enf_ecdefinition option
   | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * enf_ecdefinition_dis option
+
+(* Statements and programs *)
 
 type estmt =
   | ESImport  of LexingInfo.t * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
   | ESRule    of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * erule * string tannot option
-  | ESEvent   of event_type * ident * (ident * TypeTerm.t) list * pol * string option
+  | ESEvent   of event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
   | ESType    of ident * TypeTerm.t option * string option
   | ESFunction of ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | ESNote    of string
@@ -127,38 +113,34 @@ type var_types = (ident, TypeTerm.t, Base.String.comparator_witness) Map.t
 
 type eprog =
   {
-    estmts: estmt list;
-    ealiases: (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t; (* maps type aliases to their underlying type *)
-    eevents: (ident, tevent, Base.String.comparator_witness) Map.t; (* maps event names to their definitions *)
-    efunctions: (ident, tfunction, Base.String.comparator_witness) Map.t;
-    variables: (int, var_types, Int.comparator_witness) Map.t; (* maps rule labels to variables used in section *)
-    rule_tree: Label.RuleTree.s;
-    ecrules: (int, ecrule, Int.comparator_witness) Map.t;
+    estmts:            estmt list;
+    ealiases:          (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
+                       (* maps type aliases to their underlying type *)
+    eevents:           (ident, tevent, Base.String.comparator_witness) Map.t;
+                       (* maps event names to their definitions *)
+    efunctions:        (ident, tfunction, Base.String.comparator_witness) Map.t;
+    variables:         (int, var_types, Int.comparator_witness) Map.t;
+                       (* maps rule labels to variables used in section *)
+    rule_tree:         Label.RuleTree.s;
+    ecrules:           (int, ecrule, Int.comparator_witness) Map.t;
     compilation_order: int list;
-    pols: (string, EnfType.t, Base.String.comparator_witness) Map.t;
+    pols:              (string, Enftype.t, Base.String.comparator_witness) Map.t;
   }
 
 let tempty =
   {
-    estmts = [];
-    ealiases = Map.empty (module String);
-    eevents = Map.empty (module String);
-    efunctions = Map.empty (module String);
-    variables = Map.empty (module Int); 
-    rule_tree = Label.RuleTree.empty;
-    ecrules = Map.empty (module Int);
+    estmts            = [];
+    ealiases          = Map.empty (module String);
+    eevents           = Map.empty (module String);
+    efunctions        = Map.empty (module String);
+    variables         = Map.empty (module Int); 
+    rule_tree         = Label.RuleTree.empty;
+    ecrules           = Map.empty (module Int);
     compilation_order = [];
-    pols = Map.empty (module String);
+    pols              = Map.empty (module String);
   }
 
-let formulas_from_epattern = function
-  | EPPresent
-  | EPEventually _
-  | EPAlways _
-  | EPOnce _
-  | EPHistorically _ -> []
-  | EPUntil (_, f) 
-  | EPSince (_, f) -> [f]
+(* Importation helpers *)
 
 let import eprog eprog' =
   let f ~key:_ = function `Both (x, _) | `Left x | `Right x -> Some x in
@@ -172,9 +154,7 @@ let tprog_import tprog eprog' =
                tevents    = Map.merge tprog.tevents eprog'.eevents ~f;
                tfunctions = Map.merge tprog.tfunctions eprog'.efunctions ~f }
 
-let is_erule = function
-  | ESRule _ -> true
-  | _ -> false
+(* Deconstructors for rules *)
 
 let get_obligation_params ecrules = function
   | EObligation (_, c_idx) ->
@@ -203,8 +183,8 @@ let get_constitutive_params ecrules = function
       | _ -> assert false
     in
     let disjuncts = List.zip_exn c_rules d_indices |> List.map ~f:aux in
-    let g = List.map2_exn disjuncts g ~f:(fun d g -> match g.f with
-      | EPredicate (e, _, ty) -> { g with f = EPredicate (e, d.params_original, ty) }
+    let g = List.map2_exn disjuncts g ~f:(fun d g -> match g.form with
+      | Predicate (e, _) -> { g with form = Predicate (e, d.params_original) }
       | _ -> assert false)
     in
     let d = List.hd_exn disjuncts in
@@ -241,6 +221,58 @@ let get_exceptionc_params ecrules = function
     (pf, erefs, g)
   | _ -> assert false
 
+(* Signature *)
+
+module Sig : MFOTL_lib.Modules.S = struct
+
+  type term
+
+  type pred_kind = Trace | Predicate | External | Builtin | Let
+                   [@@deriving compare, sexp_of, hash, equal]
+
+  let prog = ref (tempty: eprog) 
+  (*let set_prog p = prog := p*)
+  
+  let rank_of_pred p_name =
+    let _, args, _, _ = Map.find_exn !prog.eevents p_name in
+    List.length args
+    
+  let mem p_name =
+    Map.mem !prog.eevents p_name
+
+  let enftype_of_pred p_name =
+    let _, _, enftype, _ = Map.find_exn !prog.eevents p_name in
+    enftype
+
+  let kind_of_pred p_name =
+    let event_type, _, _, _ = Map.find_exn !prog.eevents p_name in
+    match event_type with
+    | Event _ -> Trace
+    | Predicate -> Predicate
+
+  let pred_enftype_map () =
+    Map.map !prog.eevents
+      ~f:(fun data -> let _, args, enftype, _ = data in
+                      (enftype, List.init (List.length args) ~f:(fun x -> x)))
+
+  let strict_of_func _ = false
+  
+  let add_letpred_empty _ = assert false
+  
+  let update_enftype p_name enftype =
+    prog := {
+        !prog with
+        eevents = Map.update !prog.eevents p_name
+                    ~f:(function
+                      | Some data -> let event_type, args, _, ds = data in
+                                     (event_type, args, enftype, ds)
+                      | None -> assert false)
+      }
+
+end
+
+(* Printing functions *)
+
 let verb_of_erule = function
   | EObligation _ -> "oblige"
   | EPermission _ -> "permit"
@@ -249,19 +281,10 @@ let verb_of_erule = function
     | EExceptionC _ -> "except"
   | EScope _ -> "scope"
 
-let string_of_epattern = function
-  | EPPresent -> ""
-  | EPEventually i -> " eventually " ^ Interval.to_string i 
-  | EPAlways i -> " always in the future " ^ Interval.to_string i 
-  | EPUntil (i, f) -> " eventually delaying if " ^ Eformula.to_string f ^ " " ^ Interval.to_string i
-  | EPOnce i -> " once " ^ Interval.to_string i
-  | EPHistorically i -> " always in the past " ^ Interval.to_string i
-  | EPSince (i, f) -> " always since " ^ Eformula.to_string f ^ " " ^ Interval.to_string i
-
-
 let string_of_erule ecrules i erule =
+  let open Pattern in 
   let to_string f = Util.tabs (i+1) ^ Eformula.to_string f in
-  let reference_to_string ref_ = Util.tabs (i+1) ^ Lex.string_of_reference ref_ in
+  let reference_to_string ref_ = Util.tabs (i+1) ^ Lex.Ref.to_string ref_ in
   let string_of_formula_list f =
     String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n" in
   let string_of_reference_list refs =
@@ -269,31 +292,31 @@ let string_of_erule ecrules i erule =
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Util.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb pf1 pf2 rcs rt =
-    Util.tabs i     ^ "whenever" ^ string_of_epattern pf1.p ^ "\n"
+    Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string pf1.patt ^ "\n"
     ^ string_of_formula_list pf1.fs                         
-    ^ Util.tabs i   ^ verb       ^ string_of_epattern pf2.p ^ "\n"
+    ^ Util.tabs i   ^ verb       ^ Pattern.patt_to_string pf2.patt ^ "\n"
     ^ string_of_formula_list pf2.fs
     ^ Util.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
     ^ (if List.is_empty rcs then "" (* TODO: check that this prints the rule_constr list correctly *)
       else Util.tabs i ^ (string_of_rule_constrs rcs))
   in
   let string_of_cons_rule verb pf g =
-    Util.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
-    ^ string_of_formula_list pf.fs  ^ Util.tabs i   ^ verb  ^ "\n"
+    Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string pf.patt ^ "\n"
+    ^ string_of_formula_list pf.fs  ^ Util.tabs i   ^ verb        ^ "\n"
     ^ string_of_formula_list g
   in
   let string_of_ref_rule verb pf refs =
-    Util.tabs i     ^ "whenever" ^ string_of_epattern pf.p ^ "\n"
-    ^ string_of_formula_list pf.fs                         ^ "\n"
-    ^ Util.tabs i   ^ verb                              ^ "\n"
+    Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string pf.patt ^ "\n"
+    ^ string_of_formula_list pf.fs                                ^ "\n"
+    ^ Util.tabs i   ^ verb                                        ^ "\n"
     ^ string_of_reference_list refs
   in
   let string_of_refc_rule verb pf refs g =
-    Util.tabs i     ^ "whenever"  ^ string_of_epattern pf.p ^ "\n"
+    Util.tabs i     ^ "whenever"  ^ Pattern.patt_to_string pf.patt ^ "\n"
     ^ string_of_formula_list pf.fs
-    ^ Util.tabs i   ^ verb                               ^ "\n"
+    ^ Util.tabs i   ^ verb                                         ^ "\n"
     ^ string_of_reference_list refs                     
-    ^ Util.tabs i   ^ "constitute"                       ^ "\n"
+    ^ Util.tabs i   ^ "constitute"                                 ^ "\n"
     ^ string_of_formula_list g
   in
   match erule with
@@ -308,13 +331,13 @@ let string_of_erule ecrules i erule =
     string_of_cons_rule (verb_of_erule erule) pf g
   | EException _ ->
     let pf, erefs = get_exception_params ecrules erule in
-    string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs)
+    string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:Tlex.Ref.to_lex_ref erefs)
   | EExceptionC _ ->
     let pf, erefs, g = get_exceptionc_params ecrules erule in
-    string_of_refc_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs) g
+    string_of_refc_rule (verb_of_erule erule) pf (List.map ~f:Tlex.Ref.to_lex_ref erefs) g
   | EScope _ ->
     let pf, erefs = get_exception_params ecrules erule in
-    string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:(fun x -> x.ref) erefs)
+    string_of_ref_rule (verb_of_erule erule) pf (List.map ~f:Tlex.Ref.to_lex_ref erefs)
 
 let string_of_estmt ecrules ?(i=0) =
   function
@@ -339,7 +362,7 @@ let string_of_estmt ecrules ?(i=0) =
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_erule ecrules (i+1) rule)
        description
-  | ESEvent (event_type, name, typed_args, pol, doc_string) ->
+  | ESEvent (event_type, name, typed_args, enftype, doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
@@ -347,7 +370,7 @@ let string_of_estmt ecrules ?(i=0) =
       in
       Printf.sprintf "%s%s %s %s\n%s%s"
           (Util.tabs i)
-          (string_of_pol pol)
+          (Enftype.to_string enftype)
           (string_of_event_type event_type)
           name
           description

@@ -1,6 +1,6 @@
 open Core
 
-type t = M of int * string [@@deriving compare]
+type t = M of int * string [@@deriving compare, sexp_of, hash, equal]
 
 let ($) a c = M (int_of_float (a *. 100.), c)
 

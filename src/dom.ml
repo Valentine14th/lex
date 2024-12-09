@@ -8,6 +8,11 @@
 (*  Leonardo Lima (UCPH)                                           *)
 (*******************************************************************)
 
+open Core
+
+module Time = MFOTL_lib.Time
+module Span = MFOTL_lib.Time.Span
+
 type tt =
   | TInt
   | TStr
@@ -15,36 +20,18 @@ type tt =
   | TBool
   | TTime
   | TSpan
-  | TMoney of string
+  | TMoney of string [@@deriving compare, sexp_of, hash, equal]
 
 type t =
   | Int of Int.t
   | Str of String.t
   | Float of Float.t
   | Bool of Bool.t
-  | Time of Lextime.Time.t
-  | Span of Lextime.Span.t
-  | Money of Money.t
+  | Time of Time.t
+  | Span of Span.s
+  | Money of Money.t [@@deriving compare, sexp_of, hash, equal]
 
-let equal d d' = match d, d' with
-  | Int v, Int v' -> Int.equal v v'
-  | Str v, Str v' -> String.equal v v'
-  | Float v, Float v' -> Float.equal v v'
-  | Bool v, Bool v' -> Bool.equal v v'
-  | Time v, Time v' -> Lextime.Time.equal v v'
-  | Span v, Span v' -> Lextime.Span.equal v v'
-  | Money v, Money v' -> Money.equal v v'
-  | _ -> false
-
-let tt_equal tt tt' = match tt, tt' with
-  | TInt, TInt
-    | TStr, TStr
-    | TFloat, TFloat
-    | TBool, TBool
-    | TTime, TTime
-    | TSpan, TSpan -> true
-  | TMoney c, TMoney c' -> String.equal c c'
-  | _ -> false
+let bool_tt = Bool true
 
 (*let tt_of_string = function
   | "int" -> TInt
@@ -67,7 +54,7 @@ let tt_of_domain = function
   | Span _ -> TSpan
   | Money m -> TMoney (Money.currency m)
 
-let string_of_tt = function
+let tt_to_string = function
   | TInt -> "int"
   | TStr -> "string"
   | TFloat -> "float"
@@ -81,8 +68,8 @@ let tt_default = function
   | TStr -> Str ""
   | TFloat -> Float 0.0
   | TBool -> Bool false
-  | TTime -> Time Lextime.Time.zero
-  | TSpan -> Span Lextime.Span.zero
+  | TTime -> Time Time.zero
+  | TSpan -> Span Time.Span.zero
   | TMoney c -> Money Money.(0. $ c)
 
 let to_string = function
@@ -90,8 +77,8 @@ let to_string = function
   | Str v -> Printf.sprintf "\"%s\"" v
   | Float v -> Float.to_string v
   | Bool v -> Bool.to_string v
-  | Time v -> Lextime.Time.to_string v
-  | Span v -> Lextime.Span.to_string v
+  | Time v -> Time.to_string v
+  | Span v -> Span.to_string v
   | Money v -> Money.to_string v
      
 

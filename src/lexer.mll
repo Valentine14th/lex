@@ -2,6 +2,8 @@
   open Lexing
   open Parser
 
+  module Time = MFOTL_lib.Time
+
   let (+>) = LexingInfo.(+>)
 
   let debug_lexer = ref false
@@ -13,6 +15,8 @@
 
   let info lexbuf = LexingInfo.create lexbuf.lex_start_p lexbuf.lex_curr_p
   let info1 lexbuf = LexingInfo.create1 lexbuf.lex_start_p
+
+  let make_interval lexbuf = MFOTL_lib.Interval.lex (fun () -> Errors.lexer_error "interval lexing did not succeed" (info lexbuf))
 
   let rec update_indent i =
     match !indents with
@@ -108,7 +112,6 @@ let int     = ['0'-'9']*
 let float1  = ['0'-'9']+ '.' ['0'-'9']*
 let float2  = '.' ['0'-'9']+
 
-
 rule read =
   parse
   | (comment? newline white*)* eof
@@ -169,6 +172,7 @@ rule read =
   | "\"\"\""                                     { read_docstring (Buffer.create 17) (info lexbuf) lexbuf }
   | "condition[" (int as i) "]"                  { CONDITION (info lexbuf, int_of_string i) }
   | "[" (int as i) "]"                           { LABEL_LEVEL (info lexbuf, int_of_string i) }
+  | (['(' '['] as l) white* (int as i) white* (ident? as u) white* ',' white* ((int | "INFINITY" | "∞" | "*") as j) white* (ident? as v) white* ([')' ']'] as r)                       { INTERVAL (make_interval lexbuf l i u j v r) }
   | "false"                          | "⊥"       { FALSE (info lexbuf) }
   | "true"                           | "⊤"       { TRUE (info lexbuf) }
   | '='                                          { EQ (info lexbuf) }
@@ -189,9 +193,6 @@ rule read =
   | "EVENTUALLY"                     | "F" | "◊" { EVENTUALLY (info lexbuf) }
   | "GLOBALLY_PAST" | "HISTORICALLY" | "■"       { HISTORICALLY (info lexbuf) }
   | "ONCE"                           | "⧫"       { ONCE (info lexbuf) }
-  | '['                                          { LSB (info lexbuf) }
-  | ']'                                          { RSB (info lexbuf) }
-  | "INFINITY"                       | "∞"       { INFINITY (info lexbuf) }
   | ident as id
     {
       try (Hashtbl.find keyword_table id) (info lexbuf)
@@ -202,7 +203,7 @@ rule read =
   | int
      { INT (info lexbuf, int_of_string (Lexing.lexeme lexbuf)) }
   | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s)
-     { SPAN (info lexbuf, Lextime.Span.of_value_with_unit (int_of_string i) (info lexbuf) s) }
+     { SPAN (info lexbuf, Time.Span.make i s) }
   | _
      { Errors.lexer_error ("Unexpected character: " ^ Lexing.lexeme lexbuf) (info1 lexbuf) }
 
@@ -224,7 +225,7 @@ and read_time buf i =
   parse
   | '`' { TIME (i +> info1 lexbuf,
                 let contents = Buffer.contents buf in
-                try Lextime.Time.of_string contents
+                try Time.of_string contents
                 with _ -> Errors.lexer_error ("Illegal time expression: `" ^ contents ^ "`") (i +> info1 lexbuf)) }
   | [^ '`']+ { Buffer.add_string buf (Lexing.lexeme lexbuf); read_time buf i lexbuf }
   | _   { Errors.lexer_error ("Illegal time character: " ^ Lexing.lexeme lexbuf) (info1 lexbuf) }

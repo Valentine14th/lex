@@ -1,10 +1,14 @@
 open Base
 
+module Side = MFOTL_lib.Side
+module Interval = MFOTL_lib.Interval
+module Enftype = MFOTL_lib.Enftype
+
 module Aop = struct
 
-  type t = Aggregation.op
+  type t = MFOTL_lib.Aggregation.op
 
-  let to_string = Aggregation.op_to_string
+  let to_string = MFOTL_lib.Aggregation.op_to_string
   
 end
 
@@ -125,7 +129,7 @@ type core_t =
   | SForall of string list * t
   | SBtop of Side.t option * Interval.t * t * Btop.t * t
   | SUtop of Interval.t * Utop.t * t
-  | STyp of t * EnfType.t
+  | STyp of t * Enftype.t
   | SRecord of (string * t) list
   | SProj of t * string
 and t = { f : core_t; pos : LexingInfo.t }
@@ -146,7 +150,6 @@ let utop pos op i e = make pos (SUtop (i, op, e))
 let typ pos e ty = make pos (STyp (e, ty))
 let record pos es = make pos (SRecord es)
 let proj pos e s = make pos (SProj (e, s))
-
 
 let rec to_string_rec l = function
   | SConst c -> Dom.to_string c
@@ -189,7 +192,7 @@ let rec to_string_rec l = function
                             (to_string_rec (Utop.prio utop) f.f)
   | STyp (f, ty) -> Printf.sprintf "%s : %s"
                       (to_string_rec 0 f.f)
-                      (EnfType.to_string ty)
+                      (Enftype.to_string ty)
   | SRecord sfs -> Printf.sprintf "{ %s }"
                     (Util.string_of_string_list
                        (List.map ~f:(fun (s, f) -> Printf.sprintf "%s : %s" s (to_string_rec 0 f.f)) sfs))

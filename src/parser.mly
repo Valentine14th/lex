@@ -1,8 +1,14 @@
 %{
   open Lex
+  open Slex
   open LexingInfo
   open Sformula
-    
+
+  module Time = MFOTL_lib.Time
+  module Interval = MFOTL_lib.Interval
+  module Aggregation = MFOTL_lib.Aggregation
+
+  let pf = SPattern.make
 
   (* exception ParseError of string *)
 
@@ -20,17 +26,17 @@
 
 %token <LexingInfo.t * string>         IDENT
 %token <LexingInfo.t * int>            INT
-%token <LexingInfo.t * Lextime.Span.t> SPAN
+%token <LexingInfo.t * MFOTL_lib.Time.Span.s> SPAN
 %token <LexingInfo.t * float>          FLOAT
 %token <LexingInfo.t * string>         STRING
-%token <LexingInfo.t * Lextime.Time.t> TIME
+%token <LexingInfo.t * MFOTL_lib.Time.t> TIME
 %token <LexingInfo.t>                  FALSE TRUE
 %token <LexingInfo.t * string>          DOCSTRING
 
 /* Tokens: symbols */
 
 %token <LexingInfo.t> COM COL SEMICOLON DOT
-%token <LexingInfo.t> LPA RPA LBR RBR LSB RSB
+%token <LexingInfo.t> LPA RPA LBR RBR
 
 /* Tokens: program keywords  */
 
@@ -50,7 +56,7 @@
 
 /* Tokens: intervals */
 
-%token <LexingInfo.t> INFINITY
+%token <MFOTL_lib.Interval.t> INTERVAL
 
 /* Tokens: types */
 
@@ -73,7 +79,7 @@
 %left OR
 %left AND
 %nonassoc SINCE UNTIL RELEASE TRIGGER
-%left PREV NEXT ONCE EVENTUALLY HISTORICALLY ALWAYS
+%left ONCE 
 %nonassoc LT GT EQ NEQ
 %left ADD SUB
 %left MUL DIV
@@ -81,7 +87,7 @@
 %left NOT
 %left DOT
 
-%start <Sformula.t Lex.prog> prog
+%start <Slex.sprog> prog
 %%
 
 /* Program */
@@ -110,7 +116,7 @@ stmt:
 
 import:
   | IMPORT import_opt import_name
-    { SImport ($1 +> (fst $3), $2, snd $3) }
+    { SSImport ($1 +> (fst $3), $2, snd $3) }
 
 import_name:
   | IDENT
@@ -130,9 +136,9 @@ import_opt:
 
 label:
   | section_kind_and_pos STRING STRING
-    { SSection (fst $1, snd $1, snd $2, Some (snd $3)) }
+    { SSSection (fst $1, snd $1, snd $2, Some (snd $3)) }
   | section_kind_and_pos STRING
-    { SSection (fst $1, snd $1, snd $2, None) }
+    { SSSection (fst $1, snd $1, snd $2, None) }
 
 section_kind_and_pos:
   | LAW       LABEL_LEVEL
@@ -172,29 +178,29 @@ section_kind_and_pos:
 
 note:
   | NOTE STRING
-    { SNote ($1 +> fst $2, snd $2) }
+    { SSNote ($1 +> fst $2, snd $2) }
   | NOTE DOCSTRING
-    { SNote ($1 +> fst $2, snd $2) }
+    { SSNote ($1 +> fst $2, snd $2) }
 
 /* Type declarations */
 
 type_decl:
   | TTYPE IDENT IS type_term 
-    { SType ($1 +> fst $4, snd $2, Some (snd $4), None) }
+    { SSType ($1 +> fst $4, snd $2, Some (snd $4), None) }
   | TTYPE IDENT IS type_term NEWUP DOCSTRING 
-    { SType ($1 +> fst $6, snd $2, Some (snd $4), Some (snd $6)) }
+    { SSType ($1 +> fst $6, snd $2, Some (snd $4), Some (snd $6)) }
   | TTYPE IDENT
-    { SType ($1 +> fst $2, snd $2, None,          None) }
+    { SSType ($1 +> fst $2, snd $2, None,          None) }
   | TTYPE IDENT NEWUP DOCSTRING
-    { SType ($1 +> fst $4, snd $2, None,          Some (snd $4)) }
+    { SSType ($1 +> fst $4, snd $2, None,          Some (snd $4)) }
 
 /* Function declarations */
 
 fun_decl:
   | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term
-    { SFunction (fst $2 +> fst $10, snd $2, $5, snd $10, None) }
+    { SSFunction (fst $2 +> fst $10, snd $2, $5, snd $10, None) }
   | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term NEWUP DOCSTRING
-    { SFunction (fst $2 +> fst $12, snd $2, $5, snd $10, Some (snd $12)) }
+    { SSFunction (fst $2 +> fst $12, snd $2, $5, snd $10, Some (snd $12)) }
 
 fun_args:
   | list(type_fix)
@@ -204,22 +210,22 @@ fun_args:
 
 event_decl:
   | pol event_type IDENT NEWUP args
-    { SEvent (conclr_opt (fst $1) (fst $2) (fst $5)  (fst $3),
+    { SSEvent (conclr_opt (fst $1) (fst $2) (fst $5)  (fst $3),
 	      snd $2,                     snd $3, snd $5,                              snd $1, None) }
   | pol event_type IDENT NEWUP DOCSTRING NEWWHITE args
-    { SEvent (conclr_opt (fst $1) (fst $2) (fst $7)  (fst $5),
+    { SSEvent (conclr_opt (fst $1) (fst $2) (fst $7)  (fst $5),
 	      snd $2,                     snd $3, snd $7,                              snd $1, Some (snd $5)) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? args NEWDOWN? RPA SUB GT type_term
-    { SEvent (concl_opt (fst $1) $2 (fst $12),
+    { SSEvent (concl_opt (fst $1) $2 (fst $12),
 	      Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, None) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? args NEWDOWN? RPA SUB GT type_term NEWUP DOCSTRING
-    { SEvent (concl_opt (fst $1) $2 (fst $14),
+    { SSEvent (concl_opt (fst $1) $2 (fst $14),
 	      Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, Some (snd $14)) }
   | pol VARIABLE functional_event_type IDENT COL type_term
-    { SEvent (concl_opt (fst $1) $2 (fst $6),
+    { SSEvent (concl_opt (fst $1) $2 (fst $6),
 	      Lex.Event ($3, Variable),   snd $4,    ["~return_value", snd $6],        snd $1, None) }
   | pol VARIABLE functional_event_type IDENT COL type_term NEWUP DOCSTRING
-    { SEvent (concl_opt (fst $1) $2 (fst $8),
+    { SSEvent (concl_opt (fst $1) $2 (fst $8),
 	      Lex.Event ($3, Variable),   snd $4,    ["~return_value", snd $6],        snd $1, Some (snd $8)) }
 
 event_type:
@@ -246,35 +252,35 @@ functional_event_type:
 
 pol:
   | TCAUSABLE
-    { Some $1,         TCau }
+    { Some $1,         Enftype.tcau }
   | TSUPPRESSABLE
-    { Some $1,         TSup }
+    { Some $1,         Enftype.tsup }
   | TOBSERVABLE
-    { Some $1,         TObs }
+    { Some $1,         Enftype.obs }
   | TINTERNAL
-    { Some $1,         TItl }
+    { Some $1,         Enftype.itl }
   | TCAUSABLE     TOBSERVABLE
-    { Some ($1 +> $2), TCauObs }
+    { Some ($1 +> $2), Enftype.tcau }
   | TOBSERVABLE   TCAUSABLE
-    { Some ($1 +> $2), TCauObs }
+    { Some ($1 +> $2), Enftype.tcau }
   | TCAUSABLE     TSUPPRESSABLE
-    { Some ($1 +> $2), TCauSup }
+    { Some ($1 +> $2), Enftype.causup }
   | TSUPPRESSABLE TCAUSABLE
-    { Some ($1 +> $2), TCauSup }
+    { Some ($1 +> $2), Enftype.causup }
   |
-    { None,            TObs }
+    { None,            Enftype.obs }
 
 /* Rule declarations */
 
 rule_decl:
   | RULE NEWUP DOCSTRING NEWWHITE type_fixes rule
-    { SRule ($1 +> Lex.pos_of_rule $6, None,          $5, $6, Some (snd $3)) }
+    { SSRule ($1 +> Slex.pos_of_srule $6, None,          $5, $6, Some (snd $3)) }
   | RULE STRING NEWUP DOCSTRING NEWWHITE type_fixes rule
-    { SRule ($1 +> Lex.pos_of_rule $7, Some (snd $2), $6, $7, Some (snd $4)) }
+    { SSRule ($1 +> Slex.pos_of_srule $7, Some (snd $2), $6, $7, Some (snd $4)) }
   | RULE NEWUP type_fixes rule
-    { SRule ($1 +> Lex.pos_of_rule $4, None,          $3, $4, None) }
+    { SSRule ($1 +> Slex.pos_of_srule $4, None,          $3, $4, None) }
   | RULE STRING NEWUP type_fixes rule
-    { SRule ($1 +> Lex.pos_of_rule $5, Some (snd $2), $4, $5, None) }
+    { SSRule ($1 +> Slex.pos_of_srule $5, Some (snd $2), $4, $5, None) }
 
 type_fixes:
   |
@@ -288,17 +294,17 @@ type_fix:
 
 rule:
   | WHENEVER pattern NEWUP es NEWDOWN OBLIGE     pattern NEWUP es rule_type
-    { Obligation   (concr_opt $1 (fst $10) (last $9).pos, pf $2 $4, pf $7 $9, fst (snd $10), snd (snd $10)) }
-  | WHENEVER pattern NEWUP es NEWDOWN PERMIT     pattern NEWUP es rule_type
-    { Permission   (concr_opt $1 (fst $10) (last $9).pos, pf $2 $4, pf $7 $9, fst (snd $10), snd (snd $10)) }
+    { SObligation   (concr_opt $1 (fst $10) (last $9).pos, pf $2 $4, pf $7 $9, fst (snd $10), snd (snd $10)) }
+  (*| WHENEVER pattern NEWUP es NEWDOWN PERMIT     pattern NEWUP es rule_type
+    { SPermission   (concr_opt $1 (fst $10) (last $9).pos, pf $2 $4, pf $7 $9, fst (snd $10), snd (snd $10)) }*)
   | WHENEVER pattern NEWUP es NEWDOWN CONSTITUTE         NEWUP es
-    { Constitutive ($1 +> (last $8).pos,                  pf $2 $4, $8) }
+    { SConstitutive ($1 +> (last $8).pos,                  pf $2 $4, $8) }
   | WHENEVER pattern NEWUP es NEWDOWN EXCEPT             NEWUP ref_exprs
-    { Exception    ($1 +> fst_of_last $8,                 pf $2 $4, List.map snd $8) }
+    { SException    ($1 +> fst_of_last $8,                 pf $2 $4, List.map snd $8) }
   | WHENEVER pattern NEWUP es NEWDOWN REPLACE            NEWUP ref_exprs    NEWDOWN CONSTITUTE NEWUP es
-    { ExceptionC   ($1 +> (last $12).pos,                 pf $2 $4, List.map snd $8, $12) }
+    { SExceptionC   ($1 +> (last $12).pos,                 pf $2 $4, List.map snd $8, $12) }
   | WHENEVER pattern NEWUP es NEWDOWN SCOPE              NEWUP ref_exprs
-    { Scope        ($1 +> fst_of_last $8,                 pf $2 $4, List.map snd $8) }
+    { SScope        ($1 +> fst_of_last $8,                 pf $2 $4, List.map snd $8) }
 
 rule_type:
   | NEWDOWN                TENFORCEABLE rule_constrs
@@ -340,11 +346,11 @@ ref_exprs:
 
 ref_expr:
   | RULE STRING
-    { $1 +> fst $2,                       make_ref_expr (fst $2)           []                (Some (snd $2)) }
+    { $1 +> fst $2,                       Ref.make []                (Some (snd $2)) (fst $2) }
   | nonempty_list(section_kind_with_name) RULE STRING
-    { fst (List.hd $1) +> fst $3,         make_ref_expr (fst (List.hd $1)) (List.map snd $1) (Some (snd $3)) }
+    { fst (List.hd $1) +> fst $3,         Ref.make (List.map snd $1) (Some (snd $3)) (fst (List.hd $1)) }
   | nonempty_list(section_kind_with_name)
-    { fst (List.hd $1) +> fst_of_last $1, make_ref_expr (fst (List.hd $1)) (List.map snd $1) None }
+    { fst (List.hd $1) +> fst_of_last $1, Ref.make (List.map snd $1) None (fst (List.hd $1)) }
 
 section_kind_with_name:
   | LAW       label_level STRING
@@ -423,9 +429,9 @@ e:
     { exists ($1 +> $4.pos) (List.map snd $2) $4 }
   | FORALL vars DOT e %prec FORALL
     { forall ($1 +> $4.pos) (List.map snd $2) $4 }
-  | e btop interval_opt side_opt e
+  | e btop interval_opt side_opt e %prec SINCE
     { btop ($1.pos +> $5.pos) $4 $3 $2 $1 $5 }
-  | utop interval_opt e
+  | utop interval_opt e %prec ONCE
     { utop (fst $1 +> $3.pos) (snd $1) $2 $3 }
   | e COL ty
     { typ ($1.pos +> fst $3) $1 (snd $3) }
@@ -435,8 +441,8 @@ e:
     { proj ($1.pos +> fst $3) $1 (snd $3) }
 
 %inline interval_opt:
-  | interval
-    { snd $1 }
+  | INTERVAL
+    { $1 }
   |
     { Interval.full }
 
@@ -538,11 +544,11 @@ agg:
 
 side:
   | COL IDENT
-    { Side.of_string (fst $2) (snd $2) }
+    { Side.of_string (snd $2) }
 
 side2:
   | COL IDENT COM IDENT
-    { (Side.of_string (fst $2) (snd $2), Side.of_string (fst $4) (snd $4)) }
+    { (Side.of_string (snd $2), Side.of_string (snd $4)) }
 
 terms:
   | separated_list(COM, e) { $1 }
@@ -584,9 +590,9 @@ vars:
 
 ty:
   | TCAUSABLE
-    { $1, EnfType.Cau }
+    { $1, Enftype.cau }
   | TSUPPRESSABLE
-    { $1, EnfType.Sup }
+    { $1, Enftype.sup }
 
 /* Patterns */
 
@@ -626,32 +632,12 @@ common_interval:
   |
     { Interval.full }
   | IWITHIN            SPAN
-    { Interval.lzero_rclosed_BI (snd $2) }
+    { Interval.lclosed_rclosed_BI Time.Span.zero (snd $2) }
   | IBETWEEN           SPAN           AND SPAN
-    { Interval.lclosed_rclosed_BI (snd $2) (snd $4) }
+    { Interval.lclosed_rclosed_BI (snd $2)       (snd $4) }
   | ISTRICTLY IBETWEEN SPAN           AND SPAN
-    { Interval.lopen_ropen_BI (snd $3) (snd $5) }
+    { Interval.lopen_ropen_BI     (snd $3)       (snd $5) }
   | IBETWEEN           SPAN           AND SPAN IEXCLUDED
-    { Interval.lclosed_ropen_BI (snd $2) (snd $4) }
+    { Interval.lclosed_ropen_BI   (snd $2)       (snd $4) }
   | IBETWEEN           SPAN IEXCLUDED AND SPAN
-    { Interval.lopen_rclosed_BI (snd $2) (snd $5) }
-
-/* Intervals */
-					   
-interval:
-  | LSB ib COM ib       RSB
-    { $1, Interval.lclosed_rclosed_BI $2 $4 }
-  | LSB ib COM ib       RPA
-    { $1, Interval.lclosed_ropen_BI $2 $4 }
-  | LSB ib COM INFINITY RPA
-    { $1, Interval.lclosed_UI $2 }
-  | LPA ib COM ib       RSB
-    { $1, Interval.lopen_rclosed_BI $2 $4 }
-  | LPA ib COM ib       RPA
-    { $1, Interval.lopen_ropen_BI $2 $4 }
-  | LPA ib COM INFINITY RPA
-    { $1, Interval.lopen_UI $2 }
-
-ib:
-  | SPAN { snd $1 }
-  | INT  { Lextime.Span.seconds (snd $1) }
+    { Interval.lopen_rclosed_BI   (snd $2)       (snd $5) }

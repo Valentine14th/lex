@@ -4,7 +4,31 @@ type range =
   { start: Lexing.position;
     stop:  Lexing.position }
 
-type t = { ranges: range list }
+let compare_range r1 r2 =
+  match compare r1.start.pos_cnum r2.start.pos_cnum with
+  | 0 -> compare r1.stop.pos_cnum r2.stop.pos_cnum
+  | c -> c
+
+let sexp_of_range r =
+  let open Sexplib.Sexp in
+  List [
+    List [Atom "start"; Atom (string_of_int r.start.pos_cnum)];
+    List [Atom "stop"; Atom (string_of_int r.stop.pos_cnum)]
+  ]
+
+let hash_range r =
+  Hashtbl.hash (r.start.pos_cnum, r.stop.pos_cnum)
+
+let hash_fold_range state range =
+  let state = Hash.fold_int state range.start.pos_cnum in
+  let state = Hash.fold_int state range.start.pos_lnum in
+  let state = Hash.fold_int state range.stop.pos_cnum in
+  Hash.fold_int state range.stop.pos_lnum
+
+let equal_range r1 r2 =
+  r1.start.pos_cnum = r2.start.pos_cnum && r1.stop.pos_cnum = r2.stop.pos_cnum
+
+type t = { ranges: range list } [@@deriving compare, sexp_of, hash, equal]
 
 let cnum (pos : Lexing.position) = pos.pos_cnum - pos.pos_bol + 1
 

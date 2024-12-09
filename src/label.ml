@@ -20,88 +20,112 @@ let string_of_loc = function
   | LRule n -> "LRule \"" ^ n ^ "\"" (* TODO: choose sensible string representation for rule locations *)
   | LNone -> "LNone"
 
-
 type t =
   {
-    law: label_levels; (* for qualified name, this must be non-empty *)
-    title: label_levels; (* ignored for qualified name *)
-    chapter: label_levels; (* ignored for qualified name *)
-    section: label_levels; (* ignored for qualified name *)
-    article: label_levels; (* for qualified name, this must be non-empty *)
+    law:       label_levels; (* for qualified name, this must be non-empty *)
+    title:     label_levels; (* ignored for qualified name *)
+    chapter:   label_levels; (* ignored for qualified name *)
+    section:   label_levels; (* ignored for qualified name *)
+    article:   label_levels; (* for qualified name, this must be non-empty *)
     paragraph: label_levels;
-    point: label_levels;
-    subpoint: label_levels;
-    rule_id: ident option
+    point:     label_levels;
+    subpoint:  label_levels;
+    rule_id:   ident option
   }
 
 let empty =
   {
-    law = [];
-    title = [];
-    chapter = [];
-    section = [];
-    article = [];
+    law       = [];
+    title     = [];
+    chapter   = [];
+    section   = [];
+    article   = [];
     paragraph = [];
-    point = [];
-    subpoint = [];
-    rule_id = None
+    point     = [];
+    subpoint  = [];
+    rule_id   = None
   }
 
 let is_empty = function
-  | { law = []; title = []; chapter = []; section = []; article = []; paragraph = []; point = []; subpoint = []; rule_id = None } -> true
+  | { law       = [];
+      title     = [];
+      chapter   = [];
+      section   = [];
+      article   = [];
+      paragraph = [];
+      point     = [];
+      subpoint  = [];
+      rule_id   = None } -> true
   | _ -> false
 
 let qualified_label l =
-  let h =  match l.law with
+  let h = match l.law with
   | h::_ -> [h]
   | [] -> []
-  in {l with law = h; title = []; chapter = []; section = []; }
+  in { l with law = h; title = []; chapter = []; section = []; }
 
 let lowest_level = function
-  | { rule_id = Some r; _ } -> LRule r
-  | { subpoint = levels;  _ } when List.length levels > 0 -> LSection (Subpoint (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { point = levels;  _ } when List.length levels > 0 -> LSection (Point (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { paragraph = levels;  _ } when List.length levels > 0 -> LSection (Paragraph (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { article = levels;  _ } when List.length levels > 0 -> LSection (Article (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { section = levels;  _ } when List.length levels > 0 -> LSection (Section (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { chapter = levels;  _ } when List.length levels > 0 -> LSection (Chapter (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { title = levels;  _ } when List.length levels > 0 -> LSection (Title (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
-  | { law = levels;  _ } when List.length levels > 0 -> LSection (Law (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { rule_id   = Some r; _ } -> LRule r
+  | { subpoint  = levels;  _ } when List.length levels > 0 ->
+     LSection (Subpoint  (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { point     = levels;  _ } when List.length levels > 0 ->
+     LSection (Point     (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { paragraph = levels;  _ } when List.length levels > 0 ->
+     LSection (Paragraph (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { article   = levels;  _ } when List.length levels > 0 ->
+     LSection (Article   (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { section   = levels;  _ } when List.length levels > 0 ->
+     LSection (Section   (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { chapter   = levels;  _ } when List.length levels > 0 ->
+     LSection (Chapter   (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { title     = levels;  _ } when List.length levels > 0 ->
+     LSection (Title     (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
+  | { law       = levels;  _ } when List.length levels > 0 ->
+     LSection (Law       (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
   | _ -> LNone
 
 let combine_with_previous = function
-  | Law i, Law j -> Law (i+j)
-  | Title i, Title j -> Title (i+j)
-  | Chapter i, Chapter j -> Chapter (i+j)
-  | Section i, Section j -> Section (i+j)
-  | Article i, Article j -> Article (i+j)
+  | Law       i, Law       j -> Law (i+j)
+  | Title     i, Title     j -> Title (i+j)
+  | Chapter   i, Chapter   j -> Chapter (i+j)
+  | Section   i, Section   j -> Section (i+j)
+  | Article   i, Article   j -> Article (i+j)
   | Paragraph i, Paragraph j -> Paragraph (i+j)
-  | Point i, Point j -> Point (i+j)
-  | Subpoint i, Subpoint j -> Subpoint (i+j)
-  | cur, _ -> cur
+  | Point     i, Point     j -> Point (i+j)
+  | Subpoint  i, Subpoint  j -> Subpoint (i+j)
+  | cur        , _           -> cur
 
 let highest_level ?(previous_sk=Law 0) = function
-  | { law = (l,_)::_; _ } -> LSection (combine_with_previous (Law 0, previous_sk), l)
-  | { title = (l,_)::_; _ } -> LSection (combine_with_previous (Title 0, previous_sk), l)
-  | { chapter = (l,_)::_; _ } -> LSection (combine_with_previous (Chapter 0, previous_sk), l)
-  | { section = (l,_)::_; _ } -> LSection (combine_with_previous (Section 0, previous_sk), l)
-  | { article = (l,_)::_; _ } -> LSection (combine_with_previous (Article 0, previous_sk), l)
-  | { paragraph = (l,_)::_; _ } -> LSection (combine_with_previous (Paragraph 0, previous_sk), l)
-  | { point = (l,_)::_; _ } -> LSection (combine_with_previous (Point 0, previous_sk), l)
-  | { subpoint = (l,_)::_; _ } -> LSection (combine_with_previous (Subpoint 0, previous_sk), l)
-  | { rule_id = Some r; _ } -> LRule r
+  | { law       = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Law 0, previous_sk), l)
+  | { title     = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Title 0, previous_sk), l)
+  | { chapter   = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Chapter 0, previous_sk), l)
+  | { section   = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Section 0, previous_sk), l)
+  | { article   = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Article 0, previous_sk), l)
+  | { paragraph = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Paragraph 0, previous_sk), l)
+  | { point     = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Point 0, previous_sk), l)
+  | { subpoint  = (l,_)::_; _ } ->
+     LSection (combine_with_previous (Subpoint 0, previous_sk), l)
+  | { rule_id   = Some r; _ } ->
+     LRule r
   | _ -> LNone
 
 let remove_highest_level = function
-  | { law = _::ls; _ } as t -> { t with law = ls }
-  | { title = _::ls; _ } as t-> { t with title = ls }
-  | { chapter = _::ls; _ } as t-> { t with chapter = ls }
-  | { section = _::ls; _ } as t-> { t with section = ls }
-  | { article = _::ls; _ } as t-> { t with article = ls }
-  | { paragraph = _::ls; _ } as t-> { t with paragraph = ls }
-  | { point = _::ls; _ } as t-> { t with point = ls }
-  | { subpoint = _::ls; _ } as t-> { t with subpoint = ls }
-  | { rule_id = Some _; _ } as t-> { t with rule_id = None } (* not strictly necessary, will be the same as the empty case in the pattern matching *)
+  | { law       = _::ls;  _ } as t -> { t with law       = ls   }
+  | { title     = _::ls;  _ } as t -> { t with title     = ls   }
+  | { chapter   = _::ls;  _ } as t -> { t with chapter   = ls   }
+  | { section   = _::ls;  _ } as t -> { t with section   = ls   }
+  | { article   = _::ls;  _ } as t -> { t with article   = ls   }
+  | { paragraph = _::ls;  _ } as t -> { t with paragraph = ls   }
+  | { point     = _::ls;  _ } as t -> { t with point     = ls   }
+  | { subpoint  = _::ls;  _ } as t -> { t with subpoint  = ls   }
+  | { rule_id   = Some _; _ } as t -> { t with rule_id   = None } (* not strictly necessary, will be the same as the empty case in the pattern matching *)
   | _ -> empty
 
 let valid_rule_label pos = function
@@ -109,20 +133,29 @@ let valid_rule_label pos = function
   | { article = []; _ } -> Errors.label_error "No 'article section defined (yet). A rule must be inside of an 'article' section" pos
   | _ -> ()
 
-let set pos section_kind label_name l = try match section_kind with
-    | Law i       -> {            law       = Util.take l.law i @ [label_name];       rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
-    | Title i     -> { l     with title     = Util.take l.title i @ [label_name];     rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
-    | Chapter i   -> { l     with chapter   = Util.take l.chapter i @ [label_name];   rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []}
-    | Section i   -> { l     with section   = Util.take l.section i @ [label_name];   rule_id = None; subpoint = []; point = []; paragraph = []; article = []}
-    | Article i   -> { l     with article   = Util.take l.article i @ [label_name];   rule_id = None; subpoint = []; point = []; paragraph = []}
-    | Paragraph i -> { l     with paragraph = Util.take l.paragraph i @ [label_name]; rule_id = None; subpoint = []; point = []}
-    | Point i     -> { l     with point     = Util.take l.point i @ [label_name];     rule_id = None; subpoint = []}
-    | Subpoint i  -> { l     with subpoint  = Util.take l.subpoint i @ [label_name];  rule_id = None;}
+let set pos section_kind label_name l =
+  try match section_kind with
+      | Law i       ->
+         {            law       = Util.take l.law i       @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
+      | Title i     ->
+         { l     with title     = Util.take l.title i     @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
+      | Chapter i   ->
+         { l     with chapter   = Util.take l.chapter i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []}
+      | Section i   ->
+         { l     with section   = Util.take l.section i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []}
+      | Article i   ->
+         { l     with article   = Util.take l.article i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []}
+      | Paragraph i ->
+         { l     with paragraph = Util.take l.paragraph i @ [label_name]; rule_id = None; subpoint = []; point = []}
+      | Point i     ->
+         { l     with point     = Util.take l.point i     @ [label_name]; rule_id = None; subpoint = []}
+      | Subpoint i  ->
+         { l     with subpoint  = Util.take l.subpoint i  @ [label_name]; rule_id = None;}
   with
-    | Invalid_argument idx ->
-      (* TODO: give more complete error message with a string representation of the entire label *)
-      let err_msg = Printf.sprintf "wrong sub-level index '%s' in '%s'" idx (string_of_section_kind section_kind) in
-      Errors.label_error err_msg pos
+  | Invalid_argument idx ->
+     (* TODO: give more complete error message with a string representation of the entire label *)
+     let err_msg = Printf.sprintf "wrong sub-level index '%s' in '%s'" idx (string_of_section_kind section_kind) in
+     Errors.label_error err_msg pos
 
 let set_rule_id rule_id l = { l with rule_id = rule_id }
 
@@ -130,38 +163,38 @@ let set_rule_id_force rule_id l = match rule_id with
   | Some _ -> { l with rule_id = rule_id }
   | _      -> { l with rule_id = Some "" }
 
-let reference_of_label label =
+let reference_of_label label pos =
   let rec aux sk ls = match sk, ls with
-  | _, [] -> []
-  | Law i, [(n,_)] -> [(Law i, n)]
-  | Law i, (n,_)::rest -> (Law i, n) :: aux (Law (i+1)) rest
-  | Title i, [(n,_)] -> [(Title i, n)]
-  | Title i, (n,_)::rest -> (Title i, n) :: aux (Title (i+1)) rest
-  | Chapter i, [(n,_)] -> [(Chapter i, n)]
-  | Chapter i, (n,_)::rest -> (Chapter i, n) :: aux (Chapter (i+1)) rest
-  | Section i, [(n,_)] -> [(Section i, n)]
-  | Section i, (n,_)::rest -> (Section i, n) :: aux (Section (i+1)) rest
-  | Article i, [(n,_)] -> [(Article i, n)]
-  | Article i, (n,_)::rest -> (Article i, n) :: aux (Article (i+1)) rest
-  | Paragraph i, [(n,_)] -> [(Paragraph i, n)]
+  | _          , [] -> []
+  | Law       i, [(n,_)]     -> [(Law i, n)]
+  | Law       i, (n,_)::rest -> (Law i, n) :: aux (Law (i+1)) rest
+  | Title     i, [(n,_)]     -> [(Title i, n)]
+  | Title     i, (n,_)::rest -> (Title i, n) :: aux (Title (i+1)) rest
+  | Chapter   i, [(n,_)]     -> [(Chapter i, n)]
+  | Chapter   i, (n,_)::rest -> (Chapter i, n) :: aux (Chapter (i+1)) rest
+  | Section   i, [(n,_)]     -> [(Section i, n)]
+  | Section   i, (n,_)::rest -> (Section i, n) :: aux (Section (i+1)) rest
+  | Article   i, [(n,_)]     -> [(Article i, n)]
+  | Article   i, (n,_)::rest -> (Article i, n) :: aux (Article (i+1)) rest
+  | Paragraph i, [(n,_)]     -> [(Paragraph i, n)]
   | Paragraph i, (n,_)::rest -> (Paragraph i, n) :: aux (Paragraph (i+1)) rest
-  | Point i, [(n,_)] -> [(Point i, n)]
-  | Point i, (n,_)::rest -> (Point i, n) :: aux (Point (i+1)) rest
-  | Subpoint i, [(n,_)] -> [(Subpoint i, n)]
-  | Subpoint i, (n,_)::rest -> (Subpoint i, n) :: aux (Subpoint (i+1)) rest
+  | Point     i, [(n,_)]     -> [(Point i, n)]
+  | Point     i, (n,_)::rest -> (Point i, n) :: aux (Point (i+1)) rest
+  | Subpoint  i, [(n,_)]     -> [(Subpoint i, n)]
+  | Subpoint  i, (n,_)::rest -> (Subpoint i, n) :: aux (Subpoint (i+1)) rest
   in
-  let law = aux (Law 0) label.law in
-  let title = aux (Title 0) label.title in
-  let chapter = aux (Chapter 0) label.chapter in
-  let section = aux (Section 0) label.section in
-  let article = aux (Article 0) label.article in
+  let law       = aux (Law       0) label.law in
+  let title     = aux (Title     0) label.title in
+  let chapter   = aux (Chapter   0) label.chapter in
+  let section   = aux (Section   0) label.section in
+  let article   = aux (Article   0) label.article in
   let paragraph = aux (Paragraph 0) label.paragraph in
-  let point = aux (Point 0) label.point in
-  let subpoint = aux (Subpoint 0) label.subpoint in
-  let levels = List.rev (List.concat (List.map ~f:List.rev [subpoint; point; paragraph; article; section; chapter; title; law])) in
-  {sks=levels; rule=label.rule_id}
+  let point     = aux (Point     0) label.point in
+  let subpoint  = aux (Subpoint  0) label.subpoint in
+  let levels    = List.rev (List.concat_map ~f:List.rev [subpoint; point; paragraph; article; section; chapter; title; law]) in
+  Ref.{ sks = levels; rule = label.rule_id; pos }
 
-let string_of_label l = string_of_reference (reference_of_label l)
+let string_of_label l = Ref.to_string (reference_of_label l LexingInfo.dummy)
 
 let qualified_name_of_law ?(exn=false) = function
   | [] -> begin match exn with
@@ -178,7 +211,8 @@ let rec qualified_name_of_level = function
   | [] -> ""
   | (name, _) :: xs -> "(" ^ name ^ ")" ^ qualified_name_of_level xs
 
-let qualified_name_of_level_simple xs = String.concat ~sep:"_" (List.map ~f:fst xs)
+let qualified_name_of_level_simple xs =
+  String.concat ~sep:"_" (List.map ~f:fst xs)
 
 let qualified_filters_of_level kind_fun xs =
   List.mapi xs ~f:(fun i (name, _) -> (kind_fun i, name))
@@ -225,7 +259,7 @@ let id_of_sks sks =
   String.concat ~sep:"-" (List.map sks ~f)
   
 let reference_id l =
-  let ref = reference_of_label l in
+  let ref = reference_of_label l LexingInfo.dummy in
   id_of_sks ref.sks ^ string_of_rule_id3 ref.rule
 
 let doc_id l =
@@ -251,7 +285,8 @@ let full_filters l =
   @ (qualified_filters_of_level (fun i -> Subpoint i) l.subpoint)
 
 module Location = struct
-  type t = ident * int * ident
+  
+  type t = ident * int * ident [@@deriving compare]
 
   let compare l1 l2 = match l1, l2 with
   | (sk1, i1, n1), (sk2, i2, n2) when String.equal sk1 sk2 && i1 = i2 -> String.compare n1 n2
@@ -264,20 +299,21 @@ module Location = struct
   let t_of_loc = function
   | LSection (sk, n) -> 
     begin match sk with
-    | Law i       -> ("law", i, n)
-    | Title i     -> ("title", i, n)
-    | Chapter i   -> ("chapter", i, n)
-    | Section i   -> ("section", i, n)
-    | Article i   -> ("article", i, n)
+    | Law i       -> ("law"      , i, n)
+    | Title i     -> ("title"    , i, n)
+    | Chapter i   -> ("chapter"  , i, n)
+    | Section i   -> ("section"  , i, n)
+    | Article i   -> ("article"  , i, n)
     | Paragraph i -> ("paragraph", i, n)
-    | Point i     -> ("point", i, n)
-    | Subpoint i  -> ("subpoint", i, n)
+    | Point i     -> ("point"    , i, n)
+    | Subpoint i  -> ("subpoint" , i, n)
     end
   | LRule _ | LNone -> assert false
 
   let string_of_t (s,i,n) = match i with
   | 0 -> s ^ " " ^ "\"" ^ n ^ "\""
   | _ -> s ^ "[" ^ string_of_int i ^ "] " ^ "\"" ^ n ^ "\""
+  
 end
 
 module LocationMap = Map.Make(Location)
@@ -315,7 +351,7 @@ module RuleTree = struct
            
 
   type rtref_expr = { label: t;
-                      ref: Lex.reference;
+                      ref: Ref.t;
                       pos: LexingInfo.t }
 
   type s = 
@@ -521,7 +557,7 @@ module RuleTree = struct
   let add_section pos label s =
     { s with tree = insert_section_in_tree pos s.tree label }
 
-  let string_of_rule_idx s i = string_of_reference (reference_of_label (fst (Map.find_exn s.label_of_rule i)))
+  let string_of_rule_idx s i = Ref.to_string (reference_of_label (fst (Map.find_exn s.label_of_rule i)) LexingInfo.dummy)
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx (refs: rtref_expr list) s =
     debug (level_tree_to_string s.tree);

@@ -1,14 +1,16 @@
 open Core
 open Lex_lib
 
+module Time = MFOTL_lib.Time
+
 (* TODO: introduce the upper bound `b` as a command line paramter - analogous to WhyEnf *)
 let loop filename mode f o b () =
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
   let filepath = Filename.dirname filename
   and basename = Filename.basename filename in
   let b = match b with (* TODO: does this way of extracting an upper bound b make sense? *)
-    | None -> Interval.C Lextime.Span.zero
-    | Some b -> Interval.C (Lextime.Span.of_value_with_unit b LexingInfo.dummy "s") in
+    | None -> Time.Span.zero
+    | Some b -> Time.Span.of_string b in
 
   match mode with
   | None | Some "mfotl" -> begin
@@ -43,7 +45,7 @@ let () =
                   +> flag "-mode" (optional string) ~doc:"mode options: mfotl (default), doc, template"
                   +> flag "-f" (optional string) ~doc:"input format options: formex (default), akomaNtoso"
                   +> flag "-o" (optional string) ~doc:"output file"
-                  +> flag "-b" (optional int) ~doc:"upper bound for the time interval"
+                  +> flag "-b" (optional string) ~doc:"upper bound for the time interval"
                   )
     loop
   |> Command_unix.run
