@@ -252,17 +252,17 @@ functional_event_type:
 
 pol:
   | TCAUSABLE
-    { Some $1,         Enftype.tcau }
+    { Some $1,         Enftype.caubot }
   | TSUPPRESSABLE
-    { Some $1,         Enftype.tsup }
+    { Some $1,         Enftype.sup }
   | TOBSERVABLE
     { Some $1,         Enftype.obs }
   | TINTERNAL
     { Some $1,         Enftype.itl }
   | TCAUSABLE     TOBSERVABLE
-    { Some ($1 +> $2), Enftype.tcau }
+    { Some ($1 +> $2), Enftype.cau }
   | TOBSERVABLE   TCAUSABLE
-    { Some ($1 +> $2), Enftype.tcau }
+    { Some ($1 +> $2), Enftype.cau }
   | TCAUSABLE     TSUPPRESSABLE
     { Some ($1 +> $2), Enftype.causup }
   | TSUPPRESSABLE TCAUSABLE

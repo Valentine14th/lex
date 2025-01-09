@@ -37,8 +37,8 @@ let compile_tt = function
   | TStr -> TStr
   | TFloat -> TFloat
   | TBool -> TInt
-  | TTime -> TFloat
-  | TSpan -> TFloat
+  | TTime -> TInt
+  | TSpan -> TInt
   | TMoney _ -> TInt
 
 let compile_dom = function
@@ -130,9 +130,16 @@ let compile_eformulas ~f fs = f fs
 let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.cau) ~f (epf: Pattern.t): Eformula.t =
   compile_epattern ~use_pattern_for_enf ~only_pattern ~enftype (compile_eformulas ~f epf.fs) epf.patt
 
+let sup_conj_ex_neg_and_scope side cpf f ex_neg sc =
+  let ex_neg_and_scope = ex_neg @ sc in
+  if not (List.is_empty ex_neg_and_scope) then
+    make (conjs side [cpf; f ex_neg sc]) { I.dummy with enftype = Enftype.suppressable }
+  else
+    cpf
+
 let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Enftype.t) pf ex sc =
-  match enftype with
-  | _ when Enftype.is_causable enftype ->
+  match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
+  | true, _ ->
     let enf_cau = Option.value_exn cau_constr in
     begin match enf_cau with
     | EClhsAll enf_pformula_cau ->
@@ -144,39 +151,38 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Enftype.t) pf ex
       end in
       tbigcauconj (f :: ex_neg @ sc)
     end
-  | _ when Enftype.is_suppressable enftype ->
+  | _, true ->
     let enf_sup = Option.value_exn sup_constr in
     begin match enf_sup with
     | ESlhsSPformula enf_pformula_sup ->
       begin match enf_pformula_sup with
       | ESpfFormula i ->
-        let cpf = compile_epformula ~enftype:Enftype.sup ~f:(tbigsupconj i) pf in (* this is used for enforcement *)
+        let cpf = compile_epformula ~enftype:Enftype.suppressable ~f:(tbigsupconj i) pf in (* this is used for enforcement *)
         let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
-        let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
-        make (conjs L [cpf; ex_neg_and_scope]) { I.dummy with enftype = Enftype.sup }
+        sup_conj_ex_neg_and_scope L cpf (fun ex_neg sc -> tbignonconj (ex_neg @ sc)) ex_neg sc
       | ESpfPformula i ->
         let cpf = compile_epformula ~use_pattern_for_enf:true ~f:(tbigsupconj i) pf in
-        let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.sup }) in
-        let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in
-        make (conjs L [cpf; ex_neg_and_scope]) { I.dummy with enftype = Enftype.sup }
+        let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.suppressable }) in
+        sup_conj_ex_neg_and_scope L cpf (fun ex_neg sc -> tbignonconj (ex_neg @ sc)) ex_neg sc 
       | ESpfPattern ->
         let cpf = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf in
-        let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.sup }) in
-        let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in
-        make (conjs L [cpf; ex_neg_and_scope]) { I.dummy with enftype = Enftype.sup }
+        let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.suppressable }) in
+        sup_conj_ex_neg_and_scope L cpf (fun ex_neg sc -> tbignonconj (ex_neg @ sc)) ex_neg sc
       end
     | ESlhsCException i ->
       let cpf = compile_epformula ~f:tbignonconj pf in
-      let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.sup }) in
-      let ex_neg_sup = tbigsupconj i ex_neg in
-      let ex_neg_and_scope = make (conjs L (ex_neg_sup::sc)) { I.dummy with enftype = Enftype.sup } in
-      make (conjs R [cpf; ex_neg_and_scope]) { I.dummy with enftype = Enftype.sup }
+      let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.suppressable }) in
+      sup_conj_ex_neg_and_scope R cpf
+        (fun ex_neg sc -> let ex_neg_sup = tbigsupconj i ex_neg in
+                          make (conjs L (ex_neg_sup::sc)) { I.dummy with enftype = Enftype.suppressable })
+          ex_neg sc
     | ESlhsSScope i ->
       let cpf = compile_epformula ~f:tbignonconj pf in
-      let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.sup }) in
-      let sc_sup = tbigsupconj i sc in
-      let ex_neg_and_scope = make (conjs L (sc_sup::ex_neg)) { I.dummy with enftype = Enftype.sup } in
-      make (conjs R [cpf; ex_neg_and_scope]) { I.dummy with enftype = Enftype.sup }
+      let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos; enftype = Enftype.suppressable }) in
+      sup_conj_ex_neg_and_scope R cpf
+        (fun ex_neg sc -> let sc_sup = tbigsupconj i sc in
+                          make (conjs L (sc_sup::ex_neg)) { I.dummy with enftype = Enftype.suppressable })
+          ex_neg sc
     end
   (* TODO: how to handle other cases (if at all) ? *)
   | _ -> assert false
@@ -209,29 +215,28 @@ let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) (enftype: Enftype.t)
     | ETerm.Var v -> v
     | _ -> assert false) in
   let renaming = List.zip_exn param_names ed.params_original in
-  match enftype with
-  | _ when Enftype.is_causable enftype ->
+  match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
+  | true, _ -> 
     let c = Option.value_exn cau_constr in
-    let compiled = compile_lhs ~cau_constr:(Some c) Enftype.cau ed.pf ed.exceptions ed.scopes in
+    let compiled = compile_lhs ~cau_constr:(Some c) Enftype.causable ed.pf ed.exceptions ed.scopes in
     { compiled with info = { compiled.info with variable_instantiations = renaming } }
-  | _ when Enftype.is_suppressable enftype  ->
+  | _, true ->
     let c = Option.value_exn sup_constr in
-    let compiled = compile_lhs ~sup_constr:(Some c) Enftype.sup ed.pf ed.exceptions ed.scopes in
+    let compiled = compile_lhs ~sup_constr:(Some c) Enftype.suppressable ed.pf ed.exceptions ed.scopes in
     { compiled with info = { compiled.info with variable_instantiations = renaming } }
-  | _ when Enftype.is_only_observable enftype ->
+  | _  ->
     let ex_neg = List.map ed.exceptions ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
     let compiled = tbignonconj (compile_epformula ~f:(tbignonconj) ed.pf :: ex_neg @ ed.scopes) in
     { compiled with info = { compiled.info with variable_instantiations = renaming } }
-  | _ -> assert false
 
 let compile_let_rule = function
-  | ECDefinition (_, _, _, pf, ex, sc, _, g, enf_constr) ->
+  | ECDefinitionRef (_, _, _, pf, ex, sc, _, g, enf_constr) ->
     begin match enf_constr with
     | Some (ESd enf_sup_lhs) ->
-      let f = compile_lhs ~sup_constr:(Some enf_sup_lhs) Enftype.sup pf ex sc in
+      let f = compile_lhs ~sup_constr:(Some enf_sup_lhs) Enftype.suppressable pf ex sc in
       compile_let_binding ~quantifier:false f g
     | Some (ECd enf_cau_lhs) ->
-      let f = compile_lhs ~cau_constr:(Some enf_cau_lhs) Enftype.cau pf ex sc in
+      let f = compile_lhs ~cau_constr:(Some enf_cau_lhs) Enftype.causable pf ex sc in
       compile_let_binding ~quantifier:false f g
     | None ->
       let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
@@ -244,7 +249,7 @@ let compile_let_rule = function
     | Some (ECdd (idx, enf_cau_lhs)) -> 
       let rhs_list =
         let aux ~key:j ~data:d =
-          if idx = j then compile_edisjunct ~cau_constr:(Some enf_cau_lhs) Enftype.cau d
+          if idx = j then compile_edisjunct ~cau_constr:(Some enf_cau_lhs) Enftype.causable d
           else compile_edisjunct Enftype.bot d
         in
         Map.mapi edisjuncts ~f:aux |> Map.data
@@ -253,7 +258,7 @@ let compile_let_rule = function
       compile_let_binding rhs g
     | Some (ESdd enf_sup_lhs_list) ->
       let rhs = tbignondisj (List.map2_exn (Map.data edisjuncts) enf_sup_lhs_list
-        ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) Enftype.sup d)) in
+        ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) Enftype.suppressable d)) in
       compile_let_binding rhs g
     | None ->
       let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct Enftype.bot)))  in
@@ -264,32 +269,31 @@ let compile_let_rule = function
 let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) =
   let vars = Set.elements (Set.union (fv f1) (fv f2)) in
   make (always Interval.full
-          (tbigcauforall vars (make (imp s f1 f2) { I.dummy with enftype = Enftype.cau })))
-    { I.dummy with enftype = Enftype.cau }
+          (tbigcauforall vars (make (imp s f1 f2) { I.dummy with enftype = Enftype.causable })))
+    { I.dummy with enftype = Enftype.causable }
 
 let compile_imp_rule = function
   | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _, Some enf_info) ->
     begin match enf_info with
     | ESciLhs enf_sup ->
-      let lhs = compile_lhs ~sup_constr:(Some enf_sup) Enftype.sup pf1 ex sc in
+      let lhs = compile_lhs ~sup_constr:(Some enf_sup) Enftype.suppressable pf1 ex sc in
       let rhs = compile_epformula ~f:tbignonconj pf2 in
       compile_imp lhs rhs L
     | ECciRhs enf_cau ->
-      let cpf = compile_epformula ~f:tbignonconj pf1 in
-      let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with enftype = Enftype.sup; pos = x.info.pos }) in
-      let ex_neg_and_scope = tbignonconj (ex_neg @ sc) in (* this is not used for enforcement *)
-      let lhs = make (conjs R [cpf; ex_neg_and_scope]) { I.dummy with enftype = Enftype.sup } in
-      begin match enf_cau with
-      | ECpfFormulas ->
-        let rhs = compile_epformula ~f:tbigcauconj pf2 in
-        compile_imp lhs rhs R
-      | ECpfPformula ->
-        let rhs = compile_epformula ~use_pattern_for_enf:true ~f:tbigcauconj pf2 in
-        compile_imp lhs rhs R
-      | ECpfPattern ->
-        let rhs = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf2 in
-        compile_imp lhs rhs R
-      end
+       let cpf = compile_epformula ~f:tbignonconj pf1 in
+       let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with enftype = Enftype.suppressable; pos = x.info.pos }) in
+       let lhs = sup_conj_ex_neg_and_scope R cpf (fun ex_neg sc -> tbignonconj (ex_neg @ sc)) ex_neg sc in
+       begin match enf_cau with
+       | ECpfFormulas ->
+          let rhs = compile_epformula ~f:tbigcauconj pf2 in
+          compile_imp lhs rhs R
+       | ECpfPformula ->
+          let rhs = compile_epformula ~use_pattern_for_enf:true ~f:tbigcauconj pf2 in
+          compile_imp lhs rhs R
+       | ECpfPattern ->
+          let rhs = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf2 in
+          compile_imp lhs rhs R
+       end
     end
   | _ -> assert false
 
@@ -301,15 +305,19 @@ let rec compile_typeterm = function
                    List.concat (List.map kvs ~f)
 
 let compile_eval_default aliases typeterm =
-  compile_typeterm (
-      TypeTerm.eval_default aliases (TypeTerm.TypeConst TInt) typeterm)
+  List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
+    (compile_typeterm (
+      TypeTerm.eval_default aliases (TypeTerm.TypeConst TInt) typeterm))
 
 let compile_events pols events aliases =
-  let event_list = Map.to_alist events in
+  let f (_, (_, _, enftype, _)) = not (Enftype.is_internal enftype) in
+  let event_list = List.filter ~f (Map.to_alist events) in
   let compile_event (name, (event_type, args, _, _)) =
     let type_args (name, typ_alias) =
       let terms = compile_eval_default aliases typ_alias in
-      List.map terms ~f:(Util.concat name)
+      terms |>
+        List.map ~f:(Util.concat name) |>
+        List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
     in
     let typed_args = List.concat (List.map args ~f:type_args) in
     let pol' = match Map.find pols name with
@@ -325,7 +333,9 @@ let compile_functions functions aliases =
   let compile_function (name, (typed_args, return_type, _)) =
     let type_args (name, typ_alias) =
       let terms = compile_eval_default aliases typ_alias in
-      List.map terms ~f:(Util.concat name)
+      terms |>
+        List.map ~f:(Util.concat name) |>
+        List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
     in
     let typed_args = List.concat (List.map typed_args ~f:type_args) in
     let return_type = compile_eval_default aliases return_type in
@@ -369,29 +379,29 @@ let compile_exception_or_scope_signature pols indexed_predicates aliases variabl
   List.map indexed_predicates ~f:compile_predicate
 
 let is_exception = function
-  | ECDefinition (_, TRTException, _, _, _, _, _, _, _) -> true
-  | ECDefinition (_, TRTExceptionC, _, _, _, _, _, _, _) -> true
+  | ECDefinitionRef (_, TRTException, _, _, _, _, _, _, _) -> true
+  | ECDefinitionRef (_, TRTExceptionC, _, _, _, _, _, _, _) -> true
   | _ -> false
 
 let is_scope = function
-  | ECDefinition (_, TRTScope, _, _, _, _, _, _, _) -> true
+  | ECDefinitionRef (_, TRTScope, _, _, _, _, _, _, _) -> true
   | _ -> false
 
 let predicate_from_definition = function
-  | ECDefinition (idx, _, _, _, _, _, _, g, _) -> (idx, g)
+  | ECDefinitionRef (idx, _, _, _, _, _, _, g, _) -> (idx, g)
   | _ -> assert false
 
-let compile_signature pols events functions aliases variables let_rules =
+let compile_signature pols events functions aliases _ _ =
   let event_signatures = compile_events pols events aliases in
   let function_signatures = compile_functions functions aliases in
-  let exceptions = List.filter let_rules ~f:is_exception |> List.map ~f:predicate_from_definition in
-  let scopes = List.filter let_rules ~f:is_scope |> List.map ~f:predicate_from_definition in
-  let exception_signatures = compile_exception_or_scope_signature pols exceptions aliases variables in
-  let scope_signatures = compile_exception_or_scope_signature pols scopes aliases variables in
-  List.concat [event_signatures; function_signatures; exception_signatures; scope_signatures]
+  (*let exceptions = List.filter let_rules ~f:is_exception |> List.map ~f:predicate_from_definition in
+  let scopes = List.filter let_rules ~f:is_scope |> List.map ~f:predicate_from_definition in*)
+  (*let exception_signatures = compile_exception_or_scope_signature pols exceptions aliases variables in
+  let scope_signatures = compile_exception_or_scope_signature pols scopes aliases variables in*)
+  List.concat [event_signatures; function_signatures] (*; exception_signatures; scope_signatures]*)
 
 let is_let_rule = function
-  | ECDefinition _
+  | ECDefinitionRef _
   | ECDefinitionDis _ -> true
   | _ -> false
 
@@ -416,7 +426,4 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
   let phi = tbigcauconj formulae in
   let signature = compile_signature eprog.pols eprog.eevents eprog.efunctions eprog.ealiases
                     eprog.variables let_rules in
-  { signature = signature;
-    let_bindings = let_bindings;
-    phi = phi
-  }
+  { signature; let_bindings; phi }

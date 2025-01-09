@@ -77,7 +77,7 @@ module Pattern = Pattern.Make(Formula.Info)(Formula.StringVar)(Dom)(Term)
 
 (* Rule declarations *)
 
-type rule_type = Vanilla | Enforceable | Transparent
+type rule_type = Vanilla | Enforceable | Transparent [@@deriving equal]
 
 type rule_constr_kind =
   | CConditions

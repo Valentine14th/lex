@@ -90,4 +90,4 @@ let tabs i = String.make (i*4) ' '
 let sanitize_string n =
   String.map n ~f:(function ' ' | '[' | ']' | '.' -> '-' | c -> c)
 
-let concat k (k', v) = (k ^ "__" ^ k', v)
+let concat k (k', v) = ((if String.is_empty k' then k else k ^ "__" ^ k'), v)

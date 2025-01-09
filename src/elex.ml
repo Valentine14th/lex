@@ -95,7 +95,7 @@ type enf_ecdefinition_dis =
 
 type ecrule =
   | ECImplication   of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Pattern.t * rule_type * rule_constr list * enf_ecimplication option
-  | ECDefinition    of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Ref.t list * Eformula.t * enf_ecdefinition option
+  | ECDefinitionRef of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Ref.t list * Eformula.t * enf_ecdefinition option
   | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * enf_ecdefinition_dis option
 
 (* Statements and programs *)
@@ -119,6 +119,7 @@ type eprog =
     eevents:           (ident, tevent, Base.String.comparator_witness) Map.t;
                        (* maps event names to their definitions *)
     efunctions:        (ident, tfunction, Base.String.comparator_witness) Map.t;
+                       (* maps function names to their definitions *)
     variables:         (int, var_types, Int.comparator_witness) Map.t;
                        (* maps rule labels to variables used in section *)
     rule_tree:         Label.RuleTree.s;
@@ -195,14 +196,14 @@ let get_constitutive_params ecrules = function
 let get_exception_params ecrules = function
   | EException (_, c_idx) ->
     (match Map.find_exn ecrules c_idx with
-      | ECDefinition (_, _, _, pf, _, _,  erefs, _, _) -> (pf, erefs)
+     | ECDefinitionRef (_, _, _, pf, _, _,  erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
 let get_scope_params ecrules = function
   | EScope (_, c_idx) ->
     (match Map.find_exn ecrules c_idx with
-      | ECDefinition (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
+      | ECDefinitionRef (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
@@ -211,7 +212,7 @@ let get_exceptionc_params ecrules = function
     let c_rule_ex = Map.find_exn ecrules c_idx_ex in
     let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn ecrules c_idx) in
     let pf, erefs = (match c_rule_ex with
-      | ECDefinition (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
+      | ECDefinitionRef (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
       | _ -> assert false)
     in (* TODO: check that f is the same collection of formulas as in the constitutive rules, and don't just assume so *)
     let g = List.map c_rules ~f:(fun r -> match r with

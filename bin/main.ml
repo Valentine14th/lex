@@ -15,12 +15,12 @@ let loop filename mode f o b () =
   match mode with
   | None | Some "mfotl" -> begin
       let eprog = Modules.do_type [lexpath] b filepath basename in
-      (* Util.debug_print ~f_name:(Some "main.ml/loop") "Parsed and typed:\n"; *)
-      (* if !Util.debug then Elex.print_eprog eprog; *)
-      print_endline "Compiled:\n";
       let cprog = Compiler.compile eprog in
-      print_endline (Clex.to_string cprog)
-      (* compile correctly typed program *)
+      match o with
+      | None -> print_endline (Clex.to_string cprog)
+      | Some out_fn -> let sig_fn = out_fn ^ ".sig" in
+                       let formula_fn = out_fn ^ ".mfotl" in
+                       Clex.to_files cprog sig_fn formula_fn
     end
   | Some "doc" -> begin
       let eprog = Modules.do_type [lexpath] b filepath basename in

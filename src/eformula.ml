@@ -63,7 +63,7 @@ let rec max_id_core (f : t) = match f.form with
     | Predicate _ -> 0
   | Predicate' (_, _, f)
     | Let (_, _, _, _, f)
-    | Let' (_, _, _, f)
+    | Let' (_, _, _, _, f)
     | Agg (_, _, _, _, f)
     | Top (_, _, _, _, f)
     | Neg f
@@ -163,7 +163,7 @@ let rec core_of_tformula ?id:(id=1) d =
   | Predicate (e, t) -> Predicate (e, t), None
   | Predicate' (s, trms, f) -> Predicate' (s, trms, lof_formula f), None
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, lof_formula f, rof_formula g), None
-  | Let' (s, vars, f, g) -> Let' (s, vars, lof_formula f, rof_formula g), None
+  | Let' (s, ty_opt, vars, f, g) -> Let' (s, ty_opt, vars, lof_formula f, rof_formula g), None
   | Agg (s, op, x, y, f) -> Agg (s, op, x, y, lof_formula f), None
   | Top (s, op, x, y, f) -> Top (s, op, x, y, lof_formula f), None
   | Neg f -> Neg (lof_formula f), None
@@ -207,7 +207,7 @@ let rec core_of_typed_tformula ?id:(id=1) d =
   | Predicate (e, t) -> Predicate (e, t), None
   | Predicate' (s, trms, f) -> Predicate' (s, trms, lof_formula f), None
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, lof_formula f, rof_formula g), None
-  | Let' (s, vars, f, g) -> Let' (s, vars, lof_formula f, rof_formula g), None
+  | Let' (s, ty_opt, vars, f, g) -> Let' (s, ty_opt, vars, lof_formula f, rof_formula g), None
   | Agg (s, op, x, y, f) -> Agg (s, op, x, y, lof_formula f), None
   | Top (s, op, x, y, f) -> Top (s, op, x, y, lof_formula f), None
   | Neg f -> Neg (lof_formula f), None
@@ -254,7 +254,7 @@ and to_formula_core: core_t -> Formula.core_t = function
   | Predicate (e, trms) -> Predicate (e, List.map trms ~f:ETerm.to_term)
   | Predicate' (e, trms, f) -> Predicate' (e, List.map trms ~f:ETerm.to_term, to_formula f)
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, to_formula f, to_formula g)
-  | Let' (s, vars, f, g) -> Let' (s, vars, to_formula f, to_formula g)
+  | Let' (s, ty_opt, vars, f, g) -> Let' (s, ty_opt, vars, to_formula f, to_formula g)
   | Agg (s, op, x, y, f) -> Agg (s, op, ETerm.to_term x, y, to_formula f)
   | Top (s, op, x, y, f) -> Top (s, op, List.map ~f:ETerm.to_term x, y, to_formula f)
   | Neg f -> Neg (to_formula f)

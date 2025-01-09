@@ -23,8 +23,8 @@ let label_error (msg: string) (pos: LexingInfo.t) =
   eprintf "Label error at %s: %s\n" (LexingInfo.to_string pos) msg; exit (-1)
 
 let enf_error (msg: string) (pos: LexingInfo.t option) = match pos with
-  | Some pos -> eprintf "Enforcement error at %s: %s\n" (LexingInfo.to_string pos) msg; exit (-1)
-  | None -> eprintf "Enforcement error: %s\n" msg; exit (-1)
+  | Some pos -> eprintf "Enforceability error at %s: %s\n" (LexingInfo.to_string pos) msg; exit (-1)
+  | None -> eprintf "Enforceablity error: %s\n" msg; exit (-1)
 
 let reference_error (msg: string) (pos: LexingInfo.t) =
   eprintf "Reference error at %s: %s\n" (LexingInfo.to_string pos) msg; exit(-1)

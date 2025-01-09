@@ -6,6 +6,9 @@ module Zinterval = MFOTL_lib.Zinterval
 module Enftype = MFOTL_lib.Enftype
 module Term = MFOTL_lib.Term
 
+let debug_pattern = ref false
+let debug msg = if !debug_pattern then Errors.debug_print ~f_name:(Some "pattern.ml") msg
+
 module type F = sig
 
   type t
@@ -36,6 +39,12 @@ module MakeSimple (Formula : F) = struct
     | POnce i         -> Printf.sprintf " once %s"                                            (Interval.to_string i)
     | PHistorically i -> Printf.sprintf " always in the past %s"                              (Interval.to_string i)
     | PSince (i, f)   -> Printf.sprintf " always since %s %s"           (Formula.to_string f) (Interval.to_string i)
+
+  let to_string pf =
+    Printf.sprintf "{p = %s; fs = [%s]}"
+      (patt_to_string pf.patt)
+      (String.concat ~sep:", " (List.map pf.fs ~f:Formula.to_string))
+
 
 end
 
@@ -124,7 +133,9 @@ module Make
          (Zinterval.sum i (Formula.relative_interval ~itl_itvs:itl_itvs g))
 
   let relative_past ?(itl_itvs=Map.empty (module String)) pf =
-    Zinterval.is_nonpositive (relative_interval ~itl_itvs pf)
+    let itv = relative_interval ~itl_itvs pf in
+    debug (Printf.sprintf "relative_interval (%s) = %s" (to_string pf) (Zinterval.to_string itv));
+    Zinterval.is_nonpositive itv
 
   let observable (module Sig : Modules.S) ?(itl_observable=Map.empty (module String)) pf =
     List.for_all (predicates pf)
@@ -137,55 +148,63 @@ module Make
         ?(itl_itvs=Map.empty (module String))
         ?(itl_strict=Map.empty (module String))
         ?(itl_observable=Map.empty (module String)) pf =
-    relative_past ~itl_itvs pf && strict ~itl_strict pf && observable (module Sig) ~itl_observable pf
+    let is_relative_past = relative_past ~itl_itvs pf in
+    let is_strict = strict ~itl_strict pf in
+    let is_observable = observable (module Sig) ~itl_observable pf in
+    debug (Printf.sprintf "strictly_relative_past (%s)" (to_string pf));
+    debug (Printf.sprintf "is_relative_past: %b" is_relative_past);
+    debug (Printf.sprintf "is_strict: %b" is_strict);
+    debug (Printf.sprintf "is_observable: %b" is_observable);
+    is_relative_past && is_strict && is_observable
 
-  let rec solve_past_guarded (module Sig : Modules.S) ?(pg_map=Map.empty (module Var)) x p (tpf: t) =
+  let rec solve_past_guarded (module Sig : Modules.S) ?(pg_map=Map.empty (module String)) x p (tpf: t) =
     let open Formula.MFOTL_Enforceability(Sig) in
-    let solve_past_guarded_multiple fs =
-      MFOTL_lib.Etc.inter_string_set_list (List.map ~f:(solve_past_guarded pg_map x p) fs)
+    let solve_past_guarded_multiple =
+      List.concat_map ~f:(solve_past_guarded pg_map x p)
+      (*MFOTL_lib.Etc.inter_string_set_list (List.map ~f:(solve_past_guarded pg_map x p) fs)*)
     in
     (* TODO: verify this, implementation follow the implementatoin of is_past_guarded *)
-    match tpf.patt with
-    | PPresent ->
-       solve_past_guarded_multiple tpf.fs
-    | POnce _
-      | PEventually _ when p ->
-       solve_past_guarded_multiple tpf.fs
-    (* TODO: is this correct, strictly following the PG rules (and translating (Eventually_I phi) to (true Until_I phi)), x would need to be PG(x)+ in the formula 'true', which would be false *)
-    (* this is ipmlemented by following the implementation of is_past_guarded *)
-    | PEventually i 
-      | POnce i when Interval.has_zero i ->
-       solve_past_guarded_multiple tpf.fs
-    | PHistorically _ 
-      | PAlways _  when not p ->
-       solve_past_guarded_multiple tpf.fs
-    | PHistorically i when Interval.has_zero i ->
-       solve_past_guarded_multiple tpf.fs
-    | PAlways _ -> []
-    | PSince (i, g) when p ->
-       (if not (Interval.has_zero i) then
-          solve_past_guarded_multiple tpf.fs
-        else
-          []) @ solve_past_guarded pg_map x p g
-    | PSince (i, g) when Interval.has_zero i ->
-       solve_past_guarded pg_map x p g
-    | PUntil (i, g) when p ->
-       (if not (Interval.has_zero i) then
-          solve_past_guarded pg_map x p g
-        else
-          []) @ solve_past_guarded_multiple (g::tpf.fs)
-    | PUntil (i, _) when Interval.has_zero i ->
-       solve_past_guarded_multiple tpf.fs
-    | _ -> []
-  and solve_past_guarded_multiple (module Sig : Modules.S) ?(pg_map=Map.empty (module Var)) x p (tpfs: t list) =
+    let r = 
+      match tpf.patt with
+      | PPresent ->
+         solve_past_guarded_multiple tpf.fs
+      | POnce _
+        | PEventually _ when p ->
+         solve_past_guarded_multiple tpf.fs
+      (* TODO: is this correct, strictly following the PG rules (and translating (Eventually_I phi) to (true Until_I phi)), x would need to be PG(x)+ in the formula 'true', which would be false *)
+      (* this is ipmlemented by following the implementation of is_past_guarded *)
+      | PEventually i 
+        | POnce i when Interval.has_zero i ->
+         solve_past_guarded_multiple tpf.fs
+      | PHistorically _ 
+        | PAlways _  when not p ->
+         solve_past_guarded_multiple tpf.fs
+      | PHistorically i when Interval.has_zero i ->
+         solve_past_guarded_multiple tpf.fs
+      | PAlways _ -> []
+      | PSince (i, g) when p ->
+         (if not (Interval.has_zero i) then
+            solve_past_guarded_multiple tpf.fs
+          else
+            []) @ solve_past_guarded pg_map x p g
+      | PSince (i, g) when Interval.has_zero i ->
+         solve_past_guarded pg_map x p g
+      | PUntil (i, g) when p ->
+         (if not (Interval.has_zero i) then
+            solve_past_guarded pg_map x p g
+          else
+            []) @ solve_past_guarded_multiple (g::tpf.fs)
+      | PUntil (i, _) when Interval.has_zero i ->
+         solve_past_guarded_multiple tpf.fs
+      | _ -> []
+    in (*Stdio.print_endline (Printf.sprintf "solve_past_guarded(%s,%s)=%s" (Var.to_string x) (to_string tpf) (MFOTL_lib.Etc.string_set_list_to_string r));*)
+       r
+    
+  and solve_past_guarded_multiple (module Sig : Modules.S) ?(pg_map=Map.empty (module String)) x p (tpfs: t list) =
     MFOTL_lib.Etc.inter_string_set_list (List.map ~f:(solve_past_guarded (module Sig) ~pg_map x p) tpfs)
     
-  let is_past_guarded (module Sig : Modules.S) ?(pg_map=Map.empty (module Var)) x p (tpf: t) =
+  let is_past_guarded (module Sig : Modules.S) ?(pg_map=Map.empty (module String)) x p (tpf: t) =
     not (List.is_empty (solve_past_guarded (module Sig) ~pg_map x p tpf))
 
-  let to_string pf =
-    Printf.sprintf "{p = %s; fs = [%s]}"
-      (patt_to_string pf.patt)
-      (String.concat ~sep:", " (List.map pf.fs ~f:Formula.to_string))
 
 end

@@ -83,7 +83,7 @@ type tdisjunct = {
 
 type tcrule =
   | TCImplication   of int * trule_type * LexingInfo.t * Pattern.t * Tformula.t list * Tformula.t list * Pattern.t * rule_type * rule_constr list
-  | TCDefinition    of int * trule_type * LexingInfo.t * Pattern.t * Tformula.t list * Tformula.t list * Ref.t list * Tformula.t
+  | TCDefinitionRef of int * trule_type * LexingInfo.t * Pattern.t * Tformula.t list * Tformula.t list * Ref.t list * Tformula.t
   | TCDefinitionDis of (int, tdisjunct, Int.comparator_witness) Map.t * Tformula.t
 
 (* Statements and programs *)
@@ -205,6 +205,7 @@ module Sig = struct
 
   let enftype_of_pred p_name =
     let _, _, enftype, _ = Map.find_exn !prog.tevents p_name in
+    (*Stdio.printf "Tlex.Sig.enftype_of_pred (%s) = %s\n" p_name (Enftype.to_string enftype);*)
     enftype
 
   let kind_of_pred p_name =
