@@ -158,7 +158,7 @@ let add_tfunction name arg_types return_type ds tprog pos =
     with _ -> Errors.type_error (Printf.sprintf "function %s already exists" name) pos
   in
   { tprog with tfunctions = functions; tstmts = TSFunction (name, arg_types, return_type, ds)::tprog.tstmts}
-
+  
 let add_exception i f (trefs: Ref.t list) tprog =
   { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f;
                rule_tree = Label.RuleTree.add_exception i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree }
@@ -211,8 +211,9 @@ module Sig = struct
   let kind_of_pred p_name =
     let event_type, _, _, _ = Map.find_exn !prog.tevents p_name in
     match event_type with
-    | Event _ -> Trace
+    | Event _  | Exception -> Trace
     | Predicate -> Predicate
+
 
   let pred_enftype_map () =
     Map.map !prog.tevents

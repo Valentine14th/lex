@@ -248,7 +248,7 @@ let create_def_rules tprog =
 let create_imp_rules tprog =
   List.filter_map tprog.tstmts ~f:(function
     | TSRule (pos, idx, _, _, trule, _) ->
-      let ex = get_exception_predicates ~negated:true tprog idx in
+      let ex = get_exception_predicates ~negated:false tprog idx in
       let sc = get_scope_predicates tprog idx in
       begin match trule with
         | TObligation (_, pf1, pf2, rt, rcs)
@@ -572,10 +572,10 @@ let type_exceptions itl_srp (pg_map: pg_map) (exceptions: Tformula.t list) enfty
   let exceptions_neg =
     List.map exceptions ~f:(
         fun f -> Tformula.make (Tformula.neg f) { Tformula.Info.dummy with pos = f.info.pos }) in
-  type_tformulas pg_map itl_srp exceptions_neg enftype (* TODO: is Cau correct here? *)
+  type_tformulas pg_map itl_srp exceptions_neg enftype
 
 let type_scopes itl_srp (pg_map: pg_map) scopes enftype : verdict =
-  type_tformulas pg_map itl_srp scopes enftype (* TODO: is Sup correct here? *)
+  type_tformulas pg_map itl_srp scopes enftype
 
 (* TODO: may be used for a later version of rule-constraints *)
 (* let combine_with_internal_events internal_events pols =
@@ -826,7 +826,7 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
             let not_srp = Util.combine_string_descriptors
                             ["scopes"; "conditions"; "effects"]
                             [srp_scopes; srp_conditions; srp_effects] in
-            Impossible (ERule ("make " ^ not_srp ^ " SRP to allow for exceptions to be transparently caused"))
+            Impossible (ERule ("make " ^ not_srp ^ " observable to allow for exceptions to be transparently caused"))
         else Impossible (ERule ("cause an exception to the rule"))
       in
       let verdict_scopes =
@@ -837,20 +837,20 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
             let not_srp = Util.combine_string_descriptors
                             ["exceptions"; "conditions"; "effects"]
                             [srp_exceptions; srp_conditions; srp_effects] in
-            Impossible (ERule ("make " ^ not_srp ^ " SRP to allow for scopes to be transparently suppressed"))
+            Impossible (ERule ("make " ^ not_srp ^ " observable to allow for scopes to be transparently suppressed"))
         else Impossible (ERule "suppress a scope of the rule")
       in
       let verdict_references = disj verdict_exceptions verdict_scopes in
       let verdict_conditions =
         if suppress_conditions then
           if srp_exceptions && srp_scopes && srp_effects then
-            type_pattern tr pos pg_map Enftype.sup pf1
+            type_pattern tr pos pg_map Enftype.suppressable pf1
             |> disj verdict_references
           else
             let not_srp = Util.combine_string_descriptors
                             ["exceptions"; "scopes"; "effects"]
                             [srp_exceptions; srp_scopes; srp_effects] in
-            Impossible (ERule ("make " ^ not_srp ^ " SRP to allow for conditions to be transparently suppressed"))
+            Impossible (ERule ("make " ^ not_srp ^ " observable to allow for conditions to be transparently suppressed"))
         else
           match suppress_indices with
           | Some indices ->
@@ -863,17 +863,17 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
                let not_srp = Util.combine_string_descriptors
                                ["unused conditions"; "exceptions"; "scopes"; "effects"]
                                [srp_conditions_unused; srp_exceptions; srp_scopes; srp_effects] in
-               Impossible (ERule ("make " ^ not_srp ^ " SRP to allow for conditions to be transparently suppressed"))
+               Impossible (ERule ("make " ^ not_srp ^ " observable to allow for conditions to be transparently suppressed"))
           | None ->
              Impossible (ERule "no conditions are marked as suppressing")
       in
       let verdict_effects =
         if cause_effects then
           if srp_exceptions && srp_scopes && srp_conditions then
-            type_pattern tr pos pg_map Enftype.cau pf2
+            type_pattern tr pos pg_map Enftype.causable pf2
           else
             let not_srp = Util.combine_string_descriptors ["exceptions"; "scopes"; "conditions"] [srp_exceptions; srp_scopes; srp_conditions] in
-            Impossible (ERule ("make " ^ not_srp ^ " SRP to allow for effects to be transparently caused"))
+            Impossible (ERule ("make " ^ not_srp ^ " observable to allow for effects to be transparently caused"))
         else Impossible (ERule "effects are not marked as causing")
       in
       let verdict_rule_implication = disj verdict_conditions verdict_effects |> conj verdict in
@@ -1077,10 +1077,10 @@ let convert enftype (f: Tformula.t) : Eformula.t =
 
 let convert_enforceable_tformulas ?(formulas_are_disjunction=false) (enftype: Enftype.t) pols (fs: Tformula.t list) : Eformula.t list * int option =
   let convert enftype f = convert enftype f in
-  match enftype, formulas_are_disjunction with
-  | _, false when Enftype.is_causable enftype -> List.map fs ~f:(convert enftype), None
-  | _, true when Enftype.is_suppressable enftype -> List.map fs ~f:(convert enftype), None
-  | _, false when Enftype.is_suppressable enftype ->
+  match Enftype.is_causable enftype, Enftype.is_suppressable enftype, formulas_are_disjunction with
+  | true, _, false -> List.map fs ~f:(convert enftype), None
+  | _, true, true -> List.map fs ~f:(convert enftype), None
+  | _, true, false ->
     let find_first_possible _ f =
       match types enftype pols f with
       | Possible _ -> true
@@ -1089,7 +1089,7 @@ let convert_enforceable_tformulas ?(formulas_are_disjunction=false) (enftype: En
     let idx = List.findi_exn ~f:find_first_possible fs |> fst in (* there must exist at least one formula which types correctly, otherwise the enforcement checking is wrong *)
     let aux i f = if i = idx then convert Enftype.suppressable f else Eformula.of_tformula f in
     List.mapi fs ~f:aux, Some idx
-  | _, true when Enftype.is_causable enftype ->
+  | true, _, true when Enftype.is_causable enftype ->
     let find_first_possible _ f =
       match types enftype pols f with
       | Possible _ -> true
@@ -1098,43 +1098,42 @@ let convert_enforceable_tformulas ?(formulas_are_disjunction=false) (enftype: En
     let idx = List.findi_exn ~f:find_first_possible fs |> fst in (* there must exist at least one formula which types correctly, otherwise the enforcement checking is wrong *)
     let aux i f = if i = idx then convert Enftype.suppressable f else Eformula.of_tformula f in
     List.mapi fs ~f:aux, Some idx
-  | _, _ when Enftype.is_observable enftype -> List.map fs ~f:(convert Enftype.obs), None
-  | _ -> assert false
+  | _ -> List.map fs ~f:(convert enftype), None
 
 let convert_enforceable_pattern (enftype: Enftype.t) pols (tpf: Tlex.Pattern.t) : Pattern.t * enf_pformula option =
   let convert enftype f = convert enftype f in
-  match enftype with
-  | _ when Enftype.is_causable enftype ->
+  match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
+  | true, _ ->
     begin match tpf.patt with
       | PPresent
       | PEventually _
       | PAlways _
       | POnce _
       | PHistorically _ ->
-        let fs, _ = convert_enforceable_tformulas Enftype.cau pols tpf.fs in
+        let fs, _ = convert_enforceable_tformulas Enftype.causable pols tpf.fs in
         let patt = Elex.epatt_of_tpatt tpf.patt  in
         let enf_constr = EpfCau ECpfFormulas in
         Pattern.make patt fs, Some enf_constr
       | PUntil (i, _) when Interval.has_zero i ->
-        let fs, _ = convert_enforceable_tformulas Enftype.cau pols tpf.fs in
+        let fs, _ = convert_enforceable_tformulas Enftype.causable pols tpf.fs in
         let patt = Elex.epatt_of_tpatt tpf.patt in
         let enf_constr = EpfCau ECpfFormulas in
         Pattern.make patt fs, Some enf_constr
       | PUntil (i, g) ->
-        let fs, _ = convert_enforceable_tformulas Enftype.cau pols tpf.fs in
-        let eg = convert Enftype.cau g in
+        let fs, _ = convert_enforceable_tformulas Enftype.causable pols tpf.fs in
+        let eg = convert Enftype.causable g in
         let patt = Pattern.PUntil (i, eg) in
         let enf_constr = EpfCau ECpfPformula in
         Pattern.make patt fs, Some enf_constr
       | PSince (i, g) when Interval.has_zero i ->
-        let eg = convert Enftype.cau g in
+        let eg = convert Enftype.causable g in
         let fs = List.map tpf.fs ~f:Eformula.of_tformula in
         let patt = Pattern.PSince (i, eg) in
         let enf_constr = EpfCau ECpfPformula in
         Pattern.make patt fs, Some enf_constr
       | _ -> assert false
     end
-  | _ when Enftype.is_suppressable enftype ->
+  | _, true ->
     begin match tpf.patt with
       | PPresent
       | PEventually _
@@ -1158,8 +1157,7 @@ let convert_enforceable_pattern (enftype: Enftype.t) pols (tpf: Tlex.Pattern.t) 
         let enf_constr = EpfSup (ESpfFormula (Option.value_exn i_opt)) in
         Pattern.make patt fs, Some enf_constr
     end
-  | _ when Enftype.is_observable enftype -> epf_of_tpf tpf, None
-  | _ -> assert false
+  | _ -> epf_of_tpf tpf, None
 
 let update_enf_pformula indices constr =
   match constr with
@@ -1182,8 +1180,8 @@ let  merge_used_and_unused indices_used used unused =
   List.init n ~f:merge
 
 let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * enf_ecdefinition option =
-  match t with
-  | _ when Enftype.is_causable t ->
+  match Enftype.is_causable t, Enftype.is_suppressable t with
+  | true, _ ->
     let v_ex = type_exceptions itl_srp pols td.exceptions (Enftype.neg t) in
     let v_sc = type_scopes itl_srp pols td.scopes t in
     let v_pf = type_pattern itl_srp td.rule_pos pols t td.pf in
@@ -1198,8 +1196,8 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
                   thus running the typing function again does not appear to be 
                   directly necessary *)
     let exceptions, _ = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.suppressable pols td.exceptions in
-    let scopes, _ = convert_enforceable_tformulas Enftype.cau pols td.scopes in
-    let pf, constr_opt = convert_enforceable_pattern Enftype.cau pols td.pf in
+    let scopes, _ = convert_enforceable_tformulas Enftype.causable pols td.scopes in
+    let pf, constr_opt = convert_enforceable_pattern Enftype.causable pols td.pf in
     let enf_constr = match constr_opt with
       | Some (EpfCau c) -> ECd (EClhsAll c)
       | _ -> assert false
@@ -1213,11 +1211,11 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
       params_original = td.params_original;
       params_new      = td.params_new;
     }, Some enf_constr
-  | _ when Enftype.is_suppressable t ->
+  | _, true ->
     begin match type_exceptions itl_srp pols td.exceptions t with
       | Possible _ ->
         let pf = epf_of_tpf td.pf in
-        let exceptions, i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.cau pols td.exceptions in
+        let exceptions, i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.causable pols td.exceptions in
         let scopes = List.map td.scopes ~f:Eformula.of_tformula in
         let enf_constr = ESd (ESlhsCException (Option.value_exn i_opt)) in
         { rule_id         = td.rule_id;
@@ -1233,7 +1231,7 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
         | Possible _ ->
           let pf = epf_of_tpf td.pf in
           let exceptions = List.map td.exceptions ~f:Eformula.of_tformula in
-          let scopes, i_opt = convert_enforceable_tformulas Enftype.cau pols td.scopes in
+          let scopes, i_opt = convert_enforceable_tformulas Enftype.causable pols td.scopes in
           let enf_constr = ESd (ESlhsSScope (Option.value_exn i_opt)) in
           { rule_id         = td.rule_id;
             rule_type       = td.rule_type;
@@ -1247,7 +1245,7 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
         | _ ->
           begin match type_pattern itl_srp td.def_pos pols Enftype.suppressable td.pf with
           | Possible _ ->
-            let pf, constr_opt = convert_enforceable_pattern Enftype.cau pols td.pf in
+            let pf, constr_opt = convert_enforceable_pattern Enftype.causable pols td.pf in
             let exceptions = List.map td.exceptions ~f:Eformula.of_tformula in
             let scopes = List.map td.scopes ~f:Eformula.of_tformula in
             let enf_constr = match constr_opt with
@@ -1267,8 +1265,7 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
         end
       end
     end
-  | _ when Enftype.is_observable t -> edisjunct_of_tdisjunct td, None
-  | _ -> assert false
+  | _  -> edisjunct_of_tdisjunct td, None
 
 let erules_from_tcrules (tcrules: (int, tcrule, Int.comparator_witness) Map.t) : (int, erule, Int.comparator_witness) Map.t =
   let c_rules = Map.to_alist tcrules in
@@ -1425,8 +1422,8 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
        begin match Map.find pols (get_predicate_name_exn f2) with
        | Some t ->
           let itl_srp = if Enftype.is_transparent t then Some itl_srp else None in
-          begin match t with
-          | _ when Enftype.is_causable t ->
+          begin match Enftype.is_causable t, Enftype.is_suppressable t with
+          | true, _ ->
              let v_ex = type_exceptions itl_srp pg_map ex (Enftype.neg t) in
              let v_sc = type_scopes itl_srp pg_map sc t in
              let v_pf1 = type_pattern itl_srp pos pg_map t pf1 in
@@ -1448,8 +1445,8 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                | Some (EpfCau c) -> ECd (EClhsAll c)
                | _ -> assert false
              in
-             ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
-          | _ when Enftype.is_suppressable t ->
+             ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, t, Some enf_constr)
+          | _, true ->
              begin match type_exceptions itl_srp pg_map ex (Enftype.neg t) with
              | Possible constraints ->
                 (* let pols' = solve constraints |> List.hd_exn in TODO: iterate through found policies *)
@@ -1458,7 +1455,7 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                 let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.causable pg_map ex in
                 let sc' = List.map sc ~f:Eformula.of_tformula in
                 let enf_constr = ESd (ESlhsCException (Option.value_exn i_opt)) in
-                ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+                ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, t, Some enf_constr)
              | _ -> begin match type_scopes itl_srp pg_map sc t with
                     | Possible constraints ->
                        (* let pols' = solve constraints |> List.hd_exn in TODO: handle multiple/no options *)
@@ -1467,7 +1464,7 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                        let ex' = List.map ex ~f:Eformula.of_tformula in
                        let sc', i_opt = convert_enforceable_tformulas Enftype.causable pg_map sc in
                        let enf_constr = ESd (ESlhsSScope (Option.value_exn i_opt)) in
-                       ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+                       ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, t, Some enf_constr)
                     | _ ->
                        begin match type_pattern itl_srp pos pg_map Enftype.suppressable pf1 with
                        | Possible _ ->
@@ -1479,33 +1476,32 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                             | Some (EpfSup c) -> ESd (ESlhsSPformula c)
                             | _ -> assert false
                           in
-                          ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, Some enf_constr)
+                          ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, t, Some enf_constr)
                        | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
                        end
                     end
              end
-          | _ when Enftype.is_observable t ->
+          | _ ->
              let epf1 = epf_of_tpf pf1 in
              let ex' = List.map ex ~f:Eformula.of_tformula in
              let sc' = List.map sc ~f:Eformula.of_tformula in
              let ef2 = Eformula.of_tformula f2 in
-             ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, None) 
-          | _ -> assert false
+             ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, t, None) 
           end
        | None ->
           let epf1 = epf_of_tpf pf1 in
           let ex' = List.map ex ~f:Eformula.of_tformula in
           let sc' = List.map sc ~f:Eformula.of_tformula in
           let ef2 = Eformula.of_tformula f2 in
-          ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, None) 
+          ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, Enftype.obs, None) 
        end
     | TCDefinitionDis (tdisjuncts, g) as rule ->
        let eg = Eformula.of_tformula g in
        begin match Map.find pols (get_predicate_name_exn g) with
        | Some t ->
           let itl_srp = if Enftype.is_transparent t then Some itl_srp else None in
-          begin match t with
-          | _ when Enftype.is_causable t ->
+          begin match Enftype.is_causable t, Enftype.is_suppressable t with
+          | true, _ ->
              (* high-level idea:
                 - find first disjunct that can be made Cau
                 - convert this disjunct analogous to the Cau case for
@@ -1518,8 +1514,8 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                  ~f:(fun (_, c_opt) -> match Option.value_exn c_opt with ESd c -> c | _ -> assert false)
                |> Map.data
              in
-             ECDefinitionDis (edisjuncts, eg, Some (ESdd constrs))
-          | _ when Enftype.is_suppressable t ->
+             ECDefinitionDis (edisjuncts, eg, t, Some (ESdd constrs))
+          | _, true ->
              let type_tdisjunct = type_tdisjunct itl_srp pg_map t rule in
              let aux td = match type_tdisjunct td with
                | Possible _ -> true
@@ -1541,12 +1537,12 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
              let edisjuncts_and_constrs = Map.mapi tdisjuncts ~f:aux2 in
              let constr = snd (Map.find_exn edisjuncts_and_constrs first_possible) in
              let edisjuncts = Map.map edisjuncts_and_constrs ~f:fst in
-             ECDefinitionDis (edisjuncts, eg, constr)
+             ECDefinitionDis (edisjuncts, eg, t, constr)
           | _ -> assert false
           end
        | None ->
           let edisjuncts = Map.map tdisjuncts ~f:edisjunct_of_tdisjunct in
-          ECDefinitionDis (edisjuncts, eg, None) 
+          ECDefinitionDis (edisjuncts, eg, Enftype.obs, None) 
        end
   in ecrule
 

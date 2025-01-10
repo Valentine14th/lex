@@ -95,8 +95,8 @@ type enf_ecdefinition_dis =
 
 type ecrule =
   | ECImplication   of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Pattern.t * rule_type * rule_constr list * enf_ecimplication option
-  | ECDefinitionRef of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Ref.t list * Eformula.t * enf_ecdefinition option
-  | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * enf_ecdefinition_dis option
+  | ECDefinitionRef of int * trule_type * LexingInfo.t * Pattern.t * Eformula.t list * Eformula.t list * Ref.t list * Eformula.t * Enftype.t * enf_ecdefinition option
+  | ECDefinitionDis of (int, edisjunct, Int.comparator_witness) Map.t * Eformula.t * Enftype.t * enf_ecdefinition_dis option
 
 (* Statements and programs *)
 
@@ -176,11 +176,11 @@ let get_constitutive_params ecrules = function
     let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn ecrules c_idx) in
     let d_indices = List.map cs ~f:(fun (_,d_idx) -> d_idx) in
     let g = List.map c_rules ~f:(fun r -> match r with
-              | ECDefinitionDis (_, g, _) -> g
+              | ECDefinitionDis (_, g, _, _) -> g
               | _ -> assert false)
     in
     let aux = function
-      | ECDefinitionDis (disjuncts, _, _), d_idx -> Map.find_exn disjuncts d_idx
+      | ECDefinitionDis (disjuncts, _, _, _), d_idx -> Map.find_exn disjuncts d_idx
       | _ -> assert false
     in
     let disjuncts = List.zip_exn c_rules d_indices |> List.map ~f:aux in
@@ -196,14 +196,14 @@ let get_constitutive_params ecrules = function
 let get_exception_params ecrules = function
   | EException (_, c_idx) ->
     (match Map.find_exn ecrules c_idx with
-     | ECDefinitionRef (_, _, _, pf, _, _,  erefs, _, _) -> (pf, erefs)
+     | ECDefinitionRef (_, _, _, pf, _, _,  erefs, _, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
 let get_scope_params ecrules = function
   | EScope (_, c_idx) ->
     (match Map.find_exn ecrules c_idx with
-      | ECDefinitionRef (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
+      | ECDefinitionRef (_, _, _, pf, _, _, erefs, _, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
@@ -212,11 +212,11 @@ let get_exceptionc_params ecrules = function
     let c_rule_ex = Map.find_exn ecrules c_idx_ex in
     let c_rules = List.map cs ~f:(fun (c_idx,_) -> Map.find_exn ecrules c_idx) in
     let pf, erefs = (match c_rule_ex with
-      | ECDefinitionRef (_, _, _, pf, _, _, erefs, _, _) -> (pf, erefs)
+      | ECDefinitionRef (_, _, _, pf, _, _, erefs, _, _, _) -> (pf, erefs)
       | _ -> assert false)
     in (* TODO: check that f is the same collection of formulas as in the constitutive rules, and don't just assume so *)
     let g = List.map c_rules ~f:(fun r -> match r with
-              | ECDefinitionDis (_, g, _) -> g
+              | ECDefinitionDis (_, g, _, _) -> g
               | _ -> assert false)
     in
     (pf, erefs, g)
@@ -248,7 +248,7 @@ module Sig : MFOTL_lib.Modules.S = struct
   let kind_of_pred p_name =
     let event_type, _, _, _ = Map.find_exn !prog.eevents p_name in
     match event_type with
-    | Event _ -> Trace
+    | Event _ | Exception -> Trace
     | Predicate -> Predicate
 
   let pred_enftype_map () =

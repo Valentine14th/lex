@@ -49,7 +49,8 @@ type event_syntax =
 
 type event_type =
   | Event of bool * event_syntax
-  | Predicate [@@deriving compare, sexp_of, hash, equal]
+  | Predicate
+  | Exception [@@deriving compare, sexp_of, hash, equal]
 
 (* References to a section / rule *)
 
@@ -251,6 +252,7 @@ let string_of_event_syntax = function
 let string_of_event_type = function
   | Event (b, sy) -> (if b then "external " else "") ^ string_of_event_syntax sy ^ "event"
   | Predicate -> "predicate"
+  | Exception -> "exception"
 
 let string_of_type_fixes i = function
   | [] -> ""

@@ -67,7 +67,6 @@
        "internal"     , (fun b -> TINTERNAL b) ;
        "fix"          , (fun b -> FIX b) ;
        "oblige"       , (fun b -> OBLIGE b) ;
-       "permit"       , (fun b -> PERMIT b) ;
        "constitute"   , (fun b -> CONSTITUTE b) ;
        "except"       , (fun b -> EXCEPT b) ;
        "scope"        , (fun b -> SCOPE b) ;

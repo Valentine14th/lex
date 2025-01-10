@@ -41,7 +41,7 @@
 /* Tokens: program keywords  */
 
 %token <LexingInfo.t> IMPORT RULE NOTE WHENEVER TTYPE IS
-%token <LexingInfo.t> FIX OBLIGE PERMIT CONSTITUTE EXCEPT SCOPE REPLACE CAUSING SUPPRESSING 
+%token <LexingInfo.t> FIX OBLIGE CONSTITUTE EXCEPT SCOPE REPLACE CAUSING SUPPRESSING 
 %token <LexingInfo.t> LAW TITLE CHAPTER SECTION ARTICLE PARAGRAPH POINT SUBPOINT
 %token <LexingInfo.t * int> LABEL_LEVEL
 %token <LexingInfo.t> FORMEX AKOMANTOSO
@@ -268,7 +268,7 @@ pol:
   | TSUPPRESSABLE TCAUSABLE
     { Some ($1 +> $2), Enftype.causup }
   |
-    { None,            Enftype.obs }
+    { None,            Enftype.bot }
 
 /* Rule declarations */
 

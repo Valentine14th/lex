@@ -51,7 +51,7 @@ let add_section pos label s =
 
 (* let add_exception_first_pass i f refs s = *)
 let add_exception_first_pass i f (refs: Tlex.Ref.t list) s =
-  { s with exceptions_first_pass = (i,f,refs)::s.exceptions_first_pass}
+  { s with exceptions_first_pass = (i,f,refs)::s.exceptions_first_pass }
 
 let add_scope_first_pass i f refs s =
   { s with scopes_first_pass = (i,f,refs)::s.scopes_first_pass}
@@ -491,15 +491,14 @@ let type_formulas s t_vars (fs: Formula.t list): ('t_vars * Tformula.t list) =
   List.fold_map fs ~init:t_vars ~f:(type_formula s)
 
 let type_pformula tprog t_vars (pf: Lex.Pattern.t): ('free_vars * 't_vars * Pattern.t) = 
-  let t_vars, fs = type_formulas tprog t_vars pf.fs in
-  let t_vars, patt = type_patt tprog t_vars pf.patt in
+  let t_vars, fs = type_formulas tprog t_vars pf.fs in  let t_vars, patt = type_patt tprog t_vars pf.patt in
   let tpf = Pattern.make patt fs in
   let vars = Pattern.fv tpf in
   vars, t_vars, tpf
 
 let type_rule s pos = function
   | SRule (_, rule_id, type_fixes, rule, doc_string) -> begin
-      let label' = Label.set_rule_id_force rule_id s.label in
+      let label' = Label.set_rule_id_force rule_id s.label  in
       let _ = Label.valid_rule_label pos label' in
       let t_vars = Map.of_alist_exn (module String) type_fixes in
       let rule_num = fresh () in
@@ -536,6 +535,7 @@ let type_rule s pos = function
           end in
         let var_term_of_ident_and_positions t_vars x =
           TTerm.{ trm = TTerm.var x; info = { pos = LexingInfo.dummy; typ = Map.find_exn t_vars x } } in
+        let arg_of_ident_and_positions t_vars x = (x, Map.find_exn t_vars x) in
         let rec process_rule s t_vars = function
           | Exception (pos, pf, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
@@ -545,9 +545,11 @@ let type_rule s pos = function
             let p_name = "Exception" ^ string_of_int rule_num in (* TODO: mark 'Exception' as an internal name and prevent user-defined events to start with that *)
             let vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
             let terms = List.map (Set.elements vars) ~f:(var_term_of_ident_and_positions t_vars) in
+            let args = List.map (Set.elements vars) ~f:(arg_of_ident_and_positions t_vars) in
             let pred = Tformula.make (Tformula.predicate p_name terms)
                          { Tformula.Info.dummy with event_type_opt = Some (Event (false, Standard)) } in
             let s' = add_exception_first_pass rule_num pred reference_labels s in
+            let s' = add_tevent Lex.Exception p_name args Enftype.itl None s' LexingInfo.dummy in 
             s', t_vars, TException (pos, tpf, reference_labels, pred)
           | Scope (pos, pf, refs) ->
             let _ = List.map ~f:decreasing_section_kinds refs in
@@ -555,9 +557,11 @@ let type_rule s pos = function
             let p_name = "Scope" ^ string_of_int rule_num in (* TODO: mark 'Scope' as an internal name and prevent user-defined events to start with that *)
             let vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
             let terms = List.map (Set.elements vars) ~f:(var_term_of_ident_and_positions t_vars) in
+            let args = List.map (Set.elements vars) ~f:(arg_of_ident_and_positions t_vars) in
             let pred = Tformula.make (Tformula.predicate p_name terms)
                          { Tformula.Info.dummy with event_type_opt = Some (Event (false, Standard)) } in
             let s' = add_scope_first_pass rule_num pred reference_labels s in
+            let s' = add_tevent Lex.Exception p_name args Enftype.itl None s' LexingInfo.dummy in 
             s', t_vars, TScope (pos, tpf, reference_labels, pred)
           | Obligation (pos, pf1, pf2, rt, rcs) ->
             let _, t_vars, tpf1 = type_pformula s.tprog t_vars pf1 in

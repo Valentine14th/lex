@@ -101,7 +101,7 @@ let rec compile_term aliases term =
   in { term with trm }
  *)
 
-let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.cau) (f: Eformula.t) =
+let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.causable) (f: Eformula.t) =
   let open Eformula in
   let module I = Eformula.Info in
   function
@@ -127,7 +127,7 @@ let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftyp
 
 let compile_eformulas ~f fs = f fs
 
-let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.cau) ~f (epf: Pattern.t): Eformula.t =
+let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.causable) ~f (epf: Pattern.t): Eformula.t =
   compile_epattern ~use_pattern_for_enf ~only_pattern ~enftype (compile_eformulas ~f epf.fs) epf.patt
 
 let sup_conj_ex_neg_and_scope side cpf f ex_neg sc =
@@ -188,24 +188,24 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) (enftype: Enftype.t) pf ex
   | _ -> assert false
 
 (* let compile_let_binding (pf: epformula) (ex_and_sc: Eformula.t list) pred : Eformula.t * Eformula.t = *)
-let compile_let_binding ?(quantifier=true) (f: Eformula.t) pred : Eformula.t * Eformula.t =
+let compile_let_binding ?(quantifier=true) (f: Eformula.t) pred : string * ident list * Eformula.t =
   match pred with
   | { form = Predicate (p_name, trms); _ } ->
     let process_term fs (t: TTerm.t) = match t.trm with
-      | ETerm.Var _ -> fs, t
+      | ETerm.Var v -> fs, v
       | _ ->
-         let v = ETerm.{ trm = var (fresh_var ()); info = { P.dummy with typ = t.info.typ } } in
+         let w = fresh_var () in
+         let v = ETerm.{ trm = var w; info = { P.dummy with typ = t.info.typ } } in
          let eq = ETerm.{ trm = binop v Term.Bop.BEq t; info = { P.dummy with typ = TypeTerm.TypeConst Dom.TBool } } in
          let ef = Eformula.{ form = eqconst eq (Dom.Bool true); info = { I.dummy with enftype = Enftype.obs } } in
-         ef :: fs, v
+         ef :: fs, w
     in
     let fs', trms = List.fold_map trms ~init:[] ~f:process_term in
     let fs = f :: List.rev fs' in
-    let lhs = { pred with form = Predicate (p_name, trms) } in
     let rhs = tbigcauconj fs in
     let vars = Set.elements (Eformula.fv rhs) in
     let rhs = if quantifier then tbigcauexists vars rhs else rhs in
-    (lhs, rhs)
+    (p_name, trms, rhs)
   | _ -> assert false
 
 let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) (enftype: Enftype.t) ed: Eformula.t =
@@ -230,7 +230,7 @@ let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) (enftype: Enftype.t)
     { compiled with info = { compiled.info with variable_instantiations = renaming } }
 
 let compile_let_rule = function
-  | ECDefinitionRef (_, _, _, pf, ex, sc, _, g, enf_constr) ->
+  | ECDefinitionRef (_, _, _, pf, ex, sc, _, g, enftype, enf_constr) ->
     begin match enf_constr with
     | Some (ESd enf_sup_lhs) ->
       let f = compile_lhs ~sup_constr:(Some enf_sup_lhs) Enftype.suppressable pf ex sc in
@@ -243,8 +243,8 @@ let compile_let_rule = function
       let pf_comp = compile_epformula ~f:(tbignonconj) pf in
       let f = tbignonconj (pf_comp :: ex_neg @ sc) in
       compile_let_binding ~quantifier:false f g
-    end
-  | ECDefinitionDis (edisjuncts, g, enf_constr) ->
+    end, enftype
+  | ECDefinitionDis (edisjuncts, g, enftype, enf_constr) ->
     begin match enf_constr with
     | Some (ECdd (idx, enf_cau_lhs)) -> 
       let rhs_list =
@@ -263,7 +263,7 @@ let compile_let_rule = function
     | None ->
       let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct Enftype.bot)))  in
       compile_let_binding rhs g
-    end
+    end, enftype
   | _ -> assert false
 
 let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) =
@@ -379,16 +379,16 @@ let compile_exception_or_scope_signature pols indexed_predicates aliases variabl
   List.map indexed_predicates ~f:compile_predicate
 
 let is_exception = function
-  | ECDefinitionRef (_, TRTException, _, _, _, _, _, _, _) -> true
-  | ECDefinitionRef (_, TRTExceptionC, _, _, _, _, _, _, _) -> true
+  | ECDefinitionRef (_, TRTException, _, _, _, _, _, _, _, _) -> true
+  | ECDefinitionRef (_, TRTExceptionC, _, _, _, _, _, _, _, _) -> true
   | _ -> false
 
 let is_scope = function
-  | ECDefinitionRef (_, TRTScope, _, _, _, _, _, _, _) -> true
+  | ECDefinitionRef (_, TRTScope, _, _, _, _, _, _, _, _) -> true
   | _ -> false
 
 let predicate_from_definition = function
-  | ECDefinitionRef (idx, _, _, _, _, _, _, g, _) -> (idx, g)
+  | ECDefinitionRef (idx, _, _, _, _, _, _, g, _, _) -> (idx, g)
   | _ -> assert false
 
 let compile_signature pols events functions aliases _ _ =
@@ -423,7 +423,11 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
   debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));
   let formulae = List.map non_vanilla ~f:compile_imp_rule in
   let let_bindings = List.map let_rules ~f:compile_let_rule in
-  let phi = tbigcauconj formulae in
+  let phi = List.fold_right let_bindings ~f:(
+                fun ((p_name, vars, rhs), enftype) phi ->
+                Eformula.make (Eformula.flet p_name (Some enftype) vars rhs phi)
+                  { I.dummy with enftype = Enftype.cau } 
+              ) ~init:(tbigcauconj formulae) in
   let signature = compile_signature eprog.pols eprog.eevents eprog.efunctions eprog.ealiases
                     eprog.variables let_rules in
-  { signature; let_bindings; phi }
+  { signature; phi }
