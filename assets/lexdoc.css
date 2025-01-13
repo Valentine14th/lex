@@ -82,6 +82,10 @@
     padding-left: 0px;
 }
 
+.lex-rule-constr > .lex-keyword {
+    padding-left: 0px;
+}
+
 .lex-string {
     font-style: italic;
 }
@@ -196,6 +200,10 @@
 
 .lex-section-links a:hover {
     color: rgba(0,0,0,0.5);
+}
+
+.lex-section-link:hover {
+    color: black;
 }
 
 .title-row {

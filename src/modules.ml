@@ -126,37 +126,34 @@ let init_tprog_from_modules modules =
 
 let rec do_type lexpath ?seq:(seq=[]) b filepath filename : Elex.eprog Errors.OrErrors.t =
   let open Errors.OrErrors in
-  let fullname  = Filename.concat filepath filename in
-  let seq'      = seq @ [fullname] in
-  let* sprog    = parse_module fullname in
-  let prog      = Slex.to_prog sprog in
-  let imports   = list_imports prog in
-  let prefixes  = filepath :: lexpath in
-  let suffixes  = List.map imports ~f:suffix_of_import in
-  let filenames = List.map (List.zip_exn imports suffixes)
+  let  fullname  = Filename.concat filepath filename in
+  let  seq'      = seq @ [fullname] in
+  let* sprog     = parse_module fullname in
+  let  prog      = Slex.to_prog sprog in
+  let  imports   = list_imports prog in
+  let  prefixes  = filepath :: lexpath in
+  let  suffixes  = List.map imports ~f:suffix_of_import in
+  let  filenames = List.map (List.zip_exn imports suffixes)
                     ~f:(fun (import, suffix) -> find_filename seq' import prefixes suffix) in
-  let modules   = List.map (List.zip_exn filenames imports)
-                    ~f:(fun (filepath_filename, import) ->
-                      (let import_string = string_of_import import in
-                       let* (filepath', filename') = filepath_filename in
-                       (
-                         match import with
-                         | SILex _    -> let* eprog = do_type lexpath ~seq:seq' b filepath' filename' in
-                                         ok (import_string, MLex eprog)
-                         | SIFormex _ -> ok (import_string, MLegalXml (Formex.read_file filepath' filename'))
-                         | SIAkomaNtoso _ -> ok (import_string, MLegalXml (AkomaNtoso.read_file filepath' filename')))
-                      )
+  let  modules   = List.map (List.zip_exn filenames imports)
+                    ~f:(fun (filepath_filename, import) -> (
+                          let import_string = string_of_import import in
+                          let* (filepath', filename') = filepath_filename in
+                          match import with
+                          | SILex _ ->
+                             let* eprog = do_type lexpath ~seq:seq' b filepath' filename' in
+                             ok (import_string, MLex eprog)
+                          | SIFormex _     ->
+                             ok (import_string, MLegalXml (Formex.read_file filepath' filename'))
+                          | SIAkomaNtoso _ ->
+                             ok (import_string, MLegalXml (AkomaNtoso.read_file filepath' filename'))
+                        )
                     ) in
-  let* modules = all modules in
-  let modules = Map.of_alist_exn (module String) modules in
-  let init  = init_tprog_from_modules modules in
-  let* tprog =
-    of_witherror (
-        Errors.WithErrors.(
-          let* tprog = Typing.do_type init prog in
-          ok (link_formex modules tprog)
-        )
-      ) in
-  let* eprog = Enforceability.do_type modules tprog b in
+  let* modules  = all modules in
+  let  modules  = Map.of_alist_exn (module String) modules in
+  let  init     = init_tprog_from_modules modules in
+  let* tprog    = of_witherror (Typing.do_type init prog) in
+  let  tprog    = link_formex modules tprog in
+  let* eprog    = Enforceability.do_type modules tprog b in
   ok eprog
 

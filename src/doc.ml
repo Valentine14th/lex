@@ -155,12 +155,12 @@ let html_of_rule_constr_kind = function
 
 let html_of_rule_constr constr =
   let keyword, rule_consrt_kinds =  html_of_rule_constr_type constr in
-  div "lex-rule-constr" (
+  span "lex-rule-constr" (
       kw keyword ^ String.concat ~sep:", " (List.map ~f:html_of_rule_constr_kind rule_consrt_kinds)
     )
     
 let html_of_rule_constrs rule_constrs =
-  div "lex-rule-constrs" (
+  span "lex-rule-constrs" (
       String.concat ~sep:", " (List.map ~f:html_of_rule_constr rule_constrs)
     )
 
@@ -314,6 +314,23 @@ let html_of_label label =
   let reference = Util.butlast ((Label.reference_of_label label LexingInfo.dummy)).sks in
   if List.is_empty reference then "" else span "lex-section-links" (html_of_label_reference reference)
 
+let html_of_enftype enftype =
+  let open Enftype in
+  let e = equal enftype in
+  if e caubot then
+    kw "causable"
+  else if e sup then
+    kw "suppressable"
+  else if e obs then
+    kw "observable"
+  else if e itl then
+    kw "internal"
+  else if e cau then
+    kw "causable observable"
+  else if e causup then
+    kw "causable suppressable"
+  else
+    ""
 let html_of_estmt eprog =
   function
   | ESImport (_, idents, import_format) ->
@@ -341,7 +358,7 @@ let html_of_estmt eprog =
        )
   | ESRule (_, _, label, type_fixes, erule, doc_string) ->
     let rule_id = Label.qualified_id label in
-    div ~id:(Some rule_id) "lex-stmt-rule" (
+    div ~id:(Some ("lex-section-" ^ rule_id)) "lex-stmt-rule" (
         two_column (
             kw "rule"
             ^ (match label.rule_id with Some name -> span "lex-rule-label" name | None -> "")
@@ -351,12 +368,13 @@ let html_of_estmt eprog =
           (html_of_erule_reading ("lex-subformula-reading-" ^ rule_id)
              eprog type_fixes erule doc_string)
       )
+  | ESEvent (Exception, _, _, _, _) -> ""
   | ESEvent (event_type, name, typed_args, enftype, doc_string) ->
      let event_id = "lex-event-" ^ name in
      let html_of_event =
        match event_type with
        | Event (_, Functional) ->
-          kw (Enftype.to_string enftype)
+          html_of_enftype enftype
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ " ("
@@ -365,14 +383,14 @@ let html_of_estmt eprog =
           ^ (match List.last_exn typed_args with
                (_, ty) -> typ (TypeTerm.value_to_string ty))
        | Event (_, Variable) ->
-          kw (Enftype.to_string enftype)
+          html_of_enftype enftype
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ " : "
           ^ (match List.last_exn typed_args with
                (_, ty) -> typ (TypeTerm.value_to_string ty))
-       | _ -> 
-          kw (Enftype.to_string enftype)
+       | _ ->
+          html_of_enftype enftype
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ html_of_args typed_args
@@ -435,9 +453,9 @@ let html_of_eprog title css js eprog =
 
 let to_file input_filename filename eprog =
   let css = In_channel.read_all (
-                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../../../../assets/lexdoc.css") in
+                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/assets/lexdoc.css") in
   let js = In_channel.read_all (
-                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/../../../../assets/lexdoc.js") in
+                Filename.dirname ((Sys.get_argv ()).(0)) ^ "/assets/lexdoc.js") in
   let html = html_of_eprog ("Lexdoc: " ^ input_filename) css js eprog in
   print_endline filename;
   Out_channel.write_all filename ~data:html

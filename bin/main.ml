@@ -15,9 +15,9 @@ let loop filename mode f o b () =
 
   match mode with
   | None | Some "mfotl" -> begin
-      match (let* eprog = Modules.do_type [lexpath] b filepath basename in
-             ok (Compiler.compile eprog)) with
-      | Ok cprog -> 
+      match Modules.do_type [lexpath] b filepath basename with
+      | Ok eprog ->
+         let cprog = Compiler.compile eprog in
          begin match o with
          | None -> print_endline (Clex.to_string cprog)
          | Some out_fn -> let sig_fn = out_fn ^ ".sig" in
