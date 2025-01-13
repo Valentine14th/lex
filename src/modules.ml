@@ -52,29 +52,32 @@ let check_filename (prefix, filename) =
   Sys_unix.is_file_exn ~follow_symlinks:false (Filename.concat prefix filename)
 
 let find_filename seq import prefixes suffix =
+  let open Errors.OrErrors in
   let candidates = List.map prefixes ~f:(fun prefix -> (prefix, suffix)) in
   match List.find candidates ~f:check_filename with
   | Some (prefix, filename) ->
      (if List.mem seq (Filename.concat prefix filename) ~equal:String.equal then
-        Errors.import_error
-          (sprintf "found cyclic dependency %s"
-             (String.concat ~sep:" -> " (seq @ [Filename.concat prefix filename])))
-          (pos_of_import import)
+        error (Errors.import_error
+                 (sprintf "found cyclic dependency %s"
+                    (String.concat ~sep:" -> " (seq @ [Filename.concat prefix filename])))
+                 (pos_of_import import))
       else
-        (prefix, filename))
-  | None -> Errors.import_error
+        ok (prefix, filename))
+  | None ->
+     error (Errors.import_error
               (sprintf "cannot find file for importing %s"
                  (string_of_import import))
-              (pos_of_import import)
+              (pos_of_import import))
 
-let parse_with_error lexbuf =
-  try Parser.prog Lexer.read lexbuf with
+let parse_with_error lexbuf : Slex.sprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  try ok (Parser.prog Lexer.read lexbuf) with
   | Parser.Error ->
-     Errors.parser_error "invalid character" (LexingInfo.create1 lexbuf.lex_curr_p)
+     error (Errors.parser_error "invalid character" (LexingInfo.create1 lexbuf.lex_curr_p))
   | Sys_error msg ->
-     Errors.system_error msg (LexingInfo.create1 lexbuf.lex_curr_p)
+     error (Errors.parser_error msg (LexingInfo.create1 lexbuf.lex_curr_p))
 
-let parse_module filename: Slex.sprog =
+let parse_module filename: Slex.sprog Errors.OrErrors.t =
    let inx = try In_channel.create filename with
     | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
   in
@@ -121,10 +124,11 @@ let init_tprog_from_modules modules =
     | MLegalXml _ -> tprog in
   Map.fold modules ~init:Tlex.tempty ~f
 
-let rec do_type lexpath ?seq:(seq=[]) b filepath filename =
+let rec do_type lexpath ?seq:(seq=[]) b filepath filename : Elex.eprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
   let fullname  = Filename.concat filepath filename in
   let seq'      = seq @ [fullname] in
-  let sprog     = parse_module fullname in
+  let* sprog    = parse_module fullname in
   let prog      = Slex.to_prog sprog in
   let imports   = list_imports prog in
   let prefixes  = filepath :: lexpath in
@@ -132,21 +136,27 @@ let rec do_type lexpath ?seq:(seq=[]) b filepath filename =
   let filenames = List.map (List.zip_exn imports suffixes)
                     ~f:(fun (import, suffix) -> find_filename seq' import prefixes suffix) in
   let modules   = List.map (List.zip_exn filenames imports)
-                    ~f:(fun ((filepath', filename'), import) ->
+                    ~f:(fun (filepath_filename, import) ->
                       (let import_string = string_of_import import in
+                       let* (filepath', filename') = filepath_filename in
                        (
-                         import_string,
-                         (match import with
-                          | SILex _    -> MLex (do_type lexpath ~seq:seq' b filepath' filename')
-                          | SIFormex _ -> MLegalXml (Formex.read_file filepath' filename')
-                          | SIAkomaNtoso _ -> MLegalXml (AkomaNtoso.read_file filepath' filename'))
-                       )
+                         match import with
+                         | SILex _    -> let* eprog = do_type lexpath ~seq:seq' b filepath' filename' in
+                                         ok (import_string, MLex eprog)
+                         | SIFormex _ -> ok (import_string, MLegalXml (Formex.read_file filepath' filename'))
+                         | SIAkomaNtoso _ -> ok (import_string, MLegalXml (AkomaNtoso.read_file filepath' filename')))
                       )
                     ) in
+  let* modules = all modules in
   let modules = Map.of_alist_exn (module String) modules in
   let init  = init_tprog_from_modules modules in
-  let tprog = Typing.do_type init prog in
-  let tprog = link_formex modules tprog in
-  let eprog = Enforceability.do_type modules tprog b in
-  eprog
+  let* tprog =
+    of_witherror (
+        Errors.WithErrors.(
+          let* tprog = Typing.do_type init prog in
+          ok (link_formex modules tprog)
+        )
+      ) in
+  let* eprog = Enforceability.do_type modules tprog b in
+  ok eprog
 

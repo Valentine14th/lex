@@ -16,7 +16,8 @@
   let info lexbuf = LexingInfo.create lexbuf.lex_start_p lexbuf.lex_curr_p
   let info1 lexbuf = LexingInfo.create1 lexbuf.lex_start_p
 
-  let make_interval lexbuf = MFOTL_lib.Interval.lex (fun () -> Errors.lexer_error "interval lexing did not succeed" (info lexbuf))
+  let make_interval lexbuf =
+    MFOTL_lib.Interval.lex (fun () -> Errors.fatal (Errors.lexer_error "interval lexing did not succeed" (info lexbuf)))
 
   let rec update_indent i =
     match !indents with
@@ -204,7 +205,7 @@ rule read =
   | (int as i) (("s"|"m"|"h"|"d"|"M"|"y")? as s)
      { SPAN (info lexbuf, Time.Span.make i s) }
   | _
-     { Errors.lexer_error ("Unexpected character: " ^ Lexing.lexeme lexbuf) (info1 lexbuf) }
+     { Errors.fatal (Errors.lexer_error ("Unexpected character: " ^ Lexing.lexeme lexbuf) (info1 lexbuf)) }
 
 and read_string buf i =
   parse
@@ -217,18 +218,18 @@ and read_string buf i =
   | '\\' 'r'  { Buffer.add_char buf '\r';   read_string buf i lexbuf }
   | '\\' 't'  { Buffer.add_char buf '\t';   read_string buf i lexbuf }
   | [^ '"' '\\']+ { Buffer.add_string buf (Lexing.lexeme lexbuf); read_string buf i lexbuf }
-  | _         { Errors.lexer_error ("Illegal character in string: " ^ Lexing.lexeme lexbuf) (info1 lexbuf) }
-  | eof       { Errors.lexer_error "This string is never terminated" i }
+  | _         { Errors.fatal (Errors.lexer_error ("Illegal character in string: " ^ Lexing.lexeme lexbuf) (info1 lexbuf)) }
+  | eof       { Errors.fatal (Errors.lexer_error "This string is never terminated" i) }
 
 and read_time buf i =
   parse
   | '`' { TIME (i +> info1 lexbuf,
                 let contents = Buffer.contents buf in
                 try Time.of_string contents
-                with _ -> Errors.lexer_error ("Illegal time expression: `" ^ contents ^ "`") (i +> info1 lexbuf)) }
+                with _ -> Errors.fatal (Errors.lexer_error ("Illegal time expression: `" ^ contents ^ "`") (i +> info1 lexbuf))) }
   | [^ '`']+ { Buffer.add_string buf (Lexing.lexeme lexbuf); read_time buf i lexbuf }
-  | _   { Errors.lexer_error ("Illegal time character: " ^ Lexing.lexeme lexbuf) (info1 lexbuf) }
-  | eof { Errors.lexer_error "This time expression is never terminated" i }
+  | _   { Errors.fatal (Errors.lexer_error ("Illegal time character: " ^ Lexing.lexeme lexbuf) (info1 lexbuf)) }
+  | eof { Errors.fatal (Errors.lexer_error "This time expression is never terminated" i) }
 
 (* TODO: remove indentation at the beginning of the line of docstring during parsing *)
 and read_docstring buf i =

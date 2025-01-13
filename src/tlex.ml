@@ -134,38 +134,43 @@ let tempty =
 let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
 
 let add_talias name typ doc_string tprog pos =
+  let open Errors.OrErrors in
   (* TODO: (potentially in the future) allow for overwriting/reusing existing type names *)
-  let aliases =
-    try Map.add_exn tprog.taliases ~key:name ~data:(typ, doc_string)
-    with _ -> Errors.type_error (Printf.sprintf "type alias %s already exists" name) pos
+  let* aliases =
+    try ok (Map.add_exn tprog.taliases ~key:name ~data:(typ, doc_string))
+    with _ -> error (Errors.type_error (Printf.sprintf "type alias %s already exists" name) pos)
   in
-  { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
+  ok { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
 
 let add_tevent event_type name (args : (ident * TypeTerm.t) list) enftype ds tprog pos =
+  let open Errors.OrErrors in
   let event = (event_type, args, enftype, ds) in
   (* TODO: (potentially in the future) allow for overwriting/reusing event names *)
-  let events =
-    try Map.add_exn tprog.tevents ~key:name ~data:event
-    with _ -> Errors.type_error (Printf.sprintf "event %s already exists" name) pos
+  let* events =
+    try ok (Map.add_exn tprog.tevents ~key:name ~data:event)
+    with _ -> error (Errors.type_error (Printf.sprintf "event %s already exists" name) pos)
   in
-  { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, enftype, ds)::tprog.tstmts}
+  ok { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, enftype, ds)::tprog.tstmts}
 
 let add_tfunction name arg_types return_type ds tprog pos =
+  let open Errors.OrErrors in
   let function_ = (arg_types, return_type, ds) in
   (* TODO: allow for overwriting/reusing event names *)
-  let functions =
-    try Map.add_exn tprog.tfunctions ~key:name ~data:function_
-    with _ -> Errors.type_error (Printf.sprintf "function %s already exists" name) pos
+  let* functions =
+    try ok (Map.add_exn tprog.tfunctions ~key:name ~data:function_)
+    with _ -> error (Errors.type_error (Printf.sprintf "function %s already exists" name) pos)
   in
-  { tprog with tfunctions = functions; tstmts = TSFunction (name, arg_types, return_type, ds)::tprog.tstmts}
+  ok { tprog with tfunctions = functions; tstmts = TSFunction (name, arg_types, return_type, ds)::tprog.tstmts}
   
 let add_exception i f (trefs: Ref.t list) tprog =
-  { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f;
-               rule_tree = Label.RuleTree.add_exception i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree }
+  let open Errors.OrErrors in
+  let* rule_tree = Label.RuleTree.add_exception i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree in
+  ok { tprog with exception_predicates = Map.add_exn tprog.exception_predicates ~key:i ~data:f; rule_tree }
 
 let add_scope i f (trefs: Ref.t list) tprog =
-  { tprog with scope_predicates = Map.add_exn tprog.scope_predicates ~key:i ~data:f;
-               rule_tree = Label.RuleTree.add_scope i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree }
+  let open Errors.OrErrors in
+  let* rule_tree = Label.RuleTree.add_scope i (List.map ~f:Ref.to_rtref_expr trefs) tprog.rule_tree in
+  ok { tprog with scope_predicates = Map.add_exn tprog.scope_predicates ~key:i ~data:f; rule_tree }
 
 let set_labels pos label tprog =
   { tprog with rule_tree = Label.RuleTree.add_label pos tprog.rule_tree label }
@@ -178,10 +183,13 @@ let add_vars id vs tprog =
   in { tprog with variables = variables }
 
 let add_rule pos rule_num label tprog =
-  { tprog with rule_tree = Label.RuleTree.add_rule pos rule_num label tprog.rule_tree }
+  let open Errors.OrErrors in
+  let* rule_tree = Label.RuleTree.add_rule pos rule_num label tprog.rule_tree in
+  ok { tprog with rule_tree }
 
 let add_section pos label tprog =
-  { tprog with rule_tree = Label.RuleTree.add_section pos label tprog.rule_tree }
+  let open Errors.OrErrors in
+  ok { tprog with rule_tree = Label.RuleTree.add_section pos label tprog.rule_tree }
 
 (* Signature *)
 

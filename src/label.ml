@@ -1,5 +1,6 @@
 open Core
 open Lex
+open Errors
 
 let debug_label = ref false
 let debug = if !debug_label then Errors.debug_print ~f_name:(Some "label.ml") else ignore
@@ -129,33 +130,39 @@ let remove_highest_level = function
   | _ -> empty
 
 let valid_rule_label pos = function
-  | { law = []; _ } -> Errors.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos
-  | { article = []; _ } -> Errors.label_error "No 'article section defined (yet). A rule must be inside of an 'article' section" pos
-  | _ -> ()
+  | { law = []; _ } ->
+     OrErrors.error (Errors.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos)
+  | { article = []; _ } ->
+     OrErrors.error (Errors.label_error "No 'article section defined (yet). A rule must be inside of an 'article' section" pos)
+  | _ ->
+     OrErrors.ok ()
 
 let set pos section_kind label_name l =
-  try match section_kind with
-      | Law i       ->
-         {            law       = Util.take l.law i       @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
-      | Title i     ->
-         { l     with title     = Util.take l.title i     @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
-      | Chapter i   ->
-         { l     with chapter   = Util.take l.chapter i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []}
-      | Section i   ->
-         { l     with section   = Util.take l.section i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []}
-      | Article i   ->
-         { l     with article   = Util.take l.article i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []}
-      | Paragraph i ->
-         { l     with paragraph = Util.take l.paragraph i @ [label_name]; rule_id = None; subpoint = []; point = []}
-      | Point i     ->
-         { l     with point     = Util.take l.point i     @ [label_name]; rule_id = None; subpoint = []}
-      | Subpoint i  ->
-         { l     with subpoint  = Util.take l.subpoint i  @ [label_name]; rule_id = None;}
+  try
+    OrErrors.ok (
+        match section_kind with
+        | Law i       ->
+           {            law       = Util.take l.law i       @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []; title = []}
+        | Title i     ->
+           { l     with title     = Util.take l.title i     @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []; chapter = []}
+        | Chapter i   ->
+           { l     with chapter   = Util.take l.chapter i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []; section = []}
+        | Section i   ->
+           { l     with section   = Util.take l.section i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []; article = []}
+        | Article i   ->
+           { l     with article   = Util.take l.article i   @ [label_name]; rule_id = None; subpoint = []; point = []; paragraph = []}
+        | Paragraph i ->
+           { l     with paragraph = Util.take l.paragraph i @ [label_name]; rule_id = None; subpoint = []; point = []}
+        | Point i     ->
+           { l     with point     = Util.take l.point i     @ [label_name]; rule_id = None; subpoint = []}
+        | Subpoint i  ->
+           { l     with subpoint  = Util.take l.subpoint i  @ [label_name]; rule_id = None;}
+      )
   with
   | Invalid_argument idx ->
      (* TODO: give more complete error message with a string representation of the entire label *)
      let err_msg = Printf.sprintf "wrong sub-level index '%s' in '%s'" idx (string_of_section_kind section_kind) in
-     Errors.label_error err_msg pos
+     OrErrors.error (Errors.label_error err_msg pos)
 
 let set_rule_id rule_id l = { l with rule_id = rule_id }
 
@@ -370,11 +377,14 @@ module RuleTree = struct
       scopes = Map.empty (module Int);
     }
 
-  let update_rule_map pos m k v = try Map.add_exn m ~key:k ~data:v with | _ ->
-    begin match k with
-    | "" -> Errors.label_error "An unlabeled rule already exists in this section, consider using labels" pos
-    | _ -> Errors.label_error ("A rule with the label '" ^ k ^ "' already exists in this section") pos
-    end
+  let update_rule_map pos m k v =
+    try OrErrors.ok (Map.add_exn m ~key:k ~data:v)
+    with _ ->
+      OrErrors.error
+          begin match k with
+          | "" -> Errors.label_error "An unlabeled rule already exists in this section, consider using labels" pos
+          | _ -> Errors.label_error ("A rule with the label '" ^ k ^ "' already exists in this section") pos
+          end
 
   let rec insert_section_in_tree ?(previous_sk=Law 0) pos tree l =
     let highest = highest_level ~previous_sk:previous_sk l in
@@ -402,56 +412,59 @@ module RuleTree = struct
     end
 
   let rec insert_rule_in_tree ?(previous_sk=Law 0) pos tree l ri =
+    let open OrErrors in
     let highest = highest_level ~previous_sk:previous_sk l in
     let lowest = lowest_level l in
     let _ = match lowest with | LRule _ -> () | _ -> assert false in
     let key = Location.t_of_loc highest in
     let l' = remove_highest_level l in
-    let _ = match is_empty l' with
-    | true -> let err_msg = match highest with
-      | LNone -> assert false
-      | LRule r -> "Rule '" ^ r ^ "' is outside of any section"
-      | LSection _ -> assert false
-      in Errors.label_error err_msg pos
-    | false -> () in
-    begin match is_empty (remove_highest_level l') with
+    match is_empty l' with
     | true ->
-      let highest' = highest_level l' in
-      begin match  highest' with
-      | LRule rn ->
-        begin match tree with
-        | Intermediate m -> let value =
-          begin match Map.find m key with 
-          | Some (tree', rm) -> tree', update_rule_map pos rm rn ri
-          | None -> Leaf, Map.of_alist_exn (module String) [(rn, ri)]
-          end in
-          Intermediate (Map.update m key ~f:(fun _ -> value))
-        | Leaf -> 
-          let tree' = Leaf in
-          let rm = Map.of_alist_exn (module String) [(rn, ri)] in
-          Intermediate (LocationMap.of_alist_exn [(key, (tree', rm))])
-        end
-      | LSection _ | LNone -> assert false (* must be prevented by preceding checks *)
-      end
-    | false -> 
-      begin match highest with
-      | LRule _ | LNone -> assert false
-      | LSection (sk, _) -> 
-        begin match tree with
-        | Intermediate m -> let tree', rm =
-          begin match Map.find m key with 
-          | Some (tree', rm) -> tree', rm
-          | None -> Leaf, Map.empty (module String)
-          end in
-          let tree'' = insert_rule_in_tree ~previous_sk:sk pos tree' l' ri in
-          Intermediate (Map.update m key ~f:(fun _ -> (tree'', rm)))
-        | Leaf -> 
-          let tree' = insert_rule_in_tree ~previous_sk:sk pos Leaf l' ri in
-          let rm = Map.empty (module String) in
-          Intermediate (LocationMap.of_alist_exn [(key, (tree', rm))])
-        end
-      end
-    end
+       let err_msg = match highest with
+         | LNone -> assert false
+         | LRule r -> "Rule '" ^ r ^ "' is outside of any section"
+         | LSection _ -> assert false
+       in error (Errors.label_error err_msg pos)
+    | false ->
+       begin match is_empty (remove_highest_level l') with
+       | true ->
+          let highest' = highest_level l' in
+          begin match  highest' with
+          | LRule rn ->
+             begin match tree with
+             | Intermediate m -> let* value =
+                                   begin match Map.find m key with 
+                                   | Some (tree', rm) -> let* rm' = update_rule_map pos rm rn ri in
+                                                         ok (tree', rm')
+                                   | None -> ok (Leaf, Map.of_alist_exn (module String) [(rn, ri)])
+                                   end in
+                                 ok (Intermediate (Map.update m key ~f:(fun _ -> value)))
+             | Leaf -> 
+                let tree' = Leaf in
+                let rm = Map.of_alist_exn (module String) [(rn, ri)] in
+                ok (Intermediate (LocationMap.of_alist_exn [(key, (tree', rm))]))
+             end
+          | LSection _ | LNone -> assert false (* must be prevented by preceding checks *)
+          end
+       | false -> 
+          begin match highest with
+          | LRule _ | LNone -> assert false
+          | LSection (sk, _) -> 
+             begin match tree with
+             | Intermediate m -> let tree', rm =
+                                   begin match Map.find m key with 
+                                   | Some (tree', rm) -> tree', rm
+                                   | None -> Leaf, Map.empty (module String)
+                                   end in
+                                 let* tree'' = insert_rule_in_tree ~previous_sk:sk pos tree' l' ri in
+                                 ok (Intermediate (Map.update m key ~f:(fun _ -> (tree'', rm))))
+             | Leaf ->
+                let* tree' = insert_rule_in_tree ~previous_sk:sk pos Leaf l' ri in
+                let rm = Map.empty (module String) in
+                ok (Intermediate (LocationMap.of_alist_exn [(key, (tree', rm))]))
+             end
+          end
+       end
 
   let rec collect_rules_in_tree = function
     | Intermediate map ->
@@ -489,7 +502,9 @@ module RuleTree = struct
       | [] -> []
       | _ -> aux subtrees
   
-  let rec find_rules_in_tree pos label = function
+  let rec find_rules_in_tree pos label =
+    let open OrErrors in
+    function
   | Intermediate map ->
     let label' = remove_highest_level label in
     let highest = highest_level label in
@@ -498,7 +513,7 @@ module RuleTree = struct
     begin match highest with
     | LNone ->
        (debug (String.concat ~sep:", " (List.map (collect_rules_in_tree (Intermediate map)) ~f:string_of_int));
-       collect_rules_in_tree (Intermediate map))
+        ok (collect_rules_in_tree (Intermediate map)))
     | LRule _ -> assert false
     | LSection (sk, n) ->
       let sub_maps = begin match sk with
@@ -509,18 +524,18 @@ module RuleTree = struct
       | Article 0 -> infer_intermediate_levels pos map sk n [] None
       | _ -> [(map, [])]
       end in
-      let map', inferred_levels = match sub_maps with
+      let* map', inferred_levels = match sub_maps with
       | [] ->
         let err_msg = Printf.sprintf "Section { %s %s } was not found" (string_of_section_kind sk) n in
-        Errors.reference_error err_msg pos
-      | [m, ils] -> m, ils
+        error (Errors.reference_error err_msg pos)
+      | [m, ils] -> ok (m, ils)
       | _ ->
         let err_msg = Printf.sprintf "Multiple possible intermediate levels (%s) found for section { %s \"%s\" }"
                       (String.concat ~sep:", " (List.map sub_maps ~f:(fun (_, ils) -> "{ " ^ String.concat ~sep:" " (List.map ils ~f:(fun (sk, i, n) -> match i with
                         | 0 -> Printf.sprintf "%s \"%s\"" sk n
                         | _ -> Printf.sprintf "%s[%d] \"%s\"" sk i n)) ^ " }")) )
                       (string_of_section_kind sk) n in
-        Errors.reference_error err_msg pos
+        error (Errors.reference_error err_msg pos)
       in
       let _ = match List.is_empty inferred_levels with
       | true -> ()
@@ -530,29 +545,38 @@ module RuleTree = struct
                        (Lex.string_of_section_kind sk)
                        (n)
         in
-        Errors.warning warn_msg (Some pos)
+        Errors.warn warn_msg (Some pos)
       in
       begin match highest_level label' with
-      | LRule r -> begin try [Map.find_exn map' key |> snd |> (fun x -> Map.find_exn x r)]
-                   with _ -> Errors.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos end
-      | LNone -> let tree, rules = begin try Map.find_exn map' key
-                 with _ -> Errors.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos
-                          end in
-                 Map.data rules @ collect_rules_in_tree tree
-      | _ -> let tree' = begin try Map.find_exn map' key |> fst
-             with _ -> Errors.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos end
-        in find_rules_in_tree pos label' tree'
+      | LRule r ->
+         begin
+           try ok [Map.find_exn map' key |> snd |> (fun x -> Map.find_exn x r)]
+           with _ -> error (Errors.label_error ("Rule '" ^ r ^ "' not found in section '" ^ Location.string_of_t key ^ "'") pos)
+         end
+      | LNone ->
+         let* tree, rules =
+           begin try ok (Map.find_exn map' key)
+                 with _ -> error (Errors.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos)
+           end in
+         ok (Map.data rules @ collect_rules_in_tree tree)
+      | _ ->
+         let* tree' =
+           begin try ok (Map.find_exn map' key |> fst)
+                 with _ -> error (Errors.label_error ("Section '" ^ Location.string_of_t key ^ "' was not found") pos)
+           end
+         in find_rules_in_tree pos label' tree'
       end
     end
-  | Leaf -> []
+  | Leaf -> ok []
   
   let add_label pos s l =
     { s with tree = insert_section_in_tree pos s.tree l }
 
   let add_rule pos ri label s =
-    { s with tree = insert_rule_in_tree pos s.tree label ri;
-             label_of_rule = Map.add_exn s.label_of_rule ~key:ri ~data:(label,pos)
-    }
+    let open OrErrors in
+    let* tree = insert_rule_in_tree pos s.tree label ri in
+    ok { s with tree;
+                label_of_rule = Map.add_exn s.label_of_rule ~key:ri ~data:(label,pos) }
   
   let add_section pos label s =
     { s with tree = insert_section_in_tree pos s.tree label }
@@ -560,17 +584,21 @@ module RuleTree = struct
   let string_of_rule_idx s i = Ref.to_string (reference_of_label (fst (Map.find_exn s.label_of_rule i)) LexingInfo.dummy)
   let pos_of_rule_idx s i = snd (Map.find_exn s.label_of_rule i)
   let add_exception idx (refs: rtref_expr list) s =
+    let open Errors.OrErrors in
     debug (level_tree_to_string s.tree);
     debug (String.concat ~sep:"\n" (List.map refs ~f:(fun r -> string_of_label r.label)));
-    let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
+    let* rules_in_tree = all (List.map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree)) in
+    let rule_idxs = List.concat rules_in_tree in
     debug (String.concat ~sep:", " (List.map rule_idxs ~f:string_of_int));
-    if List.is_empty rule_idxs then Errors.warning ("No rules found for exception " ^ string_of_rule_idx s idx) None;
-    { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
+    if List.is_empty rule_idxs then Errors.warn ("No rules found for exception " ^ string_of_rule_idx s idx) None;
+    ok { s with exceptions = List.fold rule_idxs ~init:s.exceptions ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
   let add_scope idx (refs: rtref_expr list) s =
-    let rule_idxs = List.concat_map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree) in
-    if List.is_empty rule_idxs then Errors.warning ("No rules found for scope " ^ string_of_rule_idx s idx) None;
-    { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
+    let open Errors.OrErrors in
+    let* rules_in_tree = all (List.map refs ~f:(fun ref -> find_rules_in_tree ref.pos ref.label s.tree)) in
+    let rule_idxs = List.concat rules_in_tree in
+    if List.is_empty rule_idxs then Errors.warn ("No rules found for scope " ^ string_of_rule_idx s idx) None;
+    ok { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
 
 
   let rules_with_shared_variable_scopes (s: s) =

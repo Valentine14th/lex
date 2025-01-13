@@ -5,6 +5,7 @@ module Time = MFOTL_lib.Time
 
 (* TODO: introduce the upper bound `b` as a command line paramter - analogous to WhyEnf *)
 let loop filename mode f o b () =
+  let open Errors.OrErrors in
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
   let filepath = Filename.dirname filename
   and basename = Filename.basename filename in
@@ -14,18 +15,27 @@ let loop filename mode f o b () =
 
   match mode with
   | None | Some "mfotl" -> begin
-      let eprog = Modules.do_type [lexpath] b filepath basename in
-      let cprog = Compiler.compile eprog in
-      match o with
-      | None -> print_endline (Clex.to_string cprog)
-      | Some out_fn -> let sig_fn = out_fn ^ ".sig" in
-                       let formula_fn = out_fn ^ ".mfotl" in
-                       Clex.to_files cprog sig_fn formula_fn
+      match (let* eprog = Modules.do_type [lexpath] b filepath basename in
+             ok (Compiler.compile eprog)) with
+      | Ok cprog -> 
+         begin match o with
+         | None -> print_endline (Clex.to_string cprog)
+         | Some out_fn -> let sig_fn = out_fn ^ ".sig" in
+                          let formula_fn = out_fn ^ ".mfotl" in
+                          Clex.to_files cprog sig_fn formula_fn
+         end
+      | Errors errs ->
+         print_endline (Errors.to_string_multiple errs);
+         exit (-1)
     end
   | Some "doc" -> begin
-      let eprog = Modules.do_type [lexpath] b filepath basename in
-      let outname = Option.fold o ~init:(filename ^ "_doc.html") ~f:(fun _ x -> x) in
-      Doc.to_file basename outname eprog
+      match Modules.do_type [lexpath] b filepath basename with
+      | Ok eprog -> 
+         let outname = Option.fold o ~init:(filename ^ "_doc.html") ~f:(fun _ x -> x) in
+         Doc.to_file basename outname eprog
+      | Errors errs ->
+         print_endline (Errors.to_string_multiple errs);
+         exit (-1)
     end
   | Some "template" -> begin
       let format, xml = match f with

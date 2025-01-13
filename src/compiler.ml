@@ -76,31 +76,6 @@ let compile_binop = function
   | BGt  -> "gt"
   | BGeq -> "geq"
 
-(*
-let rec compile_term aliases term =
-  let compile_unop tt f =
-    prefix_tt tt ^ compile_unop f in
-  let compile_binop tt tt' f =
-    let p  = prefix_tt tt in
-    let p' = prefix_tt tt' in
-    let prefix = if String.equal p p' then p else p ^ p' in
-    prefix ^ compile_binop f in
-  let trm = 
-    match Term.(term.trm) with
-    | Term.TVar v -> Term.TVar v
-    | Term.TConst d -> Term.TConst (compile_dom d)
-    | Term.TApp (f, terms) -> Term.TApp (f, List.map ~f:(compile_term aliases) terms)
-    | Term.TUnop (op, term) ->
-       let f = compile_unop (compile_tt (Formula.TypeTerm.eval_default aliases TInt term.tt)) op in
-       Term.TApp (f, [compile_term aliases term])
-    | Term.TBinop (term, op, term') ->
-       let f = compile_binop
-                 (compile_tt (Formula.TypeTerm.eval_default aliases TInt term.tt))
-                 (compile_tt (Formula.TypeTerm.eval_default aliases TInt term'.tt)) op in
-       Term.TApp (f, [compile_term aliases term; compile_term aliases term'])
-  in { term with trm }
- *)
-
 let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.causable) (f: Eformula.t) =
   let open Eformula in
   let module I = Eformula.Info in
@@ -346,12 +321,6 @@ let compile_functions functions aliases =
   List.map function_list ~f:compile_function
 
 
-(*
-let compile_exception_signature exceptions aliases variables =
-  let exceptions_list = List.concat (Map.data exceptions) in
-  let compile_exception_predicate (rule_name, (pred:Eformula.t)) =
-    let var_types = try Map.find_exn variables rule_name with _ -> assert false in
- *)
 let compile_exception_or_scope_signature pols indexed_predicates aliases variables =
   let compile_predicate (idx, pred) =
     let var_types = Map.find_exn variables idx in
@@ -394,11 +363,7 @@ let predicate_from_definition = function
 let compile_signature pols events functions aliases _ _ =
   let event_signatures = compile_events pols events aliases in
   let function_signatures = compile_functions functions aliases in
-  (*let exceptions = List.filter let_rules ~f:is_exception |> List.map ~f:predicate_from_definition in
-  let scopes = List.filter let_rules ~f:is_scope |> List.map ~f:predicate_from_definition in*)
-  (*let exception_signatures = compile_exception_or_scope_signature pols exceptions aliases variables in
-  let scope_signatures = compile_exception_or_scope_signature pols scopes aliases variables in*)
-  List.concat [event_signatures; function_signatures] (*; exception_signatures; scope_signatures]*)
+  List.concat [event_signatures; function_signatures]
 
 let is_let_rule = function
   | ECDefinitionRef _
@@ -419,7 +384,7 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
   let imp_rules = List.filter sorted_c_rules ~f:is_imp_rule in
   let non_vanilla = List.filter imp_rules ~f:(fun r -> not (is_vanilla r)) in
   if List.is_empty non_vanilla then
-    Errors.warning "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
+    Errors.warn "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
   debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));
   let formulae = List.map non_vanilla ~f:compile_imp_rule in
   let let_bindings = List.map let_rules ~f:compile_let_rule in
