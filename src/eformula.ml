@@ -139,12 +139,18 @@ let tbignondisj = function
 let tbigcauforall vars f =
   List.fold_right vars ~init:f
     ~f:(fun x f -> make (forall x f) { Info.dummy with enftype = Enftype.cau;
-                                                           pos = f.info.pos })
+                                                       pos = f.info.pos })
 
-let tbigcauexists vars f =
-  List.fold_right vars ~init:f
-    ~f:(fun x f -> make (exists x f) { Info.dummy with enftype = Enftype.cau;
-                                                           pos = f.info.pos })
+let tbigexists ?(enftype_opt=None) vars f =
+  match enftype_opt with
+  | Some enftype ->
+     List.fold_right vars ~init:f
+       ~f:(fun x f -> make (exists x f) { Info.dummy with enftype; pos = f.info.pos })
+  | None ->
+     List.fold_right vars ~init:f
+       ~f:(fun x f -> make (exists x f) { Info.dummy with pos = f.info.pos })
+
+let tbigcauexists vars f = tbigexists ~enftype_opt:(Some Enftype.causable) vars f 
 
 let rec core_of_tformula ?id:(id=1) d = 
   let lof_formula = of_tformula ~id:(d*id)

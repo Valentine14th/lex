@@ -122,11 +122,14 @@ let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t
           | [] -> error (Errors.enforceability_error "Circular dependency between events" LexingInfo.dummy)
           | _ -> ok ()
           end in
+        debug ("visited:" ^ Util.string_of_int_list visited);
+        debug ("fully_defined:" ^ Util.string_of_int_list fully_defined);
+        debug ("rest:" ^ Util.string_of_int_list rest);
         aux (visited @ fully_defined) rest
     in
-  let* order = aux init rest >| List.rev in
-  debug (Printf.sprintf "topological_sort result: %s" (Util.string_of_int_list order));
-  ok order
+    let* order = aux init rest in
+    debug (Printf.sprintf "topological_sort result: %s" (Util.string_of_int_list order));
+    ok order
 
 let check_used_events_are_defined (tprog: Tlex.tprog) def use =
   let all_defined_events = List.concat (Map.data def)
@@ -277,7 +280,7 @@ let create_tcrules (tprog: Tlex.tprog) : (int, tcrule, Int.comparator_witness) M
   let def_rules = create_def_rules tprog in
   let imp_rules = create_imp_rules tprog in
   debug (Printf.sprintf "DefDis rules: %d" (List.length def_dis_rules));
-  debug (Printf.sprintf "Def rules: %d" (List.length def_rules));
+  debug (Printf.sprintf "DefRef rules: %d" (List.length def_rules));
   debug (Printf.sprintf "Imp rules: %d" (List.length imp_rules));
   List.fold (def_dis_rules @ def_rules @ imp_rules)
             ~init:((Map.empty (module Int), 0))
@@ -706,15 +709,15 @@ let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module StringVar)) ru
 (* TODO: print out other locations where the given event is constituted *)
 
 let fv_of_tcrule = function
-  | TCImplication (_, _, _, pf1, ex, sc, pf2, _, _) ->
-     Set.union_list (module StringVar) Tlex.Pattern.[fv pf1; fv pf2; fvs ex; fvs sc]
-  | TCDefinitionRef (_, _, _, pf, ex, sc, _, _) ->
-     Set.union_list (module StringVar) Tlex.Pattern.[fv pf; fvs ex; fvs sc]
+  | TCImplication (_, _, _, pf1, _, _, pf2, _, _) ->
+     Set.union_list (module StringVar) Tlex.Pattern.[fv pf1; fv pf2](*; fvs ex; fvs sc]*)
+  | TCDefinitionRef (_, _, _, pf, _, _, _, _) ->
+     Set.union_list (module StringVar) Tlex.Pattern.[fv pf](*; fvs ex; fvs sc]*)
   | TCDefinitionDis (disjuncts, _) ->
      Set.union_list (module StringVar)
        (List.concat_map (Map.data disjuncts) ~f:(
             fun disjunct ->
-            Tlex.Pattern.[fv disjunct.pf; fvs disjunct.exceptions; fvs disjunct.scopes]))
+            Tlex.Pattern.[fv disjunct.pf](*; fvs disjunct.exceptions; fvs disjunct.scopes]*)))
 
 
 let vars_are_past_guarded_tcrule_exn ?(pg_map = Map.empty (module StringVar)) vars rule : unit Err.WithErrors.t =
@@ -949,7 +952,7 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
               enftype, if Enftype.is_transparent enftype then itl_srp else None
            | None ->
               Enftype.bot, None
-                             (* TODO: is Obs desired here, or should it be something else like Non? *)
+              (* TODO: is Obs desired here, or should it be something else like Non? *)
            end in
          let v_ex = type_exceptions itl_srp pg_map ex (Enftype.neg enftype) in
          let v_sc = type_scopes itl_srp pg_map sc enftype in
@@ -1065,15 +1068,20 @@ let pg_map_of_tcrule pg_map: tcrule -> pg_map =
      let args = get_predicate_params_exn g in
      let arg_names = List.map args ~f:get_trm_name_exn in
      List.fold_left arg_names ~init:pg_map
-       ~f:(fun pg_map key -> Map.add_exn pg_map ~key ~data:(solve_past_guarded_of_pattern_exceptions_scopes tpf ex sc key pg_map))
+       ~f:(fun pg_map key ->
+         let f _ = solve_past_guarded_of_pattern_exceptions_scopes tpf ex sc key pg_map in
+         Map.update pg_map key ~f)
   | TCDefinitionDis (tdisjuncts, g) ->
      (*let e = get_predicate_name_exn g in*)
      let args = get_predicate_params_exn g in
      let arg_names = List.map args ~f:get_trm_name_exn in
-     let f x = List.map (Map.data tdisjuncts)
-                 ~f:(fun d -> solve_past_guarded_of_pattern_exceptions_scopes d.pf d.exceptions d.scopes x pg_map) in
+     let f x =
+       List.map (Map.data tdisjuncts)
+         ~f:(fun d ->
+           solve_past_guarded_of_pattern_exceptions_scopes d.pf d.exceptions d.scopes x pg_map) in
      let sols_list = List.map arg_names ~f in
-     let f pg_map key sols = Map.add_exn pg_map ~key ~data:(MFOTL_lib.Etc.inter_string_set_list sols) in
+     let f pg_map key sols =
+       Map.update pg_map key ~f:(fun _ -> MFOTL_lib.Etc.inter_string_set_list sols) in
      List.fold2_exn arg_names sols_list ~init:pg_map ~f
 
 let pg_map_of_tcrules tcrules: pg_map =

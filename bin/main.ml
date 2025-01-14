@@ -25,7 +25,7 @@ let loop filename mode f o b () =
                           Clex.to_files cprog sig_fn formula_fn
          end
       | Errors errs ->
-         print_endline (Errors.to_string_multiple errs);
+         print_string (Errors.to_string_multiple errs);
          exit (-1)
     end
   | Some "doc" -> begin
@@ -34,7 +34,7 @@ let loop filename mode f o b () =
          let outname = Option.fold o ~init:(filename ^ "_doc.html") ~f:(fun _ x -> x) in
          Doc.to_file basename outname eprog
       | Errors errs ->
-         print_endline (Errors.to_string_multiple errs);
+         print_string (Errors.to_string_multiple errs);
          exit (-1)
     end
   | Some "template" -> begin

@@ -96,4 +96,4 @@ let rec init (sf: Sformula.t) : t =
          | UOnce -> once i (init f)
        end
     | _ -> assert false
-  in make form info
+  in ac_simplify (make form info)

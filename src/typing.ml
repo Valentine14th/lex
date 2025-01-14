@@ -353,7 +353,7 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
   match List.zip args trms with
   | Base.List.Or_unequal_lengths.Ok args_trms ->
      let t_vars, trms' = fold_map_best_effort ~init:t_vars ~f:acc_function args_trms in
-     let trms' = (all trms') >| List.rev in
+     let trms' = (all trms') in (*>| List.rev in*)
      trms' >| (fun trms' -> (t_vars, trms'))
   | Base.List.Or_unequal_lengths.Unequal_lengths ->
      let err_msg = Printf.sprintf

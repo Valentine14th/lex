@@ -6,8 +6,6 @@ type signature_item =
   | CEvent of ident * event_type * Enftype.t * ((ident * Dom.tt) list)
   | CFunction of ident * ((ident * Dom.tt) list) * Dom.tt
 
-type let_binding = (Eformula.t * Eformula.t) * Enftype.t
-
 type cprog =
   {
     signature:    signature_item list;
