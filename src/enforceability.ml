@@ -236,7 +236,7 @@ let combine_constitutive_rules rules: tcrule list * 'params_map =
     in
     let params = Map.find_exn params_map name in
     let pos = Map.find_exn positions name in
-    let eg = make (predicate name params) { Tformula.Info.dummy with pos; event_type_opt = Some Lex.Predicate } in
+    let eg = make (predicate name params) { pos; event_type_opt = Some Lex.Predicate } in
     TCDefinitionDis (disjunction, eg)
   in
   Map.to_alist event_def_map |> List.map ~f:to_tr_def_dis, params_map

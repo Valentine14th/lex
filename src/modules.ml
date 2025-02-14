@@ -33,10 +33,6 @@ let extension_of_import = function
   | SIFormex _ -> ".xml"
   | SIAkomaNtoso _ -> ".xml"
 
-let concat_all = function
-  | [] -> ""
-  | init::idents -> List.fold_left idents ~init ~f:Filename.concat 
-
 let list_imports prog =
   let f = function
     | Lex.SImport (pos, ILex, idents)    -> Some (SILex (pos, idents))
@@ -45,8 +41,14 @@ let list_imports prog =
     | _ -> None
   in List.filter_map ~f Lex.(prog.stmts)
 
+let list_includes sprog =
+  let f = function
+    | Slex.SSInclude (pos, idents) -> Some (SILex (pos, idents))
+    | _ -> None
+  in List.filter_map ~f Slex.(sprog.stmts)
+
 let suffix_of_import import =
-  concat_all (idents_of_import import) ^ extension_of_import import
+  Util.concat_all_filename (idents_of_import import) ^ extension_of_import import
 
 let check_filename (prefix, filename) =
   Sys_unix.is_file_exn ~follow_symlinks:false (Filename.concat prefix filename)
@@ -128,10 +130,24 @@ let rec do_type lexpath ?seq:(seq=[]) b filepath filename : Elex.eprog Errors.Or
   let open Errors.OrErrors in
   let  fullname  = Filename.concat filepath filename in
   let  seq'      = seq @ [fullname] in
-  let* sprog     = parse_module fullname in
+  let  prefixes  = filepath :: lexpath in
+  let rec aux fullname =
+    let* sprog    = parse_module fullname in
+    let  includes = list_includes sprog in
+    let  fns      =
+      List.map ~f:(fun incl -> Util.concat_all_filename (idents_of_import incl)) includes in
+    let f incl =
+      let* (filepath', filename') = find_filename seq' incl prefixes (suffix_of_import incl) in
+      let fullname' = Filename.concat filepath' filename' in
+      aux fullname' in
+    let* sprogs   = all (List.map ~f includes) in
+    let  incl_map = Map.of_alist_exn (module String) (List.zip_exn fns sprogs) in
+    ok (Slex.replace_includes incl_map sprog)
+  in
+  let* sprog     = aux fullname in
   let  prog      = Slex.to_prog sprog in
   let  imports   = list_imports prog in
-  let  prefixes  = filepath :: lexpath in
+
   let  suffixes  = List.map imports ~f:suffix_of_import in
   let  filenames = List.map (List.zip_exn imports suffixes)
                     ~f:(fun (import, suffix) -> find_filename seq' import prefixes suffix) in

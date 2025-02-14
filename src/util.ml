@@ -91,3 +91,7 @@ let sanitize_string n =
   String.map n ~f:(function ' ' | '[' | ']' | '.' -> '-' | c -> c)
 
 let concat k (k', v) = ((if String.is_empty k' then k else k ^ "__" ^ k'), v)
+
+let concat_all_filename = function
+  | [] -> ""
+  | init::idents -> List.fold_left idents ~init ~f:Filename.concat

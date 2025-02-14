@@ -81,4 +81,12 @@ let to_string = function
   | Span v -> Span.to_string v
   | Money v -> Money.to_string v
      
-
+let to_latex = function
+  | Int v -> Int.to_string v
+  | Str v -> Printf.sprintf "\\texttt{\"%s\"}" v
+  | Float v -> Float.to_string v
+  | Bool true -> "\\top"
+  | Bool false -> "\\bot"
+  | Time v -> Time.to_string v
+  | Span v -> Span.to_string v
+  | Money v -> Money.to_string v

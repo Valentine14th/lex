@@ -6,6 +6,12 @@ type signature_item =
   | CEvent of ident * event_type * Enftype.t * ((ident * Dom.tt) list)
   | CFunction of ident * ((ident * Dom.tt) list) * Dom.tt
 
+let is_builtin = function
+  | CEvent ("ts", _, _, _)   -> true
+  | CEvent ("tp", _, _, _)   -> true
+  | CEvent ("tick", _, _, _) -> true
+  | _ -> false
+
 type cprog =
   {
     signature:    signature_item list;
@@ -31,8 +37,7 @@ let pol_to_symbol_string enftype =
 let string_of_signatures signatures =
   let string_of_event_type = function
     | Event (true, _)  -> "ext "
-    | Event (false, _) | Exception -> ""
-    | Predicate   -> "pred " in
+    | Event (false, _) | Exception | Predicate -> "" in
   let string_of_event_signature (name, event_type, pol, args) =
     let arg_strs = List.map args ~f:(fun (name, tt) ->
       Printf.sprintf "%s: %s" name (Dom.tt_to_string tt)) in
@@ -44,13 +49,14 @@ let string_of_signatures signatures =
     let arg_strs = List.map args ~f:(fun (name, tt) ->
       Printf.sprintf "%s: %s" name (Dom.tt_to_string tt)) in
     let args_str = String.concat ~sep:", " arg_strs in
-    Printf.sprintf "fun %s(%s) -> %s" name args_str (Dom.tt_to_string ret_tt)
+    Printf.sprintf "fun %s(%s) : %s" name args_str (Dom.tt_to_string ret_tt)
   in
   let string_of_signature_item = function
     | CEvent (name, event_type, pol, args) ->
        string_of_event_signature (name, event_type, pol, args)
     | CFunction (name, args, ret_tt) ->
        string_of_function_signature (name, args, ret_tt) in
+  let signatures = List.filter ~f:(fun si -> not (is_builtin si)) signatures in
   let signature_strs = List.map signatures ~f:string_of_signature_item in
   String.concat ~sep:"\n" signature_strs
 

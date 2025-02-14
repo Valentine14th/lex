@@ -28,6 +28,7 @@ let pos_of_srule = function
 
 type sstmt =
   | SSImport    of LexingInfo.t * import_format * string list
+  | SSInclude   of LexingInfo.t * string list
   | SSSection   of LexingInfo.t * section_kind * string * string option
   | SSRule      of LexingInfo.t * string option * (ident * TypeTerm.t) list * srule * string option
   | SSEvent     of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
@@ -57,9 +58,17 @@ let to_rule = function
   | SException (pos, fp, references) -> Exception (pos, to_pattern fp, references)
   | SScope (pos, fp, references) -> Scope (pos, to_pattern fp, references)
   | SExceptionC (pos, fp, references, g) -> ExceptionC (pos, to_pattern fp, references, List.map ~f:Formula.init g)
+
+let replace_includes (incl_map: (string, sprog, String.comparator_witness) Map.t) sprog =
+  let replace_include_stmt = function
+    | SSInclude (_, idents) -> (Map.find_exn incl_map (Util.concat_all_filename idents)).stmts
+    | stmt -> [stmt]
+  in
+  { stmts = List.concat_map ~f:replace_include_stmt sprog.stmts }
     
 let to_stmt = function
   | SSImport (pos, import_format, idents) -> SImport (pos, import_format, idents)
+  | SSInclude _ -> assert false
   | SSSection (pos, section_kind, label, title) -> SSection (pos, section_kind, label, title)
   | SSRule (pos, label, type_fixes, rule, doc_string) -> SRule (pos, label, type_fixes, to_rule rule, doc_string)
   | SSEvent (pos, event_type, name, typed_args, pol, doc_string) -> SEvent (pos, event_type, name, typed_args, pol, doc_string)
@@ -131,6 +140,9 @@ let string_of_stmt ?(i=0) =
   | SSImport (_, import_format, idents) ->
      Printf.sprintf "import %s%s"
        (string_of_import_format import_format)
+       (String.concat ~sep:"." idents)
+  | SSInclude (_, idents) ->
+     Printf.sprintf "include %s"
        (String.concat ~sep:"." idents)
   | SSSection (_, section_kind, label, title) ->
      Printf.sprintf "%s%s \"%s\"%s"

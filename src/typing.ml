@@ -502,13 +502,7 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
   | Predicate' _ | Let _ | Let' _  | Top _ ->
      raise (Invalid_argument (Printf.sprintf "typing not implemented for %s" (Formula.to_string f)))
   in
-  let type_variable_instantiation t_vars (k, v) =
-    let* t_vars, v = type_term s.tevents s.tfunctions s.taliases t_vars v None in
-    ok (t_vars, (k, v)) in
-  let t_vars, variable_instantiations =
-    fold_map_best_effort ~init:t_vars ~f:type_variable_instantiation f.info.variable_instantiations in
-  let* variable_instantiations = all variable_instantiations in
-  ok (t_vars, Tformula.{ form; info = Tformula.{ variable_instantiations; pos = f.info.pos; event_type_opt} })
+  ok (t_vars, Tformula.{ form; info = Tformula.{ pos = f.info.pos; event_type_opt} })
 
 let type_patt s t_vars (pf: Lex.Pattern.patt) : ('t_vars * Pattern.patt) Errors.OrErrors.t =
   let open Errors.OrErrors in

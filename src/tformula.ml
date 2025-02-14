@@ -16,7 +16,6 @@ module Side = MFOTL_lib.Side
 module StringVar = Term.StringVar
 
 type tinfo_type = {
-    variable_instantiations: (string * TTerm.t) list;
     pos: LexingInfo.t;
     event_type_opt: Lex.event_type option;
   } [@@deriving compare, sexp_of, hash, equal]
@@ -25,17 +24,9 @@ module Info : MFOTL_lib.Modules.I with type t = tinfo_type = struct
   
   type t = tinfo_type [@@deriving compare, sexp_of, hash, equal]
 
-  let rec string_of_instantiations = function
-    | [] -> ""
-    | [(x, t)] -> Printf.sprintf "%s <- %s" x (TTerm.value_to_string t)
-    | (x, t) :: insts ->  Printf.sprintf "%s <- %s; %s" x (TTerm.value_to_string t) (string_of_instantiations insts)
-
-  let to_string _ s info =
-    match info.variable_instantiations with
-    | [] -> s
-    | _ -> Printf.sprintf "(%s; %s)" s (string_of_instantiations info.variable_instantiations)
+  let to_string _ s _ = s
   
-  let dummy = { variable_instantiations = []; pos = LexingInfo.dummy; event_type_opt = None }
+  let dummy = { pos = LexingInfo.dummy; event_type_opt = None }
 
 end
 

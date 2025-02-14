@@ -191,7 +191,7 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) vars (enftype: Enftype.t) 
   (* TODO: how to handle other cases (if at all) ? *)
   | _ -> assert false
 
-let compile_let_binding ?(quantify=true) (f: Eformula.t) pred : string * ident list * Eformula.t =
+let compile_let_binding (f: Eformula.t) pred : string * ident list * Eformula.t =
   match pred with
   | { form = Predicate (p_name, trms); _ } ->
     let process_term fs (t: TTerm.t) = match t.trm with
@@ -206,34 +206,45 @@ let compile_let_binding ?(quantify=true) (f: Eformula.t) pred : string * ident l
                              info = { I.dummy with enftype = Enftype.obs } } in
          ef :: fs, w
     in
+    let bvs = Set.of_list (module String) (ETerm.fv_list trms) in
     let fs', trms = List.fold_map trms ~init:[] ~f:process_term in
     let fs = f :: List.rev fs' in
+    let compile_exists f =
+      let fvs = Set.elements (Set.diff (Eformula.fv f) bvs) in
+      List.fold_left fvs ~init:f ~f:(fun f x -> Eformula.make (Eformula.exists x f) f.info) in
+    let fs = List.map fs ~f:compile_exists in
     let rhs = tbigcauconj fs in
-    let vars = Set.elements (Eformula.fv rhs) in
-    let rhs = if quantify then tbigcauexists vars rhs else rhs in
     (p_name, trms, rhs)
   | _ -> assert false
 
-let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) vars (enftype: Enftype.t) ed: Eformula.t =
+let compile_renaming f renaming =
+  List.fold_right renaming ~init:f ~f:(fun (x, y) f -> Eformula.make (Eformula.assign x y f) f.info)
+
+let compile_exists f vars =
+  List.fold_right vars ~init:f ~f:(fun x f -> Eformula.make (Eformula.exists x f) f.info)
+
+let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) vars bvs (enftype: Enftype.t) ed: Eformula.t =
   (* let renaming = List.map2 ed.params_new ed.params_original ~f:(fun t1 t2 -> eeqconst t1 t2) in *)
   (* TODO: implement variable renaming using 'gets' operator *)
   let param_names = List.map ed.params_new ~f:(fun t -> match t.trm with
     | ETerm.Var v -> v
     | _ -> assert false) in
   let renaming = List.zip_exn param_names ed.params_original in
-  match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
-  | true, _ -> 
-    let c = Option.value_exn cau_constr in
-    let compiled = compile_lhs ~cau_constr:(Some c) vars Enftype.causable ed.pf ed.exceptions ed.scopes in
-    { compiled with info = { compiled.info with variable_instantiations = renaming } }
-  | _, true ->
-    let c = Option.value_exn sup_constr in
-    let compiled = compile_lhs ~sup_constr:(Some c) vars Enftype.suppressable ed.pf ed.exceptions ed.scopes in
-    { compiled with info = { compiled.info with variable_instantiations = renaming } }
-  | _  ->
-    let ex_neg = List.map ed.exceptions ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
-    let compiled = tbignonconj (compile_epformula ~f:(tbignonconj) ed.pf :: ex_neg @ ed.scopes) in
-    { compiled with info = { compiled.info with variable_instantiations = renaming } }
+  let compiled = 
+    match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
+    | true, _ -> 
+       let c = Option.value_exn cau_constr in
+       compile_lhs ~cau_constr:(Some c) vars Enftype.causable ed.pf ed.exceptions ed.scopes
+    | _, true ->
+       let c = Option.value_exn sup_constr in
+       compile_lhs ~sup_constr:(Some c) vars Enftype.suppressable ed.pf ed.exceptions ed.scopes
+    | _  ->
+       let ex_neg = List.map ed.exceptions
+                      ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
+       tbignonconj (compile_epformula ~f:(tbignonconj) ed.pf :: ex_neg @ ed.scopes)
+  in let vars = Eformula.fvs [compiled] in
+     compile_exists (compile_renaming compiled renaming) (Set.elements (Set.diff vars bvs))
+
 
 let fv_of_ecrule = function
   | ECImplication (_, _, _, pf1, _, _, pf2, _, _, _) ->
@@ -253,25 +264,28 @@ let compile_let_rule = function
        match enf_constr with
        | Some (ESd enf_sup_lhs) ->
           let f = compile_lhs ~sup_constr:(Some enf_sup_lhs) vars Enftype.suppressable pf ex sc in
-          compile_let_binding ~quantify:false f g
+          compile_let_binding f g
        | Some (ECd enf_cau_lhs) ->
           let f = compile_lhs ~cau_constr:(Some enf_cau_lhs) vars Enftype.causable pf ex sc in
-          compile_let_binding ~quantify:false f g
+          compile_let_binding f g
        | None ->
           let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
           let pf_comp = compile_epformula ~f:(tbignonconj) pf in
           let f = tbignonconj (pf_comp :: ex_neg @ sc) in
-          compile_let_binding ~quantify:false f g
+          compile_let_binding f g
      end, enftype
   | ECDefinitionDis (edisjuncts, g, enftype, enf_constr) as r ->
      begin
        let vars = fv_of_ecrule r in
+       let bvs = Eformula.fvs [g] in
        match enf_constr with
     | Some (ECdd (idx, enf_cau_lhs)) -> 
       let rhs_list =
         let aux ~key:j ~data:d =
-          if idx = j then compile_edisjunct ~cau_constr:(Some enf_cau_lhs) vars Enftype.causable d
-          else compile_edisjunct vars Enftype.bot d
+          if idx = j then
+            compile_edisjunct ~cau_constr:(Some enf_cau_lhs) vars bvs Enftype.causable d
+          else
+            compile_edisjunct vars bvs Enftype.bot d
         in
         Map.mapi edisjuncts ~f:aux |> Map.data
       in
@@ -279,10 +293,10 @@ let compile_let_rule = function
       compile_let_binding rhs g
     | Some (ESdd enf_sup_lhs_list) ->
       let rhs = tbignondisj (List.map2_exn (Map.data edisjuncts) enf_sup_lhs_list
-        ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) vars Enftype.suppressable d)) in
+        ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) vars bvs Enftype.suppressable d)) in
       compile_let_binding rhs g
     | None ->
-      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct vars Enftype.bot)))  in
+      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct vars bvs Enftype.bot)))  in
       compile_let_binding rhs g
     end, enftype
   | _ -> assert false
@@ -332,10 +346,10 @@ let compile_eval_default aliases typeterm =
     (compile_typeterm (
       TypeTerm.eval_default aliases (TypeTerm.TypeConst TInt) typeterm))
 
-let compile_events pols events aliases =
+let compile_events events aliases =
   let f (_, (_, _, enftype, _)) = not (Enftype.is_internal enftype) in
   let event_list = List.filter ~f (Map.to_alist events) in
-  let compile_event (name, (event_type, args, _, _)) =
+  let compile_event (name, (event_type, args, enftype, _)) =
     let type_args (name, typ_alias) =
       let terms = compile_eval_default aliases typ_alias in
       terms |>
@@ -343,11 +357,7 @@ let compile_events pols events aliases =
         List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
     in
     let typed_args = List.concat (List.map args ~f:type_args) in
-    let pol' = match Map.find pols name with
-      | Some p -> p
-      | None -> Enftype.obs (* TODO: is this correct?? *)
-    in
-    CEvent (name, event_type, pol', typed_args) (* TODO: which polarity value should be used? *)
+    CEvent (name, event_type, enftype, typed_args) (* TODO: which polarity value should be used? *)
   in
   List.map event_list ~f:compile_event
 
@@ -368,33 +378,6 @@ let compile_functions functions aliases =
   in
   List.map function_list ~f:compile_function
 
-
-let compile_exception_or_scope_signature pols indexed_predicates aliases variables =
-  let compile_predicate (idx, pred) =
-    let var_types = Map.find_exn variables idx in
-    let pred_name_and_terms = match pred.form with
-      | Eformula.Predicate (n, ts) -> (n, ts)
-      | _ -> assert false
-    in
-    let terms = snd pred_name_and_terms in
-    let type_term f = match Eformula.ETerm.(f.trm) with
-      | ETerm.Var v ->
-         let a = Map.find_exn var_types v in
-         let terms = compile_eval_default aliases a in
-         List.map terms ~f:(Util.concat v)
-      | _ -> assert false
-      (* TODO: constants are not actually possible to be part of an exception predicate *)
-    in
-    let typed_terms = List.concat (List.map terms ~f:type_term) in
-    let pol = match Map.find pols (fst pred_name_and_terms) with
-      | Some p -> p
-      | None -> Enftype.obs (* TODO: is this correct? *)
-      (* | None -> Lex.TItl *)
-    in
-    CEvent (fst pred_name_and_terms, Event (false, Standard), pol, typed_terms)
-  in
-  List.map indexed_predicates ~f:compile_predicate
-
 let is_exception = function
   | ECDefinitionRef (_, TRTException, _, _, _, _, _, _, _, _) -> true
   | ECDefinitionRef (_, TRTExceptionC, _, _, _, _, _, _, _, _) -> true
@@ -408,8 +391,8 @@ let predicate_from_definition = function
   | ECDefinitionRef (idx, _, _, _, _, _, _, g, _, _) -> (idx, g)
   | _ -> assert false
 
-let compile_signature pols events functions aliases _ _ =
-  let event_signatures = compile_events pols events aliases in
+let compile_signature _ events functions aliases _ _ =
+  let event_signatures = compile_events events aliases in
   let function_signatures = compile_functions functions aliases in
   List.concat [event_signatures; function_signatures]
 

@@ -20,7 +20,6 @@ let debug msg = if !debug_eformula then Errors.debug_print ~f_name:(Some "eformu
 
 type einfo_type = {
     enftype: Enftype.t;
-    variable_instantiations: (string * TTerm.t) list;
     id: int;
     pos: LexingInfo.t;
     event_type_opt: Lex.event_type option;
@@ -31,19 +30,10 @@ module Info : Modules.I with type t = einfo_type = struct
   
   type t = einfo_type [@@deriving compare, sexp_of, hash, equal]
 
-  let rec string_of_instantiations = function
-    | [] -> ""
-    | [(x, t)] -> Printf.sprintf "%s <- %s" x (TTerm.value_to_string t)
-    | (x, t) :: insts ->  Printf.sprintf "%s <- %s; %s" x (TTerm.value_to_string t) (string_of_instantiations insts)
-
-  let to_string _ s info =
-    match info.variable_instantiations with
-    | [] -> s
-    | _ -> Printf.sprintf "(%s; %s)" s (string_of_instantiations info.variable_instantiations)
+  let to_string _ s _ = s
   
   let dummy = {
       enftype = Enftype.bot;
-      variable_instantiations = [];
       id = -1;
       pos = LexingInfo.dummy;
       event_type_opt = None;
@@ -191,8 +181,7 @@ let rec core_of_tformula ?id:(id=1) d =
 and of_tformula ?id:(id=1) (f: Tformula.t) : t =
   let d = Tformula.deg f in
   let form, flag_opt = core_of_tformula ~id d f.form in
-  { form; info = { variable_instantiations = f.info.variable_instantiations;
-                   enftype = Enftype.obs;
+  { form; info = { enftype = Enftype.obs;
                    event_type_opt = f.info.event_type_opt;
                    pos = f.info.pos; id; flag_opt; } }
 
@@ -235,8 +224,7 @@ let rec core_of_typed_tformula ?id:(id=1) d =
 and of_typed_tformula ?id:(id=1) (f: Tformula.typed_t) : t =
   let d = Tformula.deg f in
   let form, flag_opt = core_of_typed_tformula ~id d f.form in
-  { form; info = { variable_instantiations = f.info.info.variable_instantiations;
-                   enftype = f.info.enftype;
+  { form; info = { enftype = f.info.enftype;
                    event_type_opt = f.info.info.event_type_opt;
                    pos = f.info.info.pos; id; flag_opt; } }
 
@@ -250,8 +238,7 @@ let fix_side s f g =
   | _ -> s
 
 let rec to_formula (f: t): Formula.t =
-  let variable_instantiations = List.map f.info.variable_instantiations ~f:(fun (x, t) -> (x, ETerm.to_term t)) in
-  Formula.make (to_formula_core f.form) { variable_instantiations; pos = f.info.pos }
+  Formula.make (to_formula_core f.form) { pos = f.info.pos }
 
 and to_formula_core: core_t -> Formula.core_t = function
   | TT -> TT

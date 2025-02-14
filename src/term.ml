@@ -22,6 +22,7 @@ module StringVar : Modules.V with type t = string and type comparator_witness = 
     type t = string [@@deriving compare, sexp_of, hash, equal]
     
     let to_string s = s
+    let to_latex s = Printf.sprintf "\\mathit{%s}" s
     let ident s = s
     let of_ident s = s
 
@@ -46,6 +47,10 @@ module Uop = struct
   let to_string = function
     | USub -> "-"
     | UNot -> "!"
+
+  let to_latex = function
+    | USub -> "-"
+    | UNot -> "\\neg"
 
   let prio _ = 10
 
@@ -73,6 +78,22 @@ module Bop = struct
     | BLeq -> "<="
     | BGt  -> ">"
     | BGeq -> ">="
+
+  let to_latex = function
+    | BAdd -> "+"
+    | BSub -> "-"
+    | BMul -> "\\cdot"
+    | BDiv -> "/"
+    | BPow -> "\\mathsf{pow}"
+    | BAnd -> "\\mathtt{AND}"
+    | BOr  -> "\\mathtt{OR}"
+    | BXor -> "\\mathtt{XOR}"
+    | BEq  -> "="
+    | BNeq -> "\\neq"
+    | BLt  -> "<"
+    | BLeq -> "\\leq"
+    | BGt  -> ">"
+    | BGeq -> "\\geq"
 
   let prio = function
     | BXor | BOr -> 1

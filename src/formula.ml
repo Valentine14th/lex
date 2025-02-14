@@ -5,27 +5,18 @@ module Modules = MFOTL_lib.Modules
 module Side = MFOTL_lib.Side
 
 type info_type = {
-    variable_instantiations: (string * Term.t) list;
     pos: LexingInfo.t
   } [@@deriving compare, sexp_of, hash, equal]
 
-let info_of_pos pos = { pos; variable_instantiations = [] }
+let info_of_pos pos = { pos }
 
 module Info : Modules.I with type t = info_type = struct
   
   type t = info_type [@@deriving compare, sexp_of, hash, equal]
 
-  let rec string_of_instantiations = function
-    | [] -> ""
-    | [(x, t)] -> Printf.sprintf "%s <- %s" x (Term.value_to_string t)
-    | (x, t) :: insts ->  Printf.sprintf "%s <- %s; %s" x (Term.value_to_string t) (string_of_instantiations insts)
+  let to_string _ s _ = s
 
-  let to_string _ s info =
-    match info.variable_instantiations with
-    | [] -> s
-    | _ -> Printf.sprintf "(%s; %s)" s (string_of_instantiations info.variable_instantiations)
-
-  let dummy = { variable_instantiations = []; pos = LexingInfo.dummy }
+  let dummy = { pos = LexingInfo.dummy }
 
 end
 
