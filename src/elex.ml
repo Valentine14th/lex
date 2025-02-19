@@ -128,7 +128,7 @@ type eprog =
     pols:              (string, Enftype.t, Base.String.comparator_witness) Map.t;
   }
 
-let tempty =
+let eempty =
   {
     estmts            = [];
     ealiases          = Map.empty (module String);
@@ -231,7 +231,7 @@ module Sig : MFOTL_lib.Modules.S = struct
   type pred_kind = Trace | Predicate | External | Builtin | Let
                    [@@deriving compare, sexp_of, hash, equal]
 
-  let prog = ref (tempty: eprog) 
+  let prog = ref (eempty: eprog) 
   (*let set_prog p = prog := p*)
   
   let rank_of_pred p_name =

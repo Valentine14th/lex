@@ -27,14 +27,14 @@ let pos_of_srule = function
 (* Statements and programs *)
 
 type sstmt =
-  | SSImport    of LexingInfo.t * import_format * string list
-  | SSInclude   of LexingInfo.t * string list
-  | SSSection   of LexingInfo.t * section_kind * string * string option
-  | SSRule      of LexingInfo.t * string option * (ident * TypeTerm.t) list * srule * string option
-  | SSEvent     of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
-  | SSType      of LexingInfo.t * ident * (TypeTerm.t option) * string option
-  | SSFunction  of LexingInfo.t * ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
-  | SSNote      of LexingInfo.t * string
+  | SSImport     of LexingInfo.t * import_format * string list
+  | SSInclude    of LexingInfo.t * string list
+  | SSSection    of LexingInfo.t * section_kind * string * string option
+  | SSRule       of LexingInfo.t * string option * (ident * TypeTerm.t) list * srule * string option
+  | SSEvent      of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
+  | SSType       of LexingInfo.t * ident * (TypeTerm.t option) * string option
+  | SSFunction   of LexingInfo.t * ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
+  | SSNote       of LexingInfo.t * string
 
 type sprog = { stmts: sstmt list }
 
@@ -105,22 +105,23 @@ let string_of_rule i rule =
       else Util.tabs i ^ (string_of_rule_constrs rcs))
   in
   let string_of_cons_rule verb fp g =
-    Util.tabs i     ^ "whenever" ^ patt_to_string fp.patt ^ "\n"
-    ^ string_of_formula_list fp.fs ^ "\n"
-    ^ Util.tabs i   ^ verb      ^ "\n"
+    Util.tabs i       ^ "whenever" ^ patt_to_string fp.patt ^ "\n"
+    ^ string_of_formula_list fp.fs        ^ "\n"
+    ^ Util.tabs i     ^ verb                                ^ "\n"
     ^ string_of_formula_list g
   in
-  let string_of_exc_rule verb fp rs = Util.tabs i     ^ "whenever"  ^ patt_to_string fp.patt ^ "\n"
-    ^ string_of_formula_list fp.fs ^ "\n"
-    ^ Util.tabs i   ^ verb
+  let string_of_exc_rule verb fp rs =
+    Util.tabs i       ^ "whenever"  ^ patt_to_string fp.patt ^ "\n"
+    ^ string_of_formula_list fp.fs         ^ "\n"
+    ^ Util.tabs i     ^ verb
     ^ String.concat ~sep:"\n" (List.map ~f:Ref.to_string rs)
   in
   let string_of_excc_rule verb fp rs g =
-    Util.tabs i     ^ "whenever"  ^ patt_to_string fp.patt ^ "\n"
-    ^ string_of_formula_list fp.fs ^ "\n"
-    ^ Util.tabs i   ^ verb
-    ^ String.concat ~sep:"\n" (List.map ~f:Ref.to_string rs)
-    ^ Util.tabs i   ^ "constitute"
+    Util.tabs i       ^ "whenever"  ^ patt_to_string fp.patt ^ "\n"
+    ^ string_of_formula_list fp.fs         ^ "\n"
+    ^ Util.tabs i     ^ verb
+    ^ Util.tabs (i+1) ^ String.concat ~sep:"\n" (List.map ~f:Ref.to_string rs)
+    ^ Util.tabs i     ^ "constitute"
     ^ string_of_formula_list g
   in
   match rule with

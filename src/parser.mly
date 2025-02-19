@@ -1,6 +1,8 @@
 %{
   open Lex
+  open Rex
   open Slex
+  open Srex
   open LexingInfo
   open Sformula
 
@@ -31,7 +33,7 @@
 %token <LexingInfo.t * string>         STRING
 %token <LexingInfo.t * MFOTL_lib.Time.t> TIME
 %token <LexingInfo.t>                  FALSE TRUE
-%token <LexingInfo.t * string>          DOCSTRING
+%token <LexingInfo.t * string>         DOCSTRING
 
 /* Tokens: symbols */
 
@@ -53,6 +55,7 @@
 %token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR
 %token <LexingInfo.t> SUM AVG MED CNT MIN MAX
 %token <LexingInfo.t> FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE
+%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY HIDE
 
 /* Tokens: intervals */
 
@@ -88,6 +91,7 @@
 %left DOT
 
 %start <Slex.sprog> prog
+%start <Srex.srefi> refi
 %%
 
 /* Program */
@@ -641,3 +645,63 @@ common_interval:
     { Interval.lclosed_ropen_BI   (snd $2)       (snd $4) }
   | IBETWEEN           SPAN IEXCLUDED AND SPAN
     { Interval.lopen_rclosed_BI   (snd $2)       (snd $5) }
+
+/* Refinement */
+
+refi:
+  | NEWLINE? separated_list(NEWLINE, rtmt) EOF
+    { { rtmts = $2 } }
+
+rtmt:
+  | stmt
+    { SRStmt $1 }
+  | REFINE import_name
+    { SRRefine ($1 +> (fst $2), snd $2) }
+  | rrule_decl
+    { $1 }
+  | type_refi_decl
+    { $1 }
+  | replace_decl
+    { $1 }
+  | hide_decl
+    { $1 }
+
+rrule_decl:
+  | RULE NEWUP DOCSTRING NEWWHITE type_fixes rrule
+    { SRRule ($1 +> Srex.pos_of_srrule $6, None,          $5, $6, Some (snd $3)) }
+  | RULE STRING NEWUP DOCSTRING NEWWHITE type_fixes rrule
+    { SRRule ($1 +> Srex.pos_of_srrule $7, Some (snd $2), $6, $7, Some (snd $4)) }
+  | RULE NEWUP type_fixes rrule
+    { SRRule ($1 +> Srex.pos_of_srrule $4, None,          $3, $4, None) }
+  | RULE STRING NEWUP type_fixes rrule
+    { SRRule ($1 +> Srex.pos_of_srrule $5, Some (snd $2), $4, $5, None) }
+
+rrule:
+  | WHENEVER pattern NEWUP es NEWDOWN REFINE NEWUP es
+    { SRefine ($1 +> (last $8).pos, pf $2 $4, $8) }
+
+type_refi_decl:
+  | REFINE TTYPE IDENT IS type_term 
+    { SRType ($1 +> fst $5, snd $3, Some (snd $5), None) }
+  | REFINE TTYPE IDENT IS type_term NEWUP DOCSTRING 
+    { SRType ($1 +> fst $7, snd $3, Some (snd $5), Some (snd $7)) }
+  | REFINE TTYPE IDENT
+    { SRType ($1 +> fst $3, snd $3, None,          None) }
+  | REFINE TTYPE IDENT NEWUP DOCSTRING
+    { SRType ($1 +> fst $5, snd $3, None,          Some (snd $5)) }
+
+hide_decl:
+  | HIDE IDENT
+    { SRHide ($1 +> fst $2, snd $2, None) }
+  | HIDE IDENT NEWUP DOCSTRING
+    { SRHide ($1 +> fst $4, snd $2, Some (snd $4)) }
+
+replace_decl:
+  | replace_kind NEWUP ref_exprs NEWDOWN BY NEWUP ref_exprs
+    { SRReplace (fst $1 +> fst_of_last $7, snd $1, List.map snd $3, List.map snd $7, None) }
+  | replace_kind NEWUP DOCSTRING NEWLINE ref_exprs NEWDOWN BY NEWUP ref_exprs
+    { SRReplace (fst $1 +> fst_of_last $9, snd $1, List.map snd $5, List.map snd $9, Some (snd $3)) }
+
+%inline replace_kind:
+  | STRENGTHEN { $1, Strengthen }
+  | WEAKEN     { $1, Weaken }

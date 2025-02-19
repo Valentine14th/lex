@@ -99,6 +99,11 @@
        "CNT"          , (fun b -> CNT b) ;
        "MIN"          , (fun b -> MIN b) ;
        "MAX"          , (fun b -> MAX b) ;
+       "refine"       , (fun b -> REFINE b) ;
+       "strengthen"   , (fun b -> STRENGTHEN b) ;
+       "weaken"       , (fun b -> WEAKEN b) ;
+       "by"           , (fun b -> BY b) ;
+       "hide"         , (fun b -> HIDE b) ;
       ]
 }
 

@@ -386,8 +386,6 @@ let unpack_special_eq tevents trm trm' =
      unpack_variable tevents trm' trm]
     ~f:(fun x -> x)
 
-
-
 let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f: Formula.t): ('t_vars * Tformula.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
   let* t_vars, form, event_type_opt = match f.form with
@@ -532,6 +530,24 @@ let type_pformula' tprog t_vars pf : ('t_vars * Pattern.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
   (type_pformula tprog t_vars pf) >| (fun (_, t_vars, pf) -> (t_vars, pf))
 
+let merge_reference_with_label pos (l: Label.t) (ref_expr: Lex.Ref.t) =
+  let open Errors.OrErrors in
+  begin match Label.highest_level l with
+  | (Label.LSection (Article 0, _)) ->
+     let init = Label.qualified_label l in
+     let rule_id = ref_expr.rule in
+     let aux acc (level, name) = Label.set pos level (name, None) acc in
+     let* label = fold ~init:init ~f:aux ref_expr.sks in
+     let label = Label.set_rule_id rule_id label in
+     ok (Ref.from_lex_ref ref_expr label)
+  | _ ->
+     let rule_id = ref_expr.rule in
+     let aux acc (level, name) = Label.set pos level (name, None) acc in
+     let* label = fold ~init:l ~f:aux ref_expr.sks in
+     let label = Label.set_rule_id rule_id label in
+     ok (Ref.from_lex_ref ref_expr label)
+  end
+
 let type_rule s pos =
   let open Errors.OrErrors in
   function
@@ -557,22 +573,7 @@ let type_rule s pos =
         | {sks=[]; rule=Some _; _} -> ok ()
       in
       let* (s, t_vars), rule = 
-        let merge_reference_with_label (l: Label.t) (ref_expr: Lex.Ref.t) =
-          begin match Label.highest_level l with
-          | (Label.LSection (Article 0, _)) ->
-             let init = Label.qualified_label l in
-             let rule_id = ref_expr.rule in
-             let aux acc (level, name) = Label.set pos level (name, None) acc in
-             let* label = fold ~init:init ~f:aux ref_expr.sks in
-             let label = Label.set_rule_id rule_id label in
-             ok (Ref.from_lex_ref ref_expr label)
-          | _ ->
-             let rule_id = ref_expr.rule in
-             let aux acc (level, name) = Label.set pos level (name, None) acc in
-             let* label = fold ~init:l ~f:aux ref_expr.sks in
-             let label = Label.set_rule_id rule_id label in
-             ok (Ref.from_lex_ref ref_expr label)
-          end in
+
         let var_term_of_ident_and_positions t_vars x =
           TTerm.{ trm = TTerm.var x; info = { pos = LexingInfo.dummy; typ = Map.find_exn t_vars x } } in
         let arg_of_ident_and_positions t_vars x = (x, Map.find_exn t_vars x) in
@@ -580,7 +581,7 @@ let type_rule s pos =
           | Exception (pos, pf, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
              debug (String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string));
-             let reference_labels = List.map ~f:(merge_reference_with_label s.label) refs in
+             let reference_labels = List.map ~f:(merge_reference_with_label pos s.label) refs in
              let* reference_labels = all reference_labels in
              debug (String.concat ~sep:"\n" (List.map reference_labels ~f:(fun r -> Label.string_of_label r.label)));
              let p_name = "Exception" ^ string_of_int rule_num in (* TODO: mark 'Exception' as an internal name and prevent user-defined events to start with that *)
@@ -594,7 +595,7 @@ let type_rule s pos =
              ok ((s', t_vars), TException (pos, tpf, reference_labels, pred))
           | Scope (pos, pf, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
-             let reference_labels = List.map ~f:(fun tref -> merge_reference_with_label s.label tref) refs in
+             let reference_labels = List.map ~f:(fun tref -> merge_reference_with_label pos s.label tref) refs in
              let* reference_labels = all reference_labels in
              let p_name = "Scope" ^ string_of_int rule_num in (* TODO: mark 'Scope' as an internal name and prevent user-defined events to start with that *)
              let* vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
@@ -690,13 +691,9 @@ let check_var_types tprog : (int, var_types, Int.comparator_witness) Map.t Error
 
 (* Main typing function *)
 
-let do_type tprog prog : tprog Errors.WithErrors.t =
+let do_type_exceptions s : tprog Errors.WithErrors.t =
   let open Errors.WithErrors in
   let we = Errors.OrErrors.witherror in
-  let init = { empty with tprog } in
-  (* First pass: type statements *)
-  let* s = fold prog.stmts ~init ~f:type_stmt in
-  (* Second pass: exceptions *)
   let* tprog' = fold s.exceptions_first_pass ~init:s.tprog
                   ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_exception i f refs acc)) in
   let* tprog'' = fold s.scopes_first_pass ~init:tprog'
@@ -712,3 +709,12 @@ let do_type tprog prog : tprog Errors.WithErrors.t =
       exception_predicates = tprog''.exception_predicates;
       scope_predicates = tprog''.scope_predicates
     }
+
+let do_type tprog prog : (t * tprog) Errors.WithErrors.t =
+  let open Errors.WithErrors in
+  let init = { empty with tprog } in
+  (* First pass: type statements *)
+  let* s = fold prog.stmts ~init ~f:type_stmt in
+  (* Second pass: exceptions *)
+  let* tprog = do_type_exceptions s in
+  ok ({ s with tprog }, tprog)

@@ -16,7 +16,7 @@ let loop filename mode f o b () =
   match mode with
   | None | Some "mfotl" -> begin
       match Modules.do_type [lexpath] b filepath basename with
-      | Ok eprog ->
+      | Ok (_, eprog) ->
          let cprog = Compiler.compile eprog in
          begin match o with
          | None -> print_endline (Clex.to_string cprog)
@@ -30,7 +30,7 @@ let loop filename mode f o b () =
     end
   | Some "doc" -> begin
       match Modules.do_type [lexpath] b filepath basename with
-      | Ok eprog -> 
+      | Ok (_, eprog) -> 
          let outname = Option.fold o ~init:(filename ^ "_doc.html") ~f:(fun _ x -> x) in
          Doc.to_file basename outname eprog
       | Errors errs ->

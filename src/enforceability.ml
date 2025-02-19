@@ -1632,7 +1632,7 @@ let type_tstmt erule_map = function
 
 (* Main typing function *)
 
-let do_type _ (tprog: Tlex.tprog) (b: Interval.v) : Elex.eprog Err.OrErrors.t =
+let do_type (tprog: Tlex.tprog) (b: Interval.v) : Elex.eprog Err.OrErrors.t =
   let open Err.OrErrors in
   (* Create tcrules *)
   let tcrules = create_tcrules tprog in
