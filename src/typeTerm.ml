@@ -17,9 +17,9 @@ let value_to_string = function
   | TypeSum kvs  -> let f (k, v) = k ^ " : " ^ to_string v in
                     "{" ^ String.concat ~sep:", " (List.map kvs ~f) ^ "}"
 
-let rec eval aliases = function
+let rec eval aliases : t -> t option = function
   | TypeConst tt -> Some (TypeConst tt)
-  | TypeVar v    -> fst (Map.find_exn aliases v)
+  | TypeVar v    -> Option.bind (fst (Map.find_exn aliases v)) ~f:(eval aliases)
   | TypeSum kvs  -> let f (k, v) = (k, Option.value_exn (eval aliases v)) in
                     Some (TypeSum (List.map kvs ~f))
 
@@ -30,6 +30,14 @@ let eval_default aliases default = function
       | Some tt -> tt
       | None -> default)
   | TypeSum kvs  -> let f (k, v) = (k, Option.value_exn (eval aliases v)) in
+                    TypeSum (List.map kvs ~f)
+
+let rec unalias aliases : t -> t = function
+  | TypeConst tt -> TypeConst tt
+  | TypeVar v    -> (match fst (Map.find_exn aliases v) with
+                     | Some tt' -> unalias aliases tt'
+                     | None -> TypeVar v)
+  | TypeSum kvs  -> let f (k, v) = (k, unalias aliases v) in
                     TypeSum (List.map kvs ~f)
 
 let rec lub t t' aliases =
@@ -48,16 +56,13 @@ let rec lub t t' aliases =
        else
          None
      end
-  | TypeVar v, tt' ->
-     begin
-       match fst (Map.find_exn aliases v) with
-       | Some tt when equal tt tt' -> Some (TypeVar v)
-       | _ -> None
-     end
   | tt, TypeVar v' ->
      begin
        match fst (Map.find_exn aliases v') with
-       | Some tt' when equal tt' tt -> Some (TypeVar v')
+       | Some tt' ->
+          (match lub tt tt' aliases with
+           | Some _ -> Some (TypeVar v')
+           | _ -> None)
        | _ -> None
      end
   | _, _ -> None

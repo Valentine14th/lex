@@ -17,7 +17,7 @@ type rtmt =
   | RReplace  of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
   | RHide     of LexingInfo.t * ident * string option
 
-type refi = { rtmts: rtmt list; theory: string list }
+type refi = { rtmts: rtmt list; lex_file: string list }
 
 (* Printing functions *)
 
@@ -88,7 +88,7 @@ let string_of_rtmt ?(i=0) =
       Printf.sprintf "%shide %s%s" (Util.tabs i) name description
 
 let string_of_refi refi =
-  "refine " ^ String.concat ~sep:"." refi.theory ^ "\n" 
+  "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
   ^ String.concat ~sep:"\n" (List.map refi.rtmts ~f:string_of_rtmt)
       
 let print_refi refi =

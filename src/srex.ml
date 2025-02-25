@@ -44,7 +44,7 @@ let to_rtmt = function
 
 let to_refi (srefi: srefi) =
   match srefi.rtmts with
-  | SRRefine (_, theory) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; theory }
+  | SRRefine (_, lex_file) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; lex_file }
   | _ -> assert false
 
 (* Printing functions *)

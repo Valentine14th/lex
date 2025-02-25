@@ -238,9 +238,8 @@ rule
 article "6" "Lawfulness of processing"
 
 observable event GiveConsent
-    """Data subject {ds} gives consent to processor {c} to use data {d} for purpose {p}"""
+    """Data subject {ds} gives consent to processor {c} to use their data for purpose {p}"""
     ds : data_subject
-    d : data
     p : purpose
     c : entity
 
@@ -250,6 +249,11 @@ observable predicate IsNecessaryForLegitimateInterest
     e : entity
     i : interest
 
+observable predicate IsOverridenByDataSubjectInterests
+    """Interest {i} of entity {e} is overriden by the interests of data subject {ds}, in particular when {ds} is a child"""
+    e : entity
+    i : interest
+    ds : data_subject
 
 observable predicate IsPublicAuthority
     """Entity {e} is a public authority"""
@@ -269,18 +273,25 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
-        ONCE GiveConsent(ds, d, p, c)
+        ONCE GiveConsent(ds, p, c)
     constitute
         IsLawful(a)
 
 point "f"
 
-rule
+rule "legitimate_interest"
     whenever
         DataProcessing(p, c, a, d)
         IsNecessaryForLegitimateInterest(a, e, i)
     constitute
         IsLawful(a)
+
+rule
+    whenever
+        PersonalData(d, ds)
+        IsOverridenByDataSubjectInterests(e, i, ds)
+    except
+        rule "legitimate_interest"
 
 paragraph[1] "2"
 

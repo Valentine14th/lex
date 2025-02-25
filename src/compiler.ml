@@ -332,7 +332,7 @@ let compile_imp_rule = function
              compile_imp lhs rhs R
           end
     end
-  | _ -> assert false
+  | _ ->  assert false
 
 let rec compile_typeterm = function
   | TypeTerm.TypeConst d -> ["", d]
@@ -343,8 +343,8 @@ let rec compile_typeterm = function
 
 let compile_eval_default aliases typeterm =
   List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
-    (compile_typeterm (
-      TypeTerm.eval_default aliases (TypeTerm.TypeConst TInt) typeterm))
+    (compile_typeterm (TypeTerm.eval_default aliases
+                         (TypeTerm.TypeConst TInt) (TypeTerm.unalias aliases typeterm)))
 
 let compile_events events aliases =
   let f (_, (_, _, enftype, _)) = not (Enftype.is_internal enftype) in
@@ -407,13 +407,15 @@ let is_imp_rule = function
 
 let is_vanilla = function
   | ECImplication (_, _, _, _, _, _, _, Vanilla, _, _) -> true
+  | ECImplication (_, _, _, _, _, _, _, Assumed, _, _) -> true
   | _ -> false
 
 let compile (eprog:Elex.eprog) : Clex.cprog =
-  let sorted_c_rules = List.map eprog.compilation_order ~f:(Map.find_exn eprog.ecrules) in 
-  let let_rules = List.filter sorted_c_rules ~f:is_let_rule in
-  let imp_rules = List.filter sorted_c_rules ~f:is_imp_rule in
-  let non_vanilla = List.filter imp_rules ~f:(fun r -> not (is_vanilla r)) in
+  let sorted_c_rules_opt = List.map eprog.compilation_order ~f:(Map.find eprog.ecrules) in
+  let sorted_c_rules     = List.filter_map ~f:(fun x -> x) sorted_c_rules_opt in
+  let let_rules          = List.filter sorted_c_rules ~f:is_let_rule in
+  let imp_rules          = List.filter sorted_c_rules ~f:is_imp_rule in
+  let non_vanilla        = List.filter imp_rules ~f:(fun r -> not (is_vanilla r)) in
   if List.is_empty non_vanilla then
     Errors.warn "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
   debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));

@@ -78,7 +78,7 @@ module Pattern = Pattern.Make(Formula.Info)(Formula.StringVar)(Dom)(Term)
 
 (* Rule declarations *)
 
-type rule_type = Vanilla | Enforceable | Transparent [@@deriving equal]
+type rule_type = Vanilla | Enforceable | Transparent | Assumed [@@deriving equal]
 
 type rule_constr_kind =
   | CConditions
@@ -157,6 +157,7 @@ let string_of_rule_type = function
   | Vanilla -> ""
   | Enforceable -> "enforceable "
   | Transparent -> "transparently enforceable "
+  | Assumed -> "assume fulfilled "
 
 let string_of_rule_constr_kind = function
   | CConditions -> "conditions"

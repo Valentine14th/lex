@@ -104,6 +104,8 @@
        "weaken"       , (fun b -> WEAKEN b) ;
        "by"           , (fun b -> BY b) ;
        "hide"         , (fun b -> HIDE b) ;
+       "assume"       , (fun b -> ASSUME b) ;
+       "fulfilled"    , (fun b -> FULFILLED b) ;
       ]
 }
 
@@ -134,9 +136,9 @@ rule read =
       let l = String.length w in
       lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_bol = lexbuf.lex_curr_p.pos_bol - l + 1 };
       match update_indent l with
-      | i when i > 0 -> NEWUP
-      | i when i < 0 -> NEWDOWN
-      | _            -> NEWWHITE }
+      | i when i > 0 -> debug "up"; NEWUP
+      | i when i < 0 -> debug "down"; NEWDOWN
+      | _            -> debug "white"; NEWWHITE }
   | ((comment? newline white*)* as n) comment? newline as comment
     { debug ("comment 2" ^ comment);
       repeat new_line lexbuf (1 + count_newlines n);
@@ -166,8 +168,8 @@ rule read =
   | "chapter"                                    { CHAPTER (info lexbuf) }
   | "section"                                    { SECTION (info lexbuf) }
   | "article"                                    { ARTICLE (info lexbuf) }
-  | "paragraph"                                  { PARAGRAPH (info lexbuf) }
-  | "point"                                      { POINT (info lexbuf) }
+  | "paragraph"                                  { debug "paragraph"; PARAGRAPH (info lexbuf) }
+  | "point"                                      { debug "point"; POINT (info lexbuf) }
   | "subpoint"                                   { SUBPOINT (info lexbuf) }
   | "rule"                                       { RULE (info lexbuf) }
   | "whenever"                                   { WHENEVER (info lexbuf) }
@@ -200,6 +202,7 @@ rule read =
   | "ONCE"                           | "⧫"       { ONCE (info lexbuf) }
   | ident as id
     {
+      debug id;
       try (Hashtbl.find keyword_table id) (info lexbuf)
       with Not_found -> IDENT (info lexbuf, Lexing.lexeme lexbuf)
     }

@@ -55,7 +55,7 @@
 %token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR
 %token <LexingInfo.t> SUM AVG MED CNT MIN MAX
 %token <LexingInfo.t> FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE
-%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY HIDE
+%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY HIDE ASSUME FULFILLED
 
 /* Tokens: intervals */
 
@@ -315,8 +315,10 @@ rule_type:
     { Some (concr_opt $2 (fst $3) $2), (Enforceable, snd $3) }
   | NEWDOWN TTRANSPARENTLY TENFORCEABLE rule_constrs
     { Some (concr_opt $2 (fst $4) $3), (Transparent, snd $4) }
+  | NEWDOWN ASSUME         FULFILLED
+    { Some ($2 +> $3),                 (Assumed,     []) }
   |
-    { None,                           (Vanilla,     []) }
+    { None,                            (Vanilla,     []) }
 
 rule_constrs:
   | separated_list(COM, rule_constr)
@@ -697,10 +699,10 @@ hide_decl:
     { SRHide ($1 +> fst $4, snd $2, Some (snd $4)) }
 
 replace_decl:
-  | replace_kind NEWUP ref_exprs NEWDOWN BY NEWUP ref_exprs
-    { SRReplace (fst $1 +> fst_of_last $7, snd $1, List.map snd $3, List.map snd $7, None) }
-  | replace_kind NEWUP DOCSTRING NEWLINE ref_exprs NEWDOWN BY NEWUP ref_exprs
-    { SRReplace (fst $1 +> fst_of_last $9, snd $1, List.map snd $5, List.map snd $9, Some (snd $3)) }
+  | REPLACE NEWUP replace_kind NEWUP ref_exprs NEWDOWN BY NEWUP ref_exprs
+    { SRReplace ($1 +> fst_of_last $9, snd $3, List.map snd $5, List.map snd $9, None) }
+  | REPLACE NEWUP replace_kind NEWUP DOCSTRING NEWLINE ref_exprs NEWDOWN BY NEWUP ref_exprs
+    { SRReplace ($1 +> fst_of_last $11, snd $3, List.map snd $7, List.map snd $11, Some (snd $5)) }
 
 %inline replace_kind:
   | STRENGTHEN { $1, Strengthen }

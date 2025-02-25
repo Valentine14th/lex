@@ -131,19 +131,19 @@ let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t
     debug (Printf.sprintf "topological_sort result: %s" (Util.string_of_int_list order));
     ok order
 
-let check_used_events_are_defined (tprog: Tlex.tprog) def use =
+let check_used_events_are_defined (_: Tlex.tprog) def use =
   let all_defined_events = List.concat (Map.data def)
                            |> List.dedup_and_sort
                               ~compare:String.compare in
   let check_used_are_defined idx =
     let used = Map.find_exn use idx in
-    let pos = Map.find_exn tprog.rule_tree.label_of_rule idx |> snd in
+    (*let pos = Map.find_exn tprog.rule_tree.label_of_rule idx |> snd in*)
     List.iter used ~f:(fun name ->
       if not (List.mem all_defined_events name ~equal:String.equal) then
         let warning = Printf.sprintf
-            "Internal event \"%s\" is never constituted"
-            name in
-        Errors.warn warning (Some pos)) in
+            "Internal event \"%s\" is never constituted" name in
+        Errors.warn warning None) in
+  (*print_endline (String.concat ~sep:"\n" (List.map ~f:(fun (k, _) -> Int.to_string k) (Map.to_alist use)));*)
   Map.iter_keys use ~f:check_used_are_defined
 
 let topological_rule_order (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) : int list Errors.OrErrors.t =
@@ -829,6 +829,7 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
       error (Err.enforceability_error err_msg LexingInfo.dummy)
   in
   match rule with
+  | TCImplication (_, _, pos, _, _, _, _, Assumed, rcs)
     | TCImplication (_, _, pos, _, _, _, _, Vanilla, rcs) ->
       debug "typing TCImplication (Vanilla)";
       vanilla_rule_constraints_warning pos rcs;
@@ -1372,11 +1373,12 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                 (Tlex.Pattern.to_string pf1) (Tlex.Pattern.to_string pf2));
        let itl_srp = match rt with
          | Vanilla
-           | Enforceable -> None
+           | Enforceable
+           | Assumed -> None
          | Transparent -> Some itl_srp
        in
        begin match rt with
-       | Vanilla ->
+       | Vanilla | Assumed ->
           let ex' = List.map ex ~f:Eformula.of_tformula in
           let sc' = List.map sc ~f:Eformula.of_tformula in
           let epf1 = epf_of_tpf pf1 in

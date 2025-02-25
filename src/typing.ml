@@ -103,120 +103,124 @@ let set_labels pos section_kind label s =
 let c = ref (-1) 
 let fresh () = incr c; !c
 
-let type_check_constant c t = match (c, t) with
-  | Dom.Int _, Dom.TInt
-  | Dom.Str _, TStr
-  | Dom.Float _, TFloat
-  | Dom.Bool _, TBool
-  | Dom.Time _, TTime -> true
-  | Dom.Money m, TMoney c -> String.equal (Money.currency m) c
-  | _, _ -> false
-
-let type_unot = function
+let type_unot taliases tt =
+  match TypeTerm.unalias taliases tt with
   | TypeConst Dom.TBool
-    | TypeConst Dom.TInt as ty -> Some ty
+    | TypeConst Dom.TInt -> Some tt
   | _ -> None
 
-let type_usub = function
+let type_usub taliases tt =
+  match TypeTerm.unalias taliases tt with
   | TypeConst Dom.TInt
     | TypeConst Dom.TFloat
     | TypeConst Dom.TSpan
-    | TypeConst (Dom.TMoney _) as ty -> Some ty
+    | TypeConst (Dom.TMoney _) -> Some tt
   | _ -> None
 
-let type_badd = function
+let type_badd taliases (tt, tt') =
+  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
   | TypeConst Dom.TInt, TypeConst Dom.TInt 
     | TypeConst Dom.TFloat, TypeConst Dom.TFloat
     | TypeConst Dom.TFloat, TypeConst Dom.TInt
     | TypeConst Dom.TStr, TypeConst Dom.TStr
     | TypeConst Dom.TTime, TypeConst Dom.TSpan
-    | TypeConst Dom.TSpan, TypeConst Dom.TSpan as args
-    -> Some (fst args)
+    | TypeConst Dom.TSpan, TypeConst Dom.TSpan
+    -> Some tt
   | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c')
        when String.equal c c'
-    -> Some (TypeConst (Dom.TMoney c))
+    -> Some tt
   | TypeConst Dom.TInt, TypeConst Dom.TFloat
-    | TypeConst Dom.TSpan, TypeConst Dom.TTime as args
-    -> Some (snd args)
+    | TypeConst Dom.TSpan, TypeConst Dom.TTime
+    -> Some tt'
   | _ -> None
 
-let type_bsub = function
+let type_bsub taliases (tt, tt') =
+  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
   | TypeConst Dom.TInt, TypeConst Dom.TInt 
     | TypeConst Dom.TFloat, TypeConst Dom.TFloat
     | TypeConst Dom.TFloat, TypeConst Dom.TInt
     | TypeConst Dom.TTime, TypeConst Dom.TSpan
-    | TypeConst Dom.TSpan, TypeConst Dom.TSpan as args
-    -> Some (fst args)
+    | TypeConst Dom.TSpan, TypeConst Dom.TSpan
+    -> Some tt
   | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c')
        when String.equal c c'
-    -> Some (TypeConst (Dom.TMoney c))
+    -> Some tt
   | TypeConst Dom.TInt, TypeConst Dom.TFloat
-    -> Some (TypeConst Dom.TFloat)
+    -> Some tt'
   | _ -> None
 
-let type_bmul = function
+let type_bmul taliases (tt, tt') =
+  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
   | TypeConst Dom.TInt, TypeConst Dom.TInt
     | TypeConst Dom.TFloat, TypeConst Dom.TFloat
     | TypeConst Dom.TInt, TypeConst Dom.TFloat
     | TypeConst Dom.TInt, TypeConst Dom.TSpan
-    | TypeConst Dom.TFloat, TypeConst Dom.TSpan as args
-    -> Some (snd args)
-  | TypeConst Dom.TInt, TypeConst (Dom.TMoney c)
-    | TypeConst Dom.TFloat, TypeConst (Dom.TMoney c)
-    | TypeConst (Dom.TMoney c), TypeConst Dom.TInt
-    | TypeConst (Dom.TMoney c), TypeConst Dom.TFloat
-    -> Some (TypeConst (Dom.TMoney c))
-  | TypeConst Dom.TFloat, TypeConst Dom.TInt
+    | TypeConst Dom.TFloat, TypeConst Dom.TSpan
+    | TypeConst Dom.TInt, TypeConst (Dom.TMoney _)
+    | TypeConst Dom.TFloat, TypeConst (Dom.TMoney _)
+    -> Some tt'
+  | TypeConst (Dom.TMoney _), TypeConst Dom.TInt
+    | TypeConst (Dom.TMoney _), TypeConst Dom.TFloat
+    | TypeConst Dom.TFloat, TypeConst Dom.TInt
     | TypeConst Dom.TSpan, TypeConst Dom.TInt
-    | TypeConst Dom.TSpan, TypeConst Dom.TFloat as args 
-    -> Some (fst args)
+    | TypeConst Dom.TSpan, TypeConst Dom.TFloat
+    -> Some tt
   | _ -> None
 
-let type_bdiv = function
-  | TypeConst Dom.TInt, TypeConst Dom.TFloat as args
-    -> Some (snd args)
+let type_bdiv taliases (tt, tt') =
+  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
+  | TypeConst Dom.TInt, TypeConst Dom.TFloat
+    -> Some tt'
   | TypeConst Dom.TInt, TypeConst Dom.TInt 
     | TypeConst Dom.TFloat, TypeConst Dom.TFloat
     | TypeConst Dom.TFloat, TypeConst Dom.TInt
     | TypeConst Dom.TSpan, TypeConst Dom.TInt
-    | TypeConst Dom.TSpan, TypeConst Dom.TFloat as args
-    -> Some (fst args)
-  | TypeConst (Dom.TMoney c), TypeConst Dom.TInt
-    | TypeConst (Dom.TMoney c), TypeConst Dom.TFloat
-    -> Some (TypeConst (Dom.TMoney c))
+    | TypeConst Dom.TSpan, TypeConst Dom.TFloat
+    | TypeConst (Dom.TMoney _), TypeConst Dom.TInt
+    | TypeConst (Dom.TMoney _), TypeConst Dom.TFloat
+    -> Some tt
   | _ -> None
 
-let type_bpow = function
+let type_bpow taliases (tt, tt') =
+  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
   | TypeConst Dom.TInt, TypeConst Dom.TInt
-    -> Some (TypeConst Dom.TInt)
   | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-    -> Some (TypeConst Dom.TFloat)
+    -> Some tt
   | _ -> None
 
-let type_band = function
+let type_band taliases (tt, tt') =
+  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
   | TypeConst Dom.TInt, TypeConst Dom.TInt
-    -> Some (TypeConst Dom.TInt)
   | TypeConst Dom.TBool, TypeConst Dom.TBool
-    -> Some (TypeConst Dom.TBool)
+    -> Some tt
   | _ -> None
 
-let type_beq (ty, ty') =
-  if TypeTerm.equal ty ty' then
-    Some ty
-  else
-    None
+let type_beq taliases (ty, ty') =
+  match TypeTerm.lub ty ty' taliases with
+  | Some _ -> Some (TypeConst Dom.TBool)
+  | None -> match TypeTerm.lub ty' ty taliases with
+            | Some _ -> Some (TypeConst Dom.TBool)
+            | None -> None
 
-let type_blt = function
-  | TypeConst Dom.TInt, TypeConst Dom.TInt
-  | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-  | TypeConst Dom.TInt, TypeConst Dom.TFloat
-  | TypeConst Dom.TFloat, TypeConst Dom.TInt
-  | TypeConst Dom.TTime, TypeConst Dom.TTime
-  | TypeConst Dom.TSpan, TypeConst Dom.TSpan
-    -> Some (TypeConst Dom.TBool)
-  | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c') when String.equal c c'
-    -> Some (TypeConst Dom.TBool)
-  | _ -> None
+let type_blt taliases (tt, tt') =
+  let aux (ty, ty') =
+    match TypeTerm.unalias taliases ty, TypeTerm.unalias taliases ty' with
+    | TypeConst Dom.TInt, TypeConst Dom.TInt
+      | TypeConst Dom.TFloat, TypeConst Dom.TFloat
+      | TypeConst Dom.TInt, TypeConst Dom.TFloat
+      | TypeConst Dom.TFloat, TypeConst Dom.TInt
+      | TypeConst Dom.TTime, TypeConst Dom.TTime
+      | TypeConst Dom.TSpan, TypeConst Dom.TSpan
+      -> Some (TypeConst Dom.TBool)
+    | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c') when String.equal c c'
+      -> Some (TypeConst Dom.TBool)
+    | _ -> None in
+  match TypeTerm.lub tt tt' taliases with
+  | Some ty' -> aux (tt, ty')
+  | None -> match TypeTerm.lub tt' tt taliases with
+            | Some ty -> aux (ty, tt')
+            | None -> None
+
 
 let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('typed_vars * TTerm.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
@@ -263,9 +267,9 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('
        let f_op = match op with
          | UNot -> type_unot
          | USub -> type_usub in
-       let t_alias = Option.find_map t_alias ~f:f_op in
+       let t_alias = Option.find_map t_alias ~f:(f_op taliases) in
        let* typed_vars, trm = type_term tevents tfunctions taliases typed_vars trm t_alias in
-       match f_op trm.info.typ with
+       match f_op taliases trm.info.typ with
        | Some typ -> ok (typed_vars, TTerm.make (TTerm.unop UNot trm) { pos = v.info.pos; typ })
        | None ->
          let err_msg = Printf.sprintf "Unary (!) expects type TBool, found '%s'"
@@ -286,12 +290,13 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('
          | BEq | BNeq -> type_beq
          | BLt | BLeq | BGt | BGeq -> type_blt
        in
-       match f_op (trm.info.typ, trm'.info.typ) with
+       match f_op taliases (trm.info.typ, trm'.info.typ) with
        | Some typ -> ok (typed_vars, TTerm.make (TTerm.binop trm op trm') { pos = v.info.pos; typ })
        | None ->
-          let err_msg = Printf.sprintf "The types '%s' and '%s' are not applicable to binary plus (+)"
+          let err_msg = Printf.sprintf "The types '%s' and '%s' are not applicable to binary %s"
                           (TypeTerm.value_to_string trm.info.typ)
-                          (TypeTerm.value_to_string trm'.info.typ) in
+                          (TypeTerm.value_to_string trm'.info.typ)
+                          (Bop.to_string op) in
           error (Errors.type_error err_msg v.info.pos)
      end
   | Proj (trm, p) ->
@@ -345,10 +350,12 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
     match TypeTerm.lub ty type_alias taliases with
     | Some typ -> let trm = { trm with info = { trm.info with typ } } in ok (t_vars, trm)
     | None ->
-      let err_msg = Printf.sprintf "Type mismatch for argument %s of event %s: expected '%s', found '%s'"
-                      arg_name event_name (TypeTerm.value_to_string type_alias)
-                      (TypeTerm.value_to_string ty) in
-      error (Errors.type_error err_msg pos)
+       let err_msg = Printf.sprintf
+                       "Type mismatch for argument %s of event %s: expected '%s', found '%s'"
+                       arg_name event_name
+                       (TypeTerm.value_to_string type_alias)
+                       (TypeTerm.value_to_string ty) in
+       error (Errors.type_error err_msg pos)
   in
   match List.zip args trms with
   | Base.List.Or_unequal_lengths.Ok args_trms ->
@@ -694,21 +701,12 @@ let check_var_types tprog : (int, var_types, Int.comparator_witness) Map.t Error
 let do_type_exceptions s : tprog Errors.WithErrors.t =
   let open Errors.WithErrors in
   let we = Errors.OrErrors.witherror in
-  let* tprog' = fold s.exceptions_first_pass ~init:s.tprog
-                  ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_exception i f refs acc)) in
-  let* tprog'' = fold s.scopes_first_pass ~init:tprog'
-                   ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_scope i f refs acc)) in
-  let* vars = check_var_types tprog'' in
-  ok {
-      tstmts = List.rev tprog''.tstmts;
-      taliases = tprog''.taliases;
-      tevents = tprog''.tevents;
-      tfunctions = tprog''.tfunctions;
-      variables = vars;
-      rule_tree = tprog''.rule_tree;
-      exception_predicates = tprog''.exception_predicates;
-      scope_predicates = tprog''.scope_predicates
-    }
+  let* tprog = fold s.exceptions_first_pass ~init:s.tprog
+                 ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_exception i f refs acc)) in
+  let* tprog = fold s.scopes_first_pass ~init:tprog
+                 ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_scope i f refs acc)) in
+  let* variables = check_var_types tprog in
+  ok { tprog with tstmts = List.rev tprog.tstmts; variables }
 
 let do_type tprog prog : (t * tprog) Errors.WithErrors.t =
   let open Errors.WithErrors in

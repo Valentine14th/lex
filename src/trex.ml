@@ -19,9 +19,12 @@ type trefi =
   {
     tprog:          tprog;
     trtmts:         trtmt list;
-    theory:         string list;
+    lex_file:       string list;
     traliases:      (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
     trhidden:       (LexingInfo.t * ident) list;
+    trvars_to_add:  (int * var_types) list;
+    trrules_to_add: (LexingInfo.t * int * Label.t) list;
+    trstmts_to_add: tstmt list;
     trrefined:      (ident, Base.String.comparator_witness) Set.t;
     trreplacements: (LexingInfo.t * replace_kind * Ref.t list * Ref.t list) list;
   }
@@ -30,9 +33,12 @@ let trempty =
   {
     tprog          = tempty;
     trtmts         = [];
-    theory         = [];
+    lex_file       = [];
     traliases      = Map.empty (module String);
     trhidden       = [];
+    trvars_to_add  = [];
+    trrules_to_add = [];
+    trstmts_to_add = [];
     trrefined      = Set.empty (module String);
     trreplacements = [];
   }
@@ -103,7 +109,7 @@ let string_of_trtmt ?(i=0) =
       Printf.sprintf "%shide %s%s" (Util.tabs i) name description
 
 let string_of_trefi refi =
-  "refine " ^ String.concat ~sep:"." refi.theory ^ "\n" 
+  "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
   ^ String.concat ~sep:"\n" (List.map refi.trtmts ~f:string_of_trtmt)
       
 let print_trefi refi =

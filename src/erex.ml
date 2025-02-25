@@ -20,14 +20,14 @@ type erefi =
   {
     eprog:    eprog;
     ertmts:   ertmt list;
-    theory:   string list;
+    lex_file: string list;
   }
 
 let erempty =
   {
     eprog    = eempty;
     ertmts   = [];
-    theory   = [];
+    lex_file = [];
   }
 
 (* Deconstructors for rules *)
@@ -95,7 +95,7 @@ let string_of_ertmt eprog ?(i=0) =
       Printf.sprintf "%shide %s%s" (Util.tabs i) name description
 
 let string_of_erefi erefi =
-  "refine " ^ String.concat ~sep:"." erefi.theory ^ "\n" 
+  "refine " ^ String.concat ~sep:"." erefi.lex_file ^ "\n" 
   ^ String.concat ~sep:"\n" (List.map erefi.ertmts ~f:(string_of_ertmt erefi.eprog))
       
 let print_erefi refi =

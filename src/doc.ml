@@ -140,6 +140,7 @@ let html_of_rule_type = function
   | Lex.Vanilla -> ""
   | Enforceable -> "enforceable"
   | Transparent -> "transparently enforceable"
+  | Assumed     -> "assume fulfilled"
 
 let html_of_rule_constr_type = function
   | Lex.Suppressing idents -> "suppressing", idents

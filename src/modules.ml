@@ -205,14 +205,13 @@ and do_type_lex lexpath b fullname seq' prefixes : (Typing.t * Elex.eprog) Error
   let* eprog    = Enforceability.do_type tprog b in
   ok (s, eprog)
 
-and do_type_rex lexpath filepath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
+and do_type_rex lexpath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   let open Errors.OrErrors in
   let* srefi         = load_rex_with_includes fullname seq' prefixes in
   let  refi          = Srex.to_refi srefi in
-  let  prog_import   = SILex (LexingInfo.dummy, refi.theory) in
+  let  prog_import   = SILex (LexingInfo.dummy, refi.lex_file) in
   let  prog_suffix   = suffix_of_import prog_import in
-  let* prog_prefix, prog_filename = find_filename seq' prog_import prefixes prog_suffix in
-  let  prog_filename = Filename.concat prog_prefix prog_filename in
+  let* filepath, prog_filename = find_filename seq' prog_import prefixes prog_suffix in
   let* s, _          = do_type lexpath ~seq b filepath prog_filename in
   let* s, trefi      = of_witherror (Rtyping.do_type s refi) in
   let* erefi         = Refinement.do_type trefi b in
@@ -223,6 +222,6 @@ and do_type lexpath ?seq:(seq=[]) b filepath filename : (Typing.t * Elex.eprog) 
   let seq'     = seq @ [fullname] in
   let prefixes = filepath :: lexpath in
   if String.is_suffix filename ~suffix:".rex" then
-    do_type_rex lexpath filepath b fullname seq seq' prefixes
+    do_type_rex lexpath b fullname seq seq' prefixes
   else 
     do_type_lex lexpath b fullname seq' prefixes
