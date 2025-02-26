@@ -103,7 +103,8 @@ let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftyp
 let compile_eformulas ~f fs = f fs
 
 let compile_epformula ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.causable) ~f (epf: Pattern.t): Eformula.t =
-  compile_epattern ~use_pattern_for_enf ~only_pattern ~enftype (compile_eformulas ~f epf.fs) epf.patt
+  map_consts ~f:compile_dom 
+    (compile_epattern ~use_pattern_for_enf ~only_pattern ~enftype (compile_eformulas ~f epf.fs) epf.patt)
 
 let compile_ex_neg ?(enftype_opt=None) vars ex =
   let enftype_neg_opt = Option.map ~f:Enftype.neg enftype_opt in
@@ -191,11 +192,26 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) vars (enftype: Enftype.t) 
   (* TODO: how to handle other cases (if at all) ? *)
   | _ -> assert false
 
-let compile_let_binding (f: Eformula.t) pred : string * ident list * Eformula.t =
+let rec compile_typeterm = function
+  | TypeTerm.TypeConst d -> ["", d]
+  | TypeVar v -> raise (Invalid_argument ("Cannot compile abstract TypeVar " ^ v))
+  | TypeSum kvs -> let f (k, v) =
+                     List.map (compile_typeterm v) ~f:(Util.concat k) in
+                   List.concat (List.map kvs ~f)
+
+let compile_eval_default aliases typeterm =
+  List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
+    (compile_typeterm (TypeTerm.eval_default aliases
+                         (TypeTerm.TypeConst TInt) (TypeTerm.unalias aliases typeterm)))
+
+
+let compile_let_binding aliases (f: Eformula.t) (pred: Eformula.t) : string * (ident * Dom.tt option) list * Eformula.t =
   match pred with
   | { form = Predicate (p_name, trms); _ } ->
     let process_term fs (t: TTerm.t) = match t.trm with
-      | ETerm.Var v -> fs, v
+      | ETerm.Var v ->
+         (*print_endline ("process_term " ^ v ^ " " ^ TypeTerm.to_string t.info.typ);*)
+         fs, (v, compile_eval_default aliases t.info.typ)
       | _ ->
          let w = fresh_var () in
          let v = ETerm.{ trm = var w;
@@ -204,10 +220,12 @@ let compile_let_binding (f: Eformula.t) pred : string * ident list * Eformula.t 
                           info = { P.dummy with typ = TypeTerm.TypeConst Dom.TBool } } in
          let ef = Eformula.{ form = eqconst eq (Dom.Bool true);
                              info = { I.dummy with enftype = Enftype.obs } } in
-         ef :: fs, w
+         ef :: fs, (w, compile_eval_default aliases t.info.typ)
     in
     let bvs = Set.of_list (module String) (ETerm.fv_list trms) in
-    let fs', trms = List.fold_map trms ~init:[] ~f:process_term in
+    let fs', trms_list = List.fold_map trms ~init:[] ~f:process_term in
+    let trms = List.concat_map trms_list ~f:(
+                   fun (v, l) -> List.map l ~f:(fun (w, tt) -> Util.concat v (w, Some tt))) in
     let fs = f :: List.rev fs' in
     let compile_exists f =
       let fvs = Set.elements (Set.diff (Eformula.fv f) bvs) in
@@ -263,22 +281,22 @@ let fv_of_ecrule = function
             fun disjunct ->
             Elex.Pattern.[fv disjunct.pf](*; fvs disjunct.exceptions; fvs disjunct.scopes]*)))
 
-let compile_let_rule = function
+let compile_let_rule aliases = function
   | ECDefinitionRef (_, _, _, pf, ex, sc, _, g, enftype, enf_constr) as r ->
      begin
        let vars = fv_of_ecrule r in
        match enf_constr with
        | Some (ESd enf_sup_lhs) ->
           let f = compile_lhs ~sup_constr:(Some enf_sup_lhs) vars Enftype.suppressable pf ex sc in
-          compile_let_binding f g
+          compile_let_binding aliases f g
        | Some (ECd enf_cau_lhs) ->
           let f = compile_lhs ~cau_constr:(Some enf_cau_lhs) vars Enftype.causable pf ex sc in
-          compile_let_binding f g
+          compile_let_binding aliases f g
        | None ->
           let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
           let pf_comp = compile_epformula ~f:(tbignonconj) pf in
           let f = tbignonconj (pf_comp :: ex_neg @ sc) in
-          compile_let_binding f g
+          compile_let_binding aliases f g
      end, enftype
   | ECDefinitionDis (edisjuncts, g, enftype, enf_constr) as r ->
      begin
@@ -295,14 +313,14 @@ let compile_let_rule = function
         Map.mapi edisjuncts ~f:aux |> Map.data
       in
       let rhs = tbigcaudisj idx rhs_list in
-      compile_let_binding rhs g
+      compile_let_binding aliases rhs g
     | Some (ESdd enf_sup_lhs_list) ->
       let rhs = tbignondisj (List.map2_exn (Map.data edisjuncts) enf_sup_lhs_list
         ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) vars Enftype.suppressable d)) in
-      compile_let_binding rhs g
+      compile_let_binding aliases rhs g
     | None ->
       let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct vars Enftype.bot)))  in
-      compile_let_binding rhs g
+      compile_let_binding aliases rhs g
     end, enftype
   | _ -> assert false
 
@@ -338,18 +356,6 @@ let compile_imp_rule = function
           end
     end
   | _ ->  assert false
-
-let rec compile_typeterm = function
-  | TypeTerm.TypeConst d -> ["", d]
-  | TypeVar v -> raise (Invalid_argument ("Cannot compile abstract TypeVar " ^ v))
-  | TypeSum kvs -> let f (k, v) =
-                     List.map (compile_typeterm v) ~f:(Util.concat k) in
-                   List.concat (List.map kvs ~f)
-
-let compile_eval_default aliases typeterm =
-  List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
-    (compile_typeterm (TypeTerm.eval_default aliases
-                         (TypeTerm.TypeConst TInt) (TypeTerm.unalias aliases typeterm)))
 
 let compile_events events aliases =
   let f (_, (_, _, enftype, _)) = not (Enftype.is_internal enftype) in
@@ -425,7 +431,7 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
     Errors.warn "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
   debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));
   let formulae = List.map non_vanilla ~f:compile_imp_rule in
-  let let_bindings = List.map let_rules ~f:compile_let_rule in
+  let let_bindings = List.map let_rules ~f:(compile_let_rule eprog.ealiases) in
   let phi = List.fold_right let_bindings ~f:(
                 fun ((p_name, vars, rhs), enftype) phi ->
                 Eformula.make (Eformula.flet p_name (Some enftype) vars rhs phi)

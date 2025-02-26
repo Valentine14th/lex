@@ -103,7 +103,6 @@
        "strengthen"   , (fun b -> STRENGTHEN b) ;
        "weaken"       , (fun b -> WEAKEN b) ;
        "by"           , (fun b -> BY b) ;
-       "hide"         , (fun b -> HIDE b) ;
        "assume"       , (fun b -> ASSUME b) ;
        "fulfilled"    , (fun b -> FULFILLED b) ;
       ]

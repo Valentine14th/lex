@@ -20,8 +20,8 @@ let type_estmt erule_map = function
      ERType (pos, name, typ, doc_string)
   | TRReplace (pos, kind, refs1, refs2, doc_string) ->
      ERReplace (pos, kind, refs1, refs2, doc_string)
-  | TRHide (pos, name, doc_string) ->
-     ERHide (pos, name, doc_string)
+  | TRAssume (pos, name, b, doc_string) ->
+     ERAssume (pos, name, b, doc_string)
 
 let insert_refinement_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
@@ -40,21 +40,22 @@ let update_types (trefi: trefi) (tprog: tprog) : tprog =
   { tprog with taliases }
 
 let hide_events (trefi: trefi) (tprog: tprog) : tprog =
-  let make_tsrule (pos, name, label) =
+  let make_tsrule b (pos, name, label) =
     let (_, vars, _, _) = Map.find_exn tprog.tevents name in
     let f (x, typ) = Eformula.ETerm.make (Eformula.ETerm.var x) { pos = LexingInfo.dummy; typ } in
     let pred = Tformula.make_dummy (Tformula.Predicate (name, List.map ~f vars)) in
     let idx = Typing.fresh () in
+    let fb = if b then Tformula.TT else Tformula.FF in
     let trule = TConstitutive (
                     LexingInfo.dummy,
-                    Tlex.Pattern.make PPresent [Tformula.make_dummy Tformula.FF],
+                    Tlex.Pattern.make PPresent [Tformula.make_dummy fb],
                     [pred]
                   ) in
     TSRule (pos, idx, label, [], trule, None) in
-  let f tprog (pos, name, label) =
-    let tsrule = make_tsrule (pos, name, label) in
+  let f tprog (pos, name, b, label) =
+    let tsrule = make_tsrule b (pos, name, label) in
     { tprog with tstmts = tprog.tstmts @ [tsrule] } in
-  List.fold_left ~init:tprog ~f trefi.trhidden
+  List.fold_left ~init:tprog ~f trefi.trassumed
 
 let internalize_events (trefi: trefi) (tprog: tprog) : tprog =
   let internalize_event name tprog =
@@ -101,7 +102,7 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
   (* TODO[FH]: check that all events have been mapped *)
   (*let* eprog = Enforceability.do_type trefi.tprog b in*)
   let* tprog = hide_and_replace trefi trefi.tprog in
-  print_endline (Tlex.string_of_tprog tprog);
+  (*print_endline (Tlex.string_of_tprog tprog);*)
   let* eprog = Enforceability.do_type tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in
   ok {

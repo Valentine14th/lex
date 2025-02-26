@@ -1,4 +1,4 @@
-girefine gdpr_mgow
+refine gdpr_mgow
 
 type session_id is int
 type data_type  is string
@@ -42,12 +42,8 @@ rule "refine_personal_data"
     refine
         PersonalData(d, u)
 
-rule "refine_isfair_istransparent"
-    whenever
-        true
-    refine
-        IsFair(a)
-        IsTransparent(a, ds)
+assume true IsFair
+assume true IsTransparent
 
 rule "refine_iscollect"
     whenever
@@ -61,8 +57,8 @@ rule "refine_giveconsent"
     refine
         GiveConsent(u, "analytics", "MyCompany")
 
-hide IsNecessaryForLegitimateInterest
-hide IsOverridenByDataSubjectInterests
+assume false IsNecessaryForLegitimateInterest
+assume false IsOverridenByDataSubjectInterests
 
 rule "new_lawfulness"
     whenever

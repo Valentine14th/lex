@@ -55,7 +55,7 @@
 %token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR
 %token <LexingInfo.t> SUM AVG MED CNT MIN MAX
 %token <LexingInfo.t> FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE
-%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY HIDE ASSUME FULFILLED
+%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY ASSUME FULFILLED
 
 /* Tokens: intervals */
 
@@ -665,7 +665,7 @@ rtmt:
     { $1 }
   | replace_decl
     { $1 }
-  | hide_decl
+  | assume_decl
     { $1 }
 
 rrule_decl:
@@ -692,11 +692,15 @@ type_refi_decl:
   | REFINE TTYPE IDENT NEWUP DOCSTRING
     { SRType ($1 +> fst $5, snd $3, None,          Some (snd $5)) }
 
-hide_decl:
-  | HIDE IDENT
-    { SRHide ($1 +> fst $2, snd $2, None) }
-  | HIDE IDENT NEWUP DOCSTRING
-    { SRHide ($1 +> fst $4, snd $2, Some (snd $4)) }
+assume_decl:
+  | ASSUME TRUE IDENT
+    { SRAssume ($1 +> fst $3, snd $3, true, None) }
+  | ASSUME FALSE IDENT
+    { SRAssume ($1 +> fst $3, snd $3, false, None) }
+  | ASSUME TRUE IDENT NEWUP DOCSTRING
+    { SRAssume ($1 +> fst $5, snd $3, true, Some (snd $5)) }
+  | ASSUME FALSE IDENT NEWUP DOCSTRING
+    { SRAssume ($1 +> fst $5, snd $3, false, Some (snd $5)) }
 
 replace_decl:
   | REPLACE NEWUP replace_kind NEWUP ref_exprs NEWDOWN BY NEWUP ref_exprs

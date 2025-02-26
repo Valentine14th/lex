@@ -194,8 +194,8 @@ let combine_constitutive_rules rules: tcrule list * 'params_map =
          let params_new = match Map.find params_map name with
            | Some params -> params
            | None -> List.map terms
-                       ~f:(fun _ -> let p = fresh_param () in
-                                    TTerm.{ trm = (Var p); info = { typ = TypeVar p; pos = LexingInfo.dummy } });
+                       ~f:(fun trm -> let p = fresh_param () in
+                                    TTerm.{ trm = (Var p); info = { typ = trm.info.typ; pos = LexingInfo.dummy } });
          in
          let params_map = Map.update params_map name ~f:(function
                               | Some params -> params

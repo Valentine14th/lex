@@ -52,7 +52,7 @@ module Make
  (Info : Modules.I)
  (Var  : Modules.V)
  (Dom  : Modules.D)
- (Term : Term.T with type v = Var.t) = struct
+ (Term : Term.T with type v = Var.t and type d = Dom.t) = struct
 
   module Formula = MFOTL_lib.MFOTL.Make(Info)(Var)(Dom)(Term)
 

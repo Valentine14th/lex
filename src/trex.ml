@@ -13,7 +13,7 @@ type trtmt =
   | TRRule    of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * trrule * string tannot option
   | TRType    of LexingInfo.t * ident * TypeTerm.t option * string option
   | TRReplace of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
-  | TRHide    of LexingInfo.t * ident * string option
+  | TRAssume  of LexingInfo.t * ident * bool * string option
 
 type trefi =
   {
@@ -21,7 +21,7 @@ type trefi =
     trtmts:         trtmt list;
     lex_file:       string list;
     traliases:      (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
-    trhidden:       (LexingInfo.t * ident * Label.t) list;
+    trassumed:      (LexingInfo.t * ident * bool * Label.t) list;
     trvars_to_add:  (int * var_types) list;
     trrules_to_add: (LexingInfo.t * int * Label.t) list;
     trstmts_to_add: tstmt list;
@@ -35,7 +35,7 @@ let trempty =
     trtmts         = [];
     lex_file       = [];
     traliases      = Map.empty (module String);
-    trhidden       = [];
+    trassumed      = [];
     trvars_to_add  = [];
     trrules_to_add = [];
     trstmts_to_add = [];
@@ -100,13 +100,13 @@ let string_of_trtmt ?(i=0) =
        (Util.tabs (i+1)) (String.concat ~sep:"\n" (List.map ~f:string_of_ref refs1))
        (Util.tabs i) 
        (Util.tabs (i+1)) (String.concat ~sep:"\n" (List.map ~f:string_of_ref refs2))
-  | TRHide (_, name, doc_string) ->
+  | TRAssume (_, name, b, doc_string) ->
       let description =
         match doc_string with
         | Some s -> make_doc_string s i
         | None -> ""
       in
-      Printf.sprintf "%shide %s%s" (Util.tabs i) name description
+      Printf.sprintf "%shide %b %s%s" (Util.tabs i) b name description
 
 let string_of_trefi refi =
   "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 

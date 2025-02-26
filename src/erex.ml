@@ -14,7 +14,7 @@ type ertmt =
   | ERRule    of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * errule * string tannot option
   | ERType    of LexingInfo.t * ident * TypeTerm.t option * string option
   | ERReplace of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
-  | ERHide    of LexingInfo.t * ident * string option
+  | ERAssume  of LexingInfo.t * ident * bool * string option
 
 type erefi =
   {
@@ -86,13 +86,13 @@ let string_of_ertmt eprog ?(i=0) =
        (Util.tabs (i+1)) (String.concat ~sep:"\n" (List.map ~f:string_of_ref refs1))
        (Util.tabs i) 
        (Util.tabs (i+1)) (String.concat ~sep:"\n" (List.map ~f:string_of_ref refs2))
-  | ERHide (_, name, doc_string) ->
+  | ERAssume (_, name, b, doc_string) ->
       let description =
         match doc_string with
         | Some s -> make_doc_string s i
         | None -> ""
       in
-      Printf.sprintf "%shide %s%s" (Util.tabs i) name description
+      Printf.sprintf "%shide %b %s%s" (Util.tabs i) b name description
 
 let string_of_erefi erefi =
   "refine " ^ String.concat ~sep:"." erefi.lex_file ^ "\n" 

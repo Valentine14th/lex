@@ -18,7 +18,7 @@ type srtmt =
   | SRRule     of LexingInfo.t * string option * (ident * TypeTerm.t) list * srrule * string option
   | SRType     of LexingInfo.t * ident * (TypeTerm.t option) * string option
   | SRReplace  of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
-  | SRHide     of LexingInfo.t * string * string option
+  | SRAssume   of LexingInfo.t * string * bool * string option
 
 type srefi = { rtmts: srtmt list }
 
@@ -39,7 +39,7 @@ let to_rtmt = function
   | SRRule (pos, label, type_fixes, rrule, doc_string) -> RRule (pos, label, type_fixes, to_rrule rrule, doc_string)
   | SRType (pos, name, typ, doc_string) -> RType (pos, name, typ, doc_string)
   | SRReplace (pos, kind, refs1, refs2, doc_string) -> RReplace (pos, kind, refs1, refs2, doc_string)
-  | SRHide (pos, name, doc_string) -> RHide (pos, name, doc_string)
+  | SRAssume (pos, name, b, doc_string) -> RAssume (pos, name, b, doc_string)
   | SRRefine _ -> assert false
 
 let to_refi (srefi: srefi) =
@@ -105,13 +105,13 @@ let string_of_rtmt ?(i=0) =
        (Util.tabs (i+1)) (String.concat ~sep:"\n" (List.map ~f:string_of_ref refs1))
        (Util.tabs i) 
        (Util.tabs (i+1)) (String.concat ~sep:"\n" (List.map ~f:string_of_ref refs2))
-  | SRHide (_, name, doc_string) ->
+  | SRAssume (_, name, b, doc_string) ->
       let description =
         match doc_string with
         | Some s -> make_doc_string s i
         | None -> ""
       in
-      Printf.sprintf "%shide %s%s" (Util.tabs i) name description
+      Printf.sprintf "%shide %b %s%s" (Util.tabs i) b name description
 
 let string_of_prog prog =
   String.concat ~sep:"\n" (List.map prog.stmts ~f:string_of_stmt)

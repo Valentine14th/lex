@@ -46,14 +46,14 @@ let add_trrefined rs name =
     { trefi with trrefined = Set.add trefi.trrefined name } in
   ok (map rs f)
 
-let add_trhidden name label doc_string rs pos =
+let add_trhidden name b label doc_string rs pos =
   (* TODO[FH]: check that the event exists in the underlying lex code *)
   let open Errors.OrErrors in
-  let* trhidden = ok ((pos, name, label) :: rs.trefi.trhidden) in
+  let* trassumed = ok ((pos, name, b, label) :: rs.trefi.trassumed) in
   let* rs = add_trrefined rs name in
   let f trefi =
-    { trefi with trtmts = TRHide (pos, name, doc_string) :: trefi.trtmts;
-                 trhidden } in
+    { trefi with trtmts = TRAssume (pos, name, b, doc_string) :: trefi.trtmts;
+                 trassumed } in
   ok (map rs f)
 
 let add_trreplacements kind refs1 refs2 doc_string rs pos =
@@ -122,9 +122,9 @@ let type_rtmt rs : rtmt -> rt Errors.WithErrors.t =
        let* reference_labels2 = all (List.map ~f:(merge_reference_with_label pos rs.s.label) refs2) in
        add_trreplacements kind reference_labels1 reference_labels2 doc_string rs pos in
      we rs
-  | RHide (pos, name, doc_string) ->
-     let label = Label.set_rule_id_force (Some ("hide_" ^ name)) rs.s.label in
-     we (add_trhidden name label doc_string rs pos)
+  | RAssume (pos, name, b, doc_string) ->
+     let label = Label.set_rule_id_force (Some ("assume_" ^ name)) rs.s.label in
+     we (add_trhidden name b label doc_string rs pos)
 
 (* Main typing function *)
 
