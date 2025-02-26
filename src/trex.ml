@@ -21,7 +21,7 @@ type trefi =
     trtmts:         trtmt list;
     lex_file:       string list;
     traliases:      (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
-    trhidden:       (LexingInfo.t * ident) list;
+    trhidden:       (LexingInfo.t * ident * Label.t) list;
     trvars_to_add:  (int * var_types) list;
     trrules_to_add: (LexingInfo.t * int * Label.t) list;
     trstmts_to_add: tstmt list;

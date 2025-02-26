@@ -312,6 +312,7 @@ let get_types_fun itl_srp (enftype: Enftype.t) (pg_map: pg_map) (f: Tformula.t) 
 
 let type_tformulas (pg_map: pg_map) itl_srp (fs: Tformula.t list) (enftype: Enftype.t) : verdict =
   let types_fun = get_types_fun itl_srp in
+  debug ("type_tformulas: " ^ Int.to_string (List.length fs) ^ " " ^ Enftype.to_string enftype);
   match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
   | true, _ ->
     List.map fs ~f:(types_fun enftype pg_map)
@@ -776,11 +777,11 @@ let type_tdisjunct itl_srp pg_map t rule (d: tdisjunct) : verdict Err.WithErrors
   let v_ex = type_exceptions itl_srp pg_map d.exceptions Enftype.causable in
   let v_sc = type_scopes itl_srp pg_map d.scopes Enftype.suppressable in
   let v_pf = type_pattern itl_srp d.rule_pos pg_map t d.pf in
-  let e, params = match rule with
+  let _, params = match rule with
     | TCDefinitionDis (_, g) -> get_predicate_name_exn g, get_predicate_params_exn g
     | _ -> assert false
   in
-  debug (Printf.sprintf "type_tdisjunct (event: %s)" e);
+  (*debug (Printf.sprintf "type_tdisjunct (event: %s)" e);*)
   let param_names = List.map params ~f:get_trm_name in
   begin match Enftype.is_causable t, Enftype.is_suppressable t with
     | true, _ -> (* all parts of the definition must be Cau *)
@@ -1143,13 +1144,13 @@ let convert_enforceable_tformulas ?(formulas_are_disjunction=false) (enftype: En
     let aux i f = if i = idx then convert Enftype.suppressable f else Eformula.of_tformula f in
     List.mapi fs ~f:aux, Some idx
   | true, _, true when Enftype.is_causable enftype ->
-    let find_first_possible _ f =
-      match types enftype pols f with
-      | Possible _ -> true
-      | Impossible _ -> false
-    in
+     let find_first_possible _ f =
+       match types enftype pols f with
+       | Possible _ -> true
+       | Impossible _ -> false
+     in
     let idx = List.findi_exn ~f:find_first_possible fs |> fst in (* there must exist at least one formula which types correctly, otherwise the enforcement checking is wrong *)
-    let aux i f = if i = idx then convert Enftype.suppressable f else Eformula.of_tformula f in
+    let aux i f = if i = idx then convert Enftype.causable f else Eformula.of_tformula f in
     List.mapi fs ~f:aux, Some idx
   | _ -> List.map fs ~f:(convert enftype), None
 
@@ -1233,40 +1234,45 @@ let  merge_used_and_unused indices_used used unused =
   List.init n ~f:merge
 
 let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * enf_ecdefinition option =
+  debug ("convert_enforceable_tdisjunct: " ^ Tlex.Pattern.to_string td.pf ^ " " ^ Enftype.to_string t);
   match Enftype.is_causable t, Enftype.is_suppressable t with
   | true, _ ->
-    let v_ex = type_exceptions itl_srp pols td.exceptions (Enftype.neg t) in
-    let v_sc = type_scopes itl_srp pols td.scopes t in
-    let v_pf = type_pattern itl_srp td.rule_pos pols t td.pf in
-    let _ = match conj (conj v_ex v_sc) v_pf with
-      | Possible constraints -> solve constraints |> List.hd_exn (* TODO: how to handle multiple options here? *)
-      | _ -> assert false
-    in (* TODO: is it actually necessary to compute a 'new' verdict here ?
-                - in TCImplication and the Sup case for TCDefinitionRef, it is 
-                  needed to run typing again, to check which part of the rule
-                  is the first that can be used to make the implicaiton Cau
-                  or the the definition Sup, but here all parts must be made Cau
-                  thus running the typing function again does not appear to be 
-                  directly necessary *)
-    let exceptions, _ = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.suppressable pols td.exceptions in
-    let scopes, _ = convert_enforceable_tformulas Enftype.causable pols td.scopes in
-    let pf, constr_opt = convert_enforceable_pattern Enftype.causable pols td.pf in
-    let enf_constr = match constr_opt with
-      | Some (EpfCau c) -> ECd (EClhsAll c)
-      | _ -> assert false
-    in
-    { rule_id         = td.rule_id;
-      rule_type       = td.rule_type;
-      rule_pos        = td.rule_pos;
-      def_pos         = td.def_pos;
-      pf; exceptions; scopes;
-      fv_renaming     = td.fv_renaming;
-      params_original = td.params_original;
-      params_new      = td.params_new;
-    }, Some enf_constr
+     let v_ex = type_exceptions itl_srp pols td.exceptions (Enftype.neg t) in
+     debug ("v_ex: "^ verdict_to_string v_ex);
+     let v_sc = type_scopes itl_srp pols td.scopes t in
+     debug ("v_sc: "^ verdict_to_string v_sc);
+     let v_pf = type_pattern itl_srp td.rule_pos pols t td.pf in
+     debug ("v_pf: "^ verdict_to_string v_pf);
+     let _ = match conj (conj v_ex v_sc) v_pf with
+       | Possible constraints -> solve constraints |> List.hd_exn (* TODO: how to handle multiple options here? *)
+       | _ -> assert false
+     in (* TODO: is it actually necessary to compute a 'new' verdict here ?
+           - in TCImplication and the Sup case for TCDefinitionRef, it is 
+           needed to run typing again, to check which part of the rule
+           is the first that can be used to make the implicaiton Cau
+           or the the definition Sup, but here all parts must be made Cau
+           thus running the typing function again does not appear to be 
+           directly necessary *)
+     let exceptions, _ = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.suppressable pols td.exceptions in
+     let scopes, _ = convert_enforceable_tformulas Enftype.causable pols td.scopes in
+     let pf, constr_opt = convert_enforceable_pattern Enftype.causable pols td.pf in
+     let enf_constr = match constr_opt with
+       | Some (EpfCau c) -> ECd (EClhsAll c)
+       | _ -> assert false
+     in
+     { rule_id         = td.rule_id;
+       rule_type       = td.rule_type;
+       rule_pos        = td.rule_pos;
+       def_pos         = td.def_pos;
+       pf; exceptions; scopes;
+       fv_renaming     = td.fv_renaming;
+       params_original = td.params_original;
+       params_new      = td.params_new;
+     }, Some enf_constr
   | _, true ->
-    begin match type_exceptions itl_srp pols td.exceptions t with
-      | Possible _ ->
+     begin match type_exceptions itl_srp pols td.exceptions t with
+     | Possible _ as v_ex ->
+        debug ("v_ex: "^ verdict_to_string v_ex);
         let pf = epf_of_tpf td.pf in
         let exceptions, i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.causable pols td.exceptions in
         let scopes = List.map td.scopes ~f:Eformula.of_tformula in
@@ -1280,85 +1286,85 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
           params_original = td.params_original;
           params_new      = td.params_new;
         }, Some enf_constr
-      | _ -> begin match type_scopes itl_srp pols td.scopes t with
-        | Possible _ ->
-          let pf = epf_of_tpf td.pf in
-          let exceptions = List.map td.exceptions ~f:Eformula.of_tformula in
-          let scopes, i_opt = convert_enforceable_tformulas Enftype.causable pols td.scopes in
-          let enf_constr = ESd (ESlhsSScope (Option.value_exn i_opt)) in
-          { rule_id         = td.rule_id;
-            rule_type       = td.rule_type;
-            rule_pos        = td.rule_pos;
-            def_pos         = td.def_pos;
-            pf; exceptions; scopes;
-            fv_renaming     = td.fv_renaming;
-            params_original = td.params_original;
-            params_new      = td.params_new;
-          }, Some enf_constr
-        | _ ->
-          begin match type_pattern itl_srp td.def_pos pols Enftype.suppressable td.pf with
-          | Possible _ ->
-            let pf, constr_opt = convert_enforceable_pattern Enftype.causable pols td.pf in
-            let exceptions = List.map td.exceptions ~f:Eformula.of_tformula in
-            let scopes = List.map td.scopes ~f:Eformula.of_tformula in
-            let enf_constr = match constr_opt with
-              | Some (EpfSup c) -> ESd (ESlhsSPformula c)
-              | _ -> assert false
-            in
-            { rule_id         = td.rule_id;
-              rule_type       = td.rule_type;
-              rule_pos        = td.rule_pos;
-              def_pos         = td.def_pos;
-              pf; exceptions; scopes;
-              fv_renaming     = td.fv_renaming;
-              params_original = td.params_original;
-              params_new      = td.params_new;
-            }, Some enf_constr
-          | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
-        end
-      end
-    end
+     | _ -> begin match type_scopes itl_srp pols td.scopes t with
+            | Possible _ ->
+               let pf = epf_of_tpf td.pf in
+               let exceptions = List.map td.exceptions ~f:Eformula.of_tformula in
+               let scopes, i_opt = convert_enforceable_tformulas Enftype.causable pols td.scopes in
+               let enf_constr = ESd (ESlhsSScope (Option.value_exn i_opt)) in
+               { rule_id         = td.rule_id;
+                 rule_type       = td.rule_type;
+                 rule_pos        = td.rule_pos;
+                 def_pos         = td.def_pos;
+                 pf; exceptions; scopes;
+                 fv_renaming     = td.fv_renaming;
+                 params_original = td.params_original;
+                 params_new      = td.params_new;
+               }, Some enf_constr
+            | _ ->
+               begin match type_pattern itl_srp td.def_pos pols Enftype.suppressable td.pf with
+               | Possible _ ->
+                  let pf, constr_opt = convert_enforceable_pattern Enftype.suppressable pols td.pf in
+                  let exceptions = List.map td.exceptions ~f:Eformula.of_tformula in
+                  let scopes = List.map td.scopes ~f:Eformula.of_tformula in
+                  let enf_constr = match constr_opt with
+                    | Some (EpfSup c) -> ESd (ESlhsSPformula c)
+                    | _ -> assert false
+                  in
+                  { rule_id         = td.rule_id;
+                    rule_type       = td.rule_type;
+                    rule_pos        = td.rule_pos;
+                    def_pos         = td.def_pos;
+                    pf; exceptions; scopes;
+                    fv_renaming     = td.fv_renaming;
+                    params_original = td.params_original;
+                    params_new      = td.params_new;
+                  }, Some enf_constr
+               | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
+               end
+            end
+     end
   | _  -> edisjunct_of_tdisjunct td, None
 
 let erules_from_tcrules (tcrules: (int, tcrule, Int.comparator_witness) Map.t) : (int, erule, Int.comparator_witness) Map.t =
   let c_rules = Map.to_alist tcrules in
   let aux erules (c_idx, c_rule) = match c_rule with
     | TCImplication (r_idx, trt, pos, _, _, _, _, _, _) ->
-      begin match trt with
-        | TRTObligation -> Map.add_exn erules ~key:r_idx ~data:(EObligation (pos, c_idx))
-        | TRTPermission -> Map.add_exn erules ~key:r_idx ~data:(EPermission (pos, c_idx))
-        | _ -> assert false
-    end
+       begin match trt with
+       | TRTObligation -> Map.add_exn erules ~key:r_idx ~data:(EObligation (pos, c_idx))
+       | TRTPermission -> Map.add_exn erules ~key:r_idx ~data:(EPermission (pos, c_idx))
+       | _ -> assert false
+       end
     | TCDefinitionRef (r_idx, trt, pos, _, _, _, _, _) ->
-      begin match trt with
-        | TRTException -> Map.add_exn erules ~key:r_idx ~data:(EException (pos, c_idx))
-        | TRTExceptionC -> Map.update erules r_idx ~f:(function
-            | Some (EExceptionC (pos, -1, constitutives)) -> EExceptionC (pos, c_idx, constitutives)
-            | Some _ -> assert false (* not -1: exception cannot be defined already *)
-            | None -> EExceptionC (pos, c_idx, []))
-        | TRTScope -> Map.add_exn erules ~key:r_idx ~data:(EScope (pos, c_idx))
-        | _ -> assert false
-      end
+       begin match trt with
+       | TRTException -> Map.add_exn erules ~key:r_idx ~data:(EException (pos, c_idx))
+       | TRTExceptionC -> Map.update erules r_idx ~f:(function
+                              | Some (EExceptionC (pos, -1, constitutives)) -> EExceptionC (pos, c_idx, constitutives)
+                              | Some _ -> assert false (* not -1: exception cannot be defined already *)
+                              | None -> EExceptionC (pos, c_idx, []))
+       | TRTScope -> Map.add_exn erules ~key:r_idx ~data:(EScope (pos, c_idx))
+       | _ -> assert false
+       end
     | TCDefinitionDis (disjunct_map, _) ->
-      let add_disjuncts_to_map m (d_idx, (disjunct: tdisjunct)) =
-        let trt = disjunct.rule_type in
-        let r_idx = disjunct.rule_id in
-        let pos = disjunct.rule_pos in
-        begin match trt with
-          | TRTConstitutive ->
+       let add_disjuncts_to_map m (d_idx, (disjunct: tdisjunct)) =
+         let trt = disjunct.rule_type in
+         let r_idx = disjunct.rule_id in
+         let pos = disjunct.rule_pos in
+         begin match trt with
+         | TRTConstitutive ->
             Map.update m r_idx ~f:(function
-              | Some (EConstitutive (pos, ds)) -> EConstitutive (pos, (c_idx, d_idx)::ds)
-              | Some _ -> assert false
-              | None -> EConstitutive (pos, [(c_idx, d_idx)]))
-          | TRTExceptionC ->
+                | Some (EConstitutive (pos, ds)) -> EConstitutive (pos, (c_idx, d_idx)::ds)
+                | Some _ -> assert false
+                | None -> EConstitutive (pos, [(c_idx, d_idx)]))
+         | TRTExceptionC ->
             Map.update m r_idx ~f:(function
-              | Some (EExceptionC (pos, c_idx_ex, constitutives)) -> EExceptionC (pos, c_idx_ex, (c_idx, d_idx)::constitutives)
-              | Some _ -> assert false
-              | None -> EExceptionC (pos, -1, [(c_idx, d_idx)]))
-          | _ -> assert false
-        end
-      in
-      Map.to_alist disjunct_map |> List.fold ~init:erules ~f:add_disjuncts_to_map
+                | Some (EExceptionC (pos, c_idx_ex, constitutives)) -> EExceptionC (pos, c_idx_ex, (c_idx, d_idx)::constitutives)
+                | Some _ -> assert false
+                | None -> EExceptionC (pos, -1, [(c_idx, d_idx)]))
+         | _ -> assert false
+         end
+       in
+       Map.to_alist disjunct_map |> List.fold ~init:erules ~f:add_disjuncts_to_map
   in
   List.fold c_rules ~f:aux ~init:(Map.empty (module Int))
 
@@ -1552,11 +1558,12 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
        end
     | TCDefinitionDis (tdisjuncts, g) as rule ->
        let eg = Eformula.of_tformula g in
+       debug (Eformula.to_string eg);
        begin match Map.find pols (get_predicate_name_exn g) with
        | Some t ->
           let itl_srp = if Enftype.is_transparent t then Some itl_srp else None in
           begin match Enftype.is_causable t, Enftype.is_suppressable t with
-          | true, _ ->
+          | _, true ->
              (* high-level idea:
                 - find first disjunct that can be made Cau
                 - convert this disjunct analogous to the Cau case for
@@ -1570,7 +1577,7 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                |> Map.data
              in
              ok (ECDefinitionDis (edisjuncts, eg, t, Some (ESdd constrs)))
-          | _, true ->
+          | true, _ ->
              let type_tdisjunct (k, v) = Err.WithErrors.(type_tdisjunct itl_srp pg_map t rule v >| (fun v -> (k, v))) in
              let aux (_, verdict) = match verdict with
                | Possible _ -> true
@@ -1645,7 +1652,9 @@ let do_type (tprog: Tlex.tprog) (b: Interval.v) : Elex.eprog Err.OrErrors.t =
   let* rule_order = topological_rule_order tprog tcrules in
   (* Compute verdict, solve constraints *)
   let* constraints, itl_srp, pg_map = type_tcrules tprog tcrules rule_order in
+  Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.Constraint.to_string data)) constraints;
   let pols = Map.map ~f:Enftype.Constraint.solve constraints in
+  Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.to_string data)) pols;
   debug (Printf.sprintf "rule_order: %s\n" (Util.string_of_int_list rule_order));
   debug (Util.string_of_pols ~f:Enftype.to_string pols);
   (* Convert tcrules to erules and ecrules *)

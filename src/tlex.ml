@@ -320,7 +320,7 @@ let string_of_tstmt ?(i=0) =
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-      Printf.sprintf "%srule%s\n%s%s\n%s"
+      Printf.sprintf "%srule %s\n%s%s\n%s"
         (Util.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)

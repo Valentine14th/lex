@@ -46,10 +46,10 @@ let add_trrefined rs name =
     { trefi with trrefined = Set.add trefi.trrefined name } in
   ok (map rs f)
 
-let add_trhidden name doc_string rs pos =
+let add_trhidden name label doc_string rs pos =
   (* TODO[FH]: check that the event exists in the underlying lex code *)
   let open Errors.OrErrors in
-  let* trhidden = ok ((pos, name) :: rs.trefi.trhidden) in
+  let* trhidden = ok ((pos, name, label) :: rs.trefi.trhidden) in
   let* rs = add_trrefined rs name in
   let f trefi =
     { trefi with trtmts = TRHide (pos, name, doc_string) :: trefi.trtmts;
@@ -123,14 +123,16 @@ let type_rtmt rs : rtmt -> rt Errors.WithErrors.t =
        add_trreplacements kind reference_labels1 reference_labels2 doc_string rs pos in
      we rs
   | RHide (pos, name, doc_string) ->
-     we (add_trhidden name doc_string rs pos)
+     let label = Label.set_rule_id_force (Some ("hide_" ^ name)) rs.s.label in
+     we (add_trhidden name label doc_string rs pos)
 
 (* Main typing function *)
 
 let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t =
   let open Errors.WithErrors in
   (*Map.iter_keys ~f:print_endline s.tprog.tevents;*)
-  let* s = type_stmt s (Lex.SSection (LexingInfo.dummy, Article 0, "refinement", None)) in
+  let label = Label.set_rule_id_force None s.label in
+  let s = { s with tprog = { s.tprog with tstmts = s.tprog.tstmts @ [Tlex.TSSection (Article 0, label, "refinement", None)] } } in
   let init = { s; trefi = { trempty with lex_file = refi.lex_file } } in
   (* First pass: type statements *)
   let* rs = fold refi.rtmts ~init ~f:type_rtmt in

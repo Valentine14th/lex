@@ -217,19 +217,20 @@ let compile_let_binding (f: Eformula.t) pred : string * ident list * Eformula.t 
     (p_name, trms, rhs)
   | _ -> assert false
 
-let compile_renaming f renaming =
-  List.fold_right renaming ~init:f ~f:(fun (x, y) f -> Eformula.make (Eformula.assign x y f) f.info)
+let compile_renaming form renaming =
+  let f (x, y) form =
+    if ETerm.is_var y then
+      Eformula.subst (Map.of_alist_exn (module String) [ETerm.unvar y, x]) form
+    else
+      Eformula.make (Eformula.assign (ETerm.unvar x) y form) form.info in
+  List.fold_right renaming ~init:form ~f
 
 let compile_exists f vars =
   List.fold_right vars ~init:f ~f:(fun x f -> Eformula.make (Eformula.exists x f) f.info)
 
-let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) vars bvs (enftype: Enftype.t) ed: Eformula.t =
+let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) vars (enftype: Enftype.t) ed: Eformula.t =
   (* let renaming = List.map2 ed.params_new ed.params_original ~f:(fun t1 t2 -> eeqconst t1 t2) in *)
   (* TODO: implement variable renaming using 'gets' operator *)
-  let param_names = List.map ed.params_new ~f:(fun t -> match t.trm with
-    | ETerm.Var v -> v
-    | _ -> assert false) in
-  let renaming = List.zip_exn param_names ed.params_original in
   let compiled = 
     match Enftype.is_causable enftype, Enftype.is_suppressable enftype with
     | true, _ -> 
@@ -242,9 +243,14 @@ let compile_edisjunct ?(cau_constr=None) ?(sup_constr=None) vars bvs (enftype: E
        let ex_neg = List.map ed.exceptions
                       ~f:(fun x -> make (neg x) { I.dummy with pos = x.info.pos }) in
        tbignonconj (compile_epformula ~f:(tbignonconj) ed.pf :: ex_neg @ ed.scopes)
-  in let vars = Eformula.fvs [compiled] in
-     compile_exists (compile_renaming compiled renaming) (Set.elements (Set.diff vars bvs))
-
+  in
+  let renaming = List.zip_exn ed.params_new ed.params_original in
+  let compiled = compile_renaming compiled renaming in
+  let bvs = Set.elements (Set.diff (Eformula.fvs [compiled])
+                            (Set.of_list (module String) (List.map ~f:ETerm.unvar ed.params_new))) in
+  debug (Eformula.to_string compiled);
+  debug (String.concat ~sep:"," bvs);
+  compile_exists compiled bvs
 
 let fv_of_ecrule = function
   | ECImplication (_, _, _, pf1, _, _, pf2, _, _, _) ->
@@ -277,15 +283,14 @@ let compile_let_rule = function
   | ECDefinitionDis (edisjuncts, g, enftype, enf_constr) as r ->
      begin
        let vars = fv_of_ecrule r in
-       let bvs = Eformula.fvs [g] in
        match enf_constr with
     | Some (ECdd (idx, enf_cau_lhs)) -> 
       let rhs_list =
         let aux ~key:j ~data:d =
           if idx = j then
-            compile_edisjunct ~cau_constr:(Some enf_cau_lhs) vars bvs Enftype.causable d
+            compile_edisjunct ~cau_constr:(Some enf_cau_lhs) vars Enftype.causable d
           else
-            compile_edisjunct vars bvs Enftype.bot d
+            compile_edisjunct vars Enftype.bot d
         in
         Map.mapi edisjuncts ~f:aux |> Map.data
       in
@@ -293,10 +298,10 @@ let compile_let_rule = function
       compile_let_binding rhs g
     | Some (ESdd enf_sup_lhs_list) ->
       let rhs = tbignondisj (List.map2_exn (Map.data edisjuncts) enf_sup_lhs_list
-        ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) vars bvs Enftype.suppressable d)) in
+        ~f:(fun d c -> compile_edisjunct ~sup_constr:(Some c) vars Enftype.suppressable d)) in
       compile_let_binding rhs g
     | None ->
-      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct vars bvs Enftype.bot)))  in
+      let rhs = tbignondisj (Map.data (Map.map edisjuncts ~f:(compile_edisjunct vars Enftype.bot)))  in
       compile_let_binding rhs g
     end, enftype
   | _ -> assert false

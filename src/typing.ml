@@ -417,17 +417,21 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
         Errors.type_error err_msg f.info.pos
       end
     end*)
-  | EqConst (t, c) ->
+  | EqConst (t, d) ->
      let* t_vars, t' = type_term s.tevents s.tfunctions s.taliases t_vars t None in
      begin match t'.info.typ with
        | TypeTerm.TypeConst Dom.TBool ->
-          let c = TTerm.{ trm = TTerm.Const c;
+          let c = TTerm.{ trm = TTerm.Const d;
                           info = { pos = t'.info.pos; typ = TypeTerm.TypeConst Dom.TBool } } in
           ok (t_vars,
-              Tformula.EqConst
-                (TTerm.{ trm = TTerm.binop t' BEq c;
-                         info = { pos = f.info.pos; typ = TypeTerm.TypeConst (Dom.TBool) } },
-                       Dom.Bool true), None)
+              (if (Dom.equal d (Dom.Bool true)) then
+                Tformula.EqConst (t', d)
+              else
+                Tformula.EqConst
+                  (TTerm.{ trm = TTerm.binop t' BEq c;
+                           info = { pos = f.info.pos; typ = TypeTerm.TypeConst (Dom.TBool) } },
+                   Dom.Bool true)),
+              None)
        | _ -> let err_msg = Printf.sprintf "Ill-typed term type: '%s'" (TypeTerm.to_string t'.info.typ) in
               error (Errors.type_error err_msg f.info.pos)
      end
