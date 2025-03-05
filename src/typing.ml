@@ -5,7 +5,7 @@ open Term
 open Lex
 open Tlex
 
-let debug_typing = ref false
+let debug_typing = ref true
 let debug msg = if !debug_typing then Errors.debug_print ~f_name:(Some "typing.ml") msg
 
 (* Typing state *)
@@ -492,7 +492,7 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
      ok (t_vars, Tformula.once i f, None)
   | Eventually (i, f) ->
      let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.eventually i f, None )
+     ok (t_vars, Tformula.eventually i f, None)
   | Historically (i, f) ->
      let* t_vars, f = type_formula s t_vars f in
      ok (t_vars, Tformula.historically i f, None)
@@ -511,7 +511,10 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
   | Predicate' _ | Let _ | Let' _  | Top _ ->
      raise (Invalid_argument (Printf.sprintf "typing not implemented for %s" (Formula.to_string f)))
   in
-  ok (t_vars, Tformula.{ form; info = Tformula.{ pos = f.info.pos; event_type_opt} })
+  (*debug ("type_formula " ^ Formula.to_string f);
+  debug ("t_vars: " ^ String.concat ~sep:", " (List.map ~f:(fun (k, v) -> k ^ " -> " ^ TypeTerm.to_string v) (Map.to_alist t_vars)));*)
+  ok (t_vars, Tformula.{ form; info = Tformula.{ pos = f.info.pos; event_type_opt;
+                                                 t_vars = Map.to_alist t_vars } })
 
 let type_patt s t_vars (pf: Lex.Pattern.patt) : ('t_vars * Pattern.patt) Errors.OrErrors.t =
   let open Errors.OrErrors in

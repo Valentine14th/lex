@@ -90,3 +90,5 @@ let to_latex = function
   | Time v -> Time.to_string v
   | Span v -> Span.to_string v
   | Money v -> Money.to_string v
+
+let of_int i = Int i

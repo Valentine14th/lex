@@ -32,5 +32,5 @@ let rec to_term_core = function
 
 and to_term t = { trm = to_term_core t.trm; info = Term.{ pos = t.info.pos } }
 
-
-
+let dummy_int i = { trm = Const (Dom.Int i);
+                    info = { PosTypeInfo.dummy with typ = TypeTerm.TypeConst (Dom.TInt) } }

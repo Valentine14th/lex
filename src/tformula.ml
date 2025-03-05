@@ -18,6 +18,7 @@ module StringVar = Term.StringVar
 type tinfo_type = {
     pos: LexingInfo.t;
     event_type_opt: Lex.event_type option;
+    t_vars: (string * TypeTerm.t) list;
   } [@@deriving compare, sexp_of, hash, equal]
 
 module Info : MFOTL_lib.Modules.I with type t = tinfo_type = struct
@@ -25,8 +26,9 @@ module Info : MFOTL_lib.Modules.I with type t = tinfo_type = struct
   type t = tinfo_type [@@deriving compare, sexp_of, hash, equal]
 
   let to_string _ s _ = s
+    (* "{ " ^ s ^ "; t_vars = " ^ String.concat ~sep:", " (List.map ~f:(fun (k, v) -> k ^ " -> " ^ TypeTerm.to_string v) info.t_vars) ^ " }"*)
   
-  let dummy = { pos = LexingInfo.dummy; event_type_opt = None }
+  let dummy = { pos = LexingInfo.dummy; event_type_opt = None; t_vars = [] }
 
 end
 

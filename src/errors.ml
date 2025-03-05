@@ -16,6 +16,7 @@ type error_type =
   | EnforceabilityError
   | ReferenceError
   | CompilerError
+  | RefinementError
 
 let error_type_to_string = function
   | LexerError -> "Lexer error"
@@ -26,6 +27,7 @@ let error_type_to_string = function
   | EnforceabilityError -> "Enforceability error"
   | ReferenceError -> "Reference error"
   | CompilerError -> "Compiler error"
+  | RefinementError -> "Refinement error"
 
 type error = { error_type: error_type;
                error_msg : string;
@@ -60,6 +62,7 @@ let label_error = make LabelError
 let enforceability_error = make EnforceabilityError
 let reference_error = make ReferenceError
 let compiler_error = make CompilerError
+let refinement_error = make RefinementError
 
 let fatal error =
   failwith ("Fatal: " ^ to_string error)
