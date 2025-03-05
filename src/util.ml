@@ -1,5 +1,7 @@
 open Core
 
+let z3_to = ref "0"
+
 let take l n =
   let rec aux = function
     | _, 0 -> []

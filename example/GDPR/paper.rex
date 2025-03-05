@@ -1,4 +1,4 @@
-refine gdpr_mgow
+refine paper
 
 type session_id is int
 type data_type  is string
@@ -49,7 +49,7 @@ rule "refine_iscollect"
     whenever
         Collect(f)
     refine
-        IsCollect(f)
+        IsCollection(f)
 
 rule "refine_giveconsent"
     whenever
@@ -72,13 +72,13 @@ rule "collection_before_processing"
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
     oblige
-        ONCE (EXISTS b. DataProcessing(pr, c, b, d) AND PersonalData(d, ds) AND IsCollect(b))
+        ONCE (EXISTS b. DataProcessing(pr, c, b, d) AND PersonalData(d, ds) AND IsCollection(b))
     assume fulfilled
         
 rule "consent_before_collection"
     whenever
         DataProcessing(pr, c, a, d)
-        IsCollect(a)
+        IsCollection(a)
         PersonalData(d, ds)
     oblige
         EXISTS p. ONCE GiveConsent(ds, p, c)
@@ -86,7 +86,7 @@ rule "consent_before_collection"
 
 replace
     strengthen
-        article "6" paragraph "1" paragraph[1] "1" point "a"
+        article "6" paragraph "1" point "a"
     by
         rule "new_lawfulness"
         rule "collection_before_processing"

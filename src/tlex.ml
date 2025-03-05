@@ -272,7 +272,7 @@ let string_of_trule i trule =
   in
   let string_of_cons_rule verb fp g =
     Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string fp.patt ^ "\n"
-    ^ string_of_formula_list fp.fs ^ "\n"
+    ^ string_of_formula_list fp.fs
     ^ Util.tabs i   ^ verb      ^ "\n"
     ^ string_of_formula_list g
   in

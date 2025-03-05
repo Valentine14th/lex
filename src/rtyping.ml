@@ -56,10 +56,120 @@ let add_trhidden name b label doc_string rs pos =
                  trassumed } in
   ok (map rs f)
 
+let merge_t_vars m (tf: Tformula.t) =
+  Map.merge ~f:(fun ~key:_ -> function
+      | `Left a -> Some a
+      | `Right a -> Some a
+      | `Both (a, _) -> Some a)
+    m (Map.of_alist_exn (module String) tf.info.t_vars)
+
+let tpf_to_tformula (tpf: Tlex.Pattern.t) =
+  let module I = Eformula.Info in
+  let t_vars' = List.fold tpf.fs ~init:(Map.empty (module String)) ~f:merge_t_vars in
+  let t_vars = Map.to_alist t_vars' in
+  let f = Tformula.make (Tformula.conjs N tpf.fs) { Tformula.Info.dummy with t_vars } in
+  match tpf.patt with
+  | Pattern.PPresent -> f
+  | PEventually i -> Tformula.make (Tformula.eventually i f) f.info
+  | PAlways i -> Tformula.make (Tformula.always i f) f.info
+  | PUntil (i, g) -> Tformula.make (Tformula.until N i g f)
+                       { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
+  | POnce i -> Tformula.make (Tformula.once i f) f.info
+  | PHistorically i -> Tformula.make (Tformula.historically i f) f.info
+  | PSince (i, g) -> Tformula.make (Tformula.since N i f g)
+                       { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
+
+let check_trreplacement kind old_trule new_trules rs pos =
+  let open Errors.OrErrors in
+  let eq t t' = String.equal (Tformula.to_string t) (Tformula.to_string t') in
+  let make_always_imp close f g =
+    let fvs_f = Tformula.fv f in
+    let fvs_g = Set.diff (Tformula.fv g) fvs_f in
+    let t_vars' = List.fold [f; g] ~init:(Map.empty (module String)) ~f:merge_t_vars in
+    let t_vars = Map.to_alist t_vars' in
+    let f_imp_g = Tformula.make (
+                      Tformula.imp N f
+                        (List.fold_right (Base.Set.elements fvs_g)
+                           ~f:(fun x f -> Tformula.make (Tformula.exists x f)
+                                            { Tformula.Info.dummy with t_vars = f.info.t_vars } )
+                           ~init:g))
+                    { Tformula.Info.dummy with t_vars } in
+    let f_imp_g = if close then
+                    let f_imp_g = List.fold_right (Base.Set.elements fvs_f)
+                                    ~f:(fun x f -> Tformula.make (Tformula.forall x f)
+                                                     { Tformula.Info.dummy with t_vars = f.info.t_vars })
+                                    ~init:f_imp_g in
+                    Tformula.make (Tformula.forall "tp.0" f_imp_g)
+                      { Tformula.Info.dummy with t_vars = t_vars @ [("tp.0", TypeTerm.TypeConst Dom.TInt)] }
+                  else
+                    f_imp_g in
+    f_imp_g in
+  match kind, old_trule with
+  | Strengthen, TConstitutive (pos', tpf, gs) ->
+     let check_strengthen_constitutive pos' tpf g =
+       let potential_replacements =
+         List.filter_map ~f:(function
+             | TConstitutive (_, tpf, gs') when List.mem gs' g ~equal:eq -> Some tpf
+             | _ -> None) new_trules in
+       let new_obligations =
+         List.filter_map ~f:(function
+             | TObligation (_, tpf, tpg, _, _) -> Some (tpf, tpg)
+             | _ -> None) new_trules in
+       let new_obligations_conj =
+         let t_vars' =
+           List.fold new_obligations ~init:(Map.empty (module String))
+             ~f:(fun m (tpf, tpg) ->
+               merge_t_vars (merge_t_vars m (tpf_to_tformula tpf)) (tpf_to_tformula tpg)) in
+         let t_vars = Map.to_alist t_vars' in
+         Tformula.make (
+             Tformula.conjs N (
+                 List.map ~f:(fun (tpf, tpg) ->
+                     make_always_imp true (tpf_to_tformula tpf) (tpf_to_tformula tpg))
+                   new_obligations))
+           { Tformula.Info.dummy with t_vars } in
+       let tf = tpf_to_tformula tpf in
+       debug ("check_strengthen_constitutive " ^ Tformula.to_string tf);
+       debug ("new_trules: " ^ Int.to_string (List.length new_trules));
+       debug ("potential_replacements: " ^ Int.to_string (List.length potential_replacements));
+       let b = List.exists potential_replacements ~f:(
+                   fun tpf' -> let tf' = tpf_to_tformula tpf' in
+                               let t_vars' = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars in
+                               let t_vars = Map.to_alist t_vars' in
+                               let imp = Tformula.make
+                                           (Tformula.imp N
+                                              new_obligations_conj (make_always_imp false tf' tf))
+                                           { Tformula.Info.dummy with t_vars } in
+                               Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp) in
+       if b then
+         ok ()
+       else
+         error (Errors.refinement_error
+                  (Printf.sprintf
+                     "Cannot strengthen constitutive rule defined at %s: cannot prove implication"
+                     (LexingInfo.to_string pos'))
+                  pos) in
+     let* _ = all (List.map ~f:(check_strengthen_constitutive pos' tpf) gs) in
+     ok ()
+  | _ -> assert false
+
 let add_trreplacements kind refs1 refs2 doc_string rs pos =
   (* TODO[FH]: check implications + monotonicity with Z3 *)
   let open Errors.OrErrors in
-  let* trreplacements = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
+  let* trreplacements  = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
+  let rules_by_refs refs = 
+    let  rtref_exprs = List.map ~f:Ref.to_rtref_expr refs in
+    let* rules_idx =
+      all (List.map rtref_exprs ~f:(fun ref ->
+               Label.RuleTree.find_rules_in_tree ref.pos ref.label rs.s.tprog.rule_tree.tree))
+      >| List.concat in
+    let f = function
+      | TSRule (_, idx, _, _, trule, _) when List.mem rules_idx idx ~equal:Int.equal -> Some trule
+      | _ -> None in
+    ok (List.filter_map ~f rs.s.tprog.tstmts) in
+  let* old_trules = rules_by_refs refs1 in
+  let* new_trules = rules_by_refs refs2 in
+  let* _ = fold_best_effort ~init:() ~f:(
+               fun () old -> check_trreplacement kind old new_trules rs pos) old_trules in
   let f trefi =
     { trefi with trtmts = TRReplace (pos, kind, refs1, refs2, doc_string) :: trefi.trtmts;
                  trreplacements } in
