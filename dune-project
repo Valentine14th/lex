@@ -27,5 +27,6 @@
     xml-light
     ppx_jane
     calendar
+    z3
   )
   (allow_empty))
