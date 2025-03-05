@@ -785,15 +785,6 @@ let type_tdisjunct itl_srp pg_map t rule (d: tdisjunct) : verdict Err.WithErrors
   let param_names = List.map params ~f:get_trm_name in
   begin match Enftype.is_causable t, Enftype.is_suppressable t with
     | true, _ -> (* all parts of the definition must be Cau *)
-      (* TODO: IMPORTANT -> having the parameters as _p1, _p2, ...
-        and then inserting equalities in each disjunct for
-        _p1=<term expr>,... makes it immediately 'un'-causable
-        with the current typing rules/implementation of typing rules
-        These equalities are currently ignored in this type-checking step
-        but either it must be changed how the variable parameters get assigned
-        their potential non-variable actual values in the code, the typing rules
-        for EqConst must be changed, or making a definition Cau must be rejected      
-      *)
        let verdict_references = conj v_ex v_sc in
       ok (conj v_pf verdict_references)
     | _, true -> (* only one part of the definition must be Sup *)
@@ -946,7 +937,6 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
          Set.partition_tf fv ~f:(fun x -> List.mem param_names x ~equal:String.equal) in
        let pos = try snd (Map.find_exn s.rule_tree.label_of_rule idx) with _ -> assert false in
        let aux v_pols =
-         (* TODO: test enforcability checking and remove assertion after successful testing *)
          let enftype, itl_srp =
            begin match Map.find v_pols e with
            | Some constr ->
@@ -954,7 +944,6 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
               enftype, if Enftype.is_transparent enftype then itl_srp else None
            | None ->
               Enftype.bot, None
-              (* TODO: is Obs desired here, or should it be something else like Non? *)
            end in
          let v_ex = type_exceptions itl_srp pg_map ex (Enftype.neg enftype) in
          let v_sc = type_scopes itl_srp pg_map sc enftype in
@@ -967,7 +956,6 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
          | _, true ->
             (* only one part of the definition must be Sup *)
             let* _ = of_witherror (vars_are_past_guarded_tcrule_exn ~pg_map fv_unbound rule) in
-            (* TODO: are they actually quantified with an existential quantifier? *)
             let verdict_references = disj v_ex v_sc in
             ok (conj (disj v_pf1 verdict_references) verdict)
          | _ -> ok verdict
@@ -978,14 +966,12 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
        let e = get_predicate_name_exn g in
        debug (Printf.sprintf "typing TCDefinitionDis: %s" e);
        let aux v_pols =
-         (* TODO: test enforcability checking and remove assertion after successful testing *)
          let enftype, itl_srp =
            begin match Map.find v_pols e with
            | Some constr ->
               let enftype = Enftype.Constraint.solve constr in
               enftype, if Enftype.is_transparent enftype then itl_srp else None
            | None -> Enftype.bot, None
-                                    (* TODO: is Obs desired here, or should it be something else like Non? *)
            end in
          let type_tdisjunct = type_tdisjunct itl_srp pg_map enftype rule in
          disjuncts
@@ -1510,7 +1496,6 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
           | _, true ->
              begin match type_exceptions itl_srp pg_map ex (Enftype.neg t) with
              | Possible constraints ->
-                (* let pols' = solve constraints |> List.hd_exn in TODO: iterate through found policies *)
                 let _ = solve constraints |> List.hd_exn in (* TODO: iterate through found policies *)
                 let epf1 = epf_of_tpf pf1 in
                 let ex', i_opt = convert_enforceable_tformulas ~formulas_are_disjunction:true Enftype.causable pg_map ex in
@@ -1519,7 +1504,6 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                 ok (ECDefinitionRef (idx, ert, pos, epf1, ex', sc', refs, ef2, t, Some enf_constr))
              | _ -> begin match type_scopes itl_srp pg_map sc t with
                     | Possible constraints ->
-                       (* let pols' = solve constraints |> List.hd_exn in TODO: handle multiple/no options *)
                        let _ = solve constraints |> List.hd_exn in (* TODO: handle multiple/no options *)
                        let epf1 = epf_of_tpf pf1 in
                        let ex' = List.map ex ~f:Eformula.of_tformula in
@@ -1529,7 +1513,6 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
                     | _ ->
                        begin match type_pattern itl_srp pos pg_map Enftype.suppressable pf1 with
                        | Possible _ ->
-                          (* let pols' = solve constraints |> List.hd_exn in TODO *)
                           let epf1, constr_opt = convert_enforceable_pattern Enftype.causable pg_map pf1 in
                           let ex' = List.map ex ~f:Eformula.of_tformula in
                           let sc' = List.map sc ~f:Eformula.of_tformula in

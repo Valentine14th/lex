@@ -1,6 +1,7 @@
 *.code-workspace
 *.exe
 *.bc
+MFOTL_lib/
 
 ### ocaml gitignore: https://github.com/github/gitignore/blob/main/OCaml.gitignore ###
 *.annot

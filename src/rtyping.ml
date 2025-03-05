@@ -26,7 +26,7 @@ let add_trtmt tstmt trtmt rs =
   let s = { rs.s with tprog = { rs.s.tprog with tstmts = rs.s.tprog.tstmts @ [tstmt] } } in
   ok { s; trefi = { rs.trefi with trtmts = trtmt :: rs.trefi.trtmts } }
 
-let add_tralias name typ doc_string rs pos =
+let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingInfo.t) =
   (* TODO[FH]: check that the type exists in the underlying lex code / that we can overwrite it *)
   let open Errors.OrErrors in
   let* traliases =

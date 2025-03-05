@@ -4,6 +4,9 @@ open Lex_lib
 module Time = MFOTL_lib.Time
 
 (* TODO: introduce the upper bound `b` as a command line paramter - analogous to WhyEnf *)
+let modes = "mfotl (default), doc, template"
+let input_formats = "formex (default), akomaNtoso"
+
 let loop filename mode f o b to_ () =
   let open Errors.OrErrors in
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
@@ -13,7 +16,6 @@ let loop filename mode f o b to_ () =
   let b = match b with (* TODO: does this way of extracting an upper bound b make sense? *)
     | None -> Time.Span.zero
     | Some b -> Time.Span.of_string b in
-
   match mode with
   | None | Some "mfotl" -> begin
       match Modules.do_type [lexpath] b filepath basename with
@@ -41,20 +43,22 @@ let loop filename mode f o b to_ () =
   | Some "template" -> begin
       let format, xml = match f with
         | Some "akomaNtoso" -> Lex.IAkomaNtoso, AkomaNtoso.read_file filepath basename
-        | _ -> Lex.IFormex, Formex.read_file filepath basename in
+        | _ -> Lex.IFormex, Formex.read_file filepath basename in (*TODO [JD]: actively check if the input format is 'formex' and give an error if it is an unkown format*)
       let name = Filename.chop_extension basename in
       let lex = LegalXml.to_lex format [name] xml in
       let outname = Option.fold o ~init:(filename ^ "_lex.lex") ~f:(fun _ x -> x) in
       Lex.prog_to_file outname lex
     end
-  | Some _ -> assert false
+  | Some m ->
+    print_string ("Unknown mode: " ^ m ^ "\nAvailable modes: " ^ modes);
+    exit (-1)
 
 let () =
   Command.basic_spec ~summary:"Parse Lex"
     Command.Spec.(empty
                   +> anon ("filename" %: string)
-                  +> flag "-mode" (optional string) ~doc:"mode options: mfotl (default), doc, template"
-                  +> flag "-f" (optional string) ~doc:"input format options: formex (default), akomaNtoso"
+                  +> flag "-mode" (optional string) ~doc:("mode options: " ^ modes)
+                  +> flag "-f" (optional string) ~doc:("input format options: " ^ input_formats)
                   +> flag "-o" (optional string) ~doc:"output file"
                   +> flag "-b" (optional string) ~doc:"upper bound for the time interval"
                   +> flag "-to" (optional string) ~doc:"Z3 timeout"
