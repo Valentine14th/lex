@@ -106,6 +106,7 @@ let check_trreplacement kind old_trule new_trules rs pos =
     f_imp_g in
   match kind, old_trule with
   | Strengthen, TConstitutive (pos', tpf, gs) ->
+     (* TODO[FH]: Check monotonicity *)
      let check_strengthen_constitutive pos' tpf g =
        let potential_replacements =
          List.filter_map ~f:(function
@@ -150,7 +151,7 @@ let check_trreplacement kind old_trule new_trules rs pos =
                   pos) in
      let* _ = all (List.map ~f:(check_strengthen_constitutive pos' tpf) gs) in
      ok ()
-  | _ -> assert false
+  | _ -> (* TODO[FH]: Other cases *) assert false
 
 let add_trreplacements kind refs1 refs2 doc_string rs pos =
   (* TODO[FH]: check implications + monotonicity with Z3 *)
