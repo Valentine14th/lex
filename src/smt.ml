@@ -8,7 +8,7 @@ open Z3
 module Time = MFOTL_lib.Time
 module Interval = MFOTL_lib.Interval
 
-let debug_smt = ref true
+let debug_smt = ref false
 let debug msg = if !debug_smt then Errors.debug_print ~f_name:(Some "smt.ml") msg
 
 (* Embedding in FOL *)
