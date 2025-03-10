@@ -335,7 +335,8 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('
          TypeTerm.TypeSum (List.map ktrms ~f:(fun (k, v) -> (k, v.info.typ))) in
        ok (typed_vars, TTerm.make trm { typ; pos = v.info.pos })
        
-let type_terms event_name trms t_vars pos tevents tfunctions taliases =
+let type_terms event_name trms t_vars pos tevents tfunctions taliases
+    : ((ident, TypeTerm.t, String.comparator_witness) Map.t * TTerm.t list) Errors.OrErrors.t =
   let open Errors.OrErrors in
   let* args = match Map.find tevents event_name with
     | Some (_, args, _, _) -> ok args
@@ -369,7 +370,8 @@ let type_terms event_name trms t_vars pos tevents tfunctions taliases =
      error (Errors.type_error err_msg pos)
 
 
-let unpack_functional tevents trm' (trm: Term.t) = match trm.trm with
+let unpack_functional tevents (trm': Term.t) (trm: Term.t) : (ident * Term.t list * event_type) option =
+  match trm.trm with
   | Term.App (f, trms) ->
      (match Map.find tevents f with
       | Some (Event (_, Functional) as et, _, _, _) ->
@@ -377,7 +379,8 @@ let unpack_functional tevents trm' (trm: Term.t) = match trm.trm with
       | _ -> None)
   | _ -> None
 
-let unpack_variable tevents trm' (trm: Term.t) = match trm.trm with
+let unpack_variable tevents (trm': Term.t) (trm: Term.t) : (ident * 'e list * event_type) option =
+  match trm.trm with
   | Term.Var x ->
      (match Map.find tevents x with
       | Some (Event (_, Variable) as et, _, _, _) ->
@@ -385,7 +388,7 @@ let unpack_variable tevents trm' (trm: Term.t) = match trm.trm with
       | _ -> None)
   | _ -> None
 
-let unpack_special_eq tevents trm trm' =
+let unpack_special_eq tevents trm trm' : (ident * Term.t list * event_type) option =
   List.find_map
     [unpack_functional tevents trm trm';
      unpack_functional tevents trm' trm;
@@ -544,7 +547,7 @@ let type_pformula' tprog t_vars pf : ('t_vars * Pattern.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
   (type_pformula tprog t_vars pf) >| (fun (_, t_vars, pf) -> (t_vars, pf))
 
-let merge_reference_with_label pos (l: Label.t) (ref_expr: Lex.Ref.t) =
+let merge_reference_with_label pos (l: Label.t) (ref_expr: Lex.Ref.t) : Tlex.Ref.t Errors.OrErrors.t =
   let open Errors.OrErrors in
   begin match Label.highest_level l with
   | (Label.LSection (Article 0, _)) ->
@@ -562,7 +565,7 @@ let merge_reference_with_label pos (l: Label.t) (ref_expr: Lex.Ref.t) =
      ok (Ref.from_lex_ref ref_expr label)
   end
 
-let type_rule s pos =
+let type_rule (s: t) pos : stmt -> t Errors.OrErrors.t =
   let open Errors.OrErrors in
   function
   | SRule (_, rule_id, type_fixes, rule, doc_string) -> begin
@@ -647,7 +650,7 @@ let type_rule s pos =
     end
   | _ -> assert false
 
-let type_stmt s : stmt -> t Errors.WithErrors.t =
+let type_stmt (s: t) : stmt -> t Errors.WithErrors.t =
   let open Errors.OrErrors in
   let we = witherror ~default:s in
   function
@@ -671,7 +674,7 @@ let type_stmt s : stmt -> t Errors.WithErrors.t =
 
 (* Checking of variable types *)
     
-let merge_type_maps pos m1 m2 label =
+let merge_type_maps pos m1 m2 (label: ident) : (ident, TypeTerm.t, String.comparator_witness) Map.t Errors.OrErrors.t =
   let open Errors.OrErrors in
   let exception Exc of Errors.error in
   try
@@ -705,7 +708,7 @@ let check_var_types tprog : (int, var_types, Int.comparator_witness) Map.t Error
 
 (* Main typing function *)
 
-let do_type_exceptions s : tprog Errors.WithErrors.t =
+let do_type_exceptions (s: t) : tprog Errors.WithErrors.t =
   let open Errors.WithErrors in
   let we = Errors.OrErrors.witherror in
   let* tprog = fold s.exceptions_first_pass ~init:s.tprog
@@ -715,7 +718,7 @@ let do_type_exceptions s : tprog Errors.WithErrors.t =
   let* variables = check_var_types tprog in
   ok { tprog with tstmts = List.rev tprog.tstmts; variables }
 
-let do_type tprog prog : (t * tprog) Errors.WithErrors.t =
+let do_type (tprog: tprog) (prog: prog) : (t * tprog) Errors.WithErrors.t =
   let open Errors.WithErrors in
   let init = { empty with tprog } in
   (* First pass: type statements *)

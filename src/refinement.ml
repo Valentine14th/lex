@@ -8,10 +8,10 @@ module Enftype = MFOTL_lib.Enftype
 
 (* Visitors *)
 
-let type_trrule = function
+let type_trrule : trrule -> errule = function
   | TRefine (pos', pf, g) -> ERefine (pos', Elex.epf_of_tpf pf, Eformula.of_tformulas g)
 
-let type_estmt erule_map = function
+let type_estmt erule_map : trtmt -> ertmt = function
   | TRStmt tstmt ->
      ERStmt (Enforceability.type_tstmt erule_map tstmt)
   | TRRule (pos, i, label, type_fixes, trrule, doc_string) ->

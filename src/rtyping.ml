@@ -26,7 +26,7 @@ let add_trtmt tstmt trtmt rs =
   let s = { rs.s with tprog = { rs.s.tprog with tstmts = rs.s.tprog.tstmts @ [tstmt] } } in
   ok { s; trefi = { rs.trefi with trtmts = trtmt :: rs.trefi.trtmts } }
 
-let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingInfo.t) =
+let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingInfo.t) : rt Errors.OrErrors.t =
   (* TODO[FH]: check that the type exists in the underlying lex code / that we can overwrite it *)
   let open Errors.OrErrors in
   let* traliases =
@@ -40,13 +40,13 @@ let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingIn
   let* s = add_talias name typ doc_string s pos in
   ok { s; trefi }
 
-let add_trrefined rs name =
+let add_trrefined rs name : rt Errors.OrErrors.t =
   let open Errors.OrErrors in
   let f trefi =
     { trefi with trrefined = Set.add trefi.trrefined name } in
   ok (map rs f)
 
-let add_trhidden name b label doc_string rs pos =
+let add_trhidden name b label doc_string (rs: rt) (pos: LexingInfo.t) : rt Errors.OrErrors.t =
   (* TODO[FH]: check that the event exists in the underlying lex code *)
   let open Errors.OrErrors in
   let* trassumed = ok ((pos, name, b, label) :: rs.trefi.trassumed) in
@@ -56,14 +56,14 @@ let add_trhidden name b label doc_string rs pos =
                  trassumed } in
   ok (map rs f)
 
-let merge_t_vars m (tf: Tformula.t) =
+let merge_t_vars m (tf: Tformula.t) : (string, TypeTerm.t, String.comparator_witness) Map.t =
   Map.merge ~f:(fun ~key:_ -> function
       | `Left a -> Some a
       | `Right a -> Some a
       | `Both (a, _) -> Some a)
     m (Map.of_alist_exn (module String) tf.info.t_vars)
 
-let tpf_to_tformula (tpf: Tlex.Pattern.t) =
+let tpf_to_tformula (tpf: Tlex.Pattern.t) : Tformula.t =
   let module I = Eformula.Info in
   let t_vars' = List.fold tpf.fs ~init:(Map.empty (module String)) ~f:merge_t_vars in
   let t_vars = Map.to_alist t_vars' in
@@ -79,7 +79,7 @@ let tpf_to_tformula (tpf: Tlex.Pattern.t) =
   | PSince (i, g) -> Tformula.make (Tformula.since N i f g)
                        { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
 
-let check_trreplacement kind old_trule new_trules rs pos =
+let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: trule list) (rs: rt) pos : unit Errors.OrErrors.t =
   let open Errors.OrErrors in
   let eq t t' = String.equal (Tformula.to_string t) (Tformula.to_string t') in
   let make_always_imp close f g =
@@ -153,7 +153,7 @@ let check_trreplacement kind old_trule new_trules rs pos =
      ok ()
   | _ -> (* TODO[FH]: Other cases *) assert false
 
-let add_trreplacements kind refs1 refs2 doc_string rs pos =
+let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
   (* TODO[FH]: check implications + monotonicity with Z3 *)
   let open Errors.OrErrors in
   let* trreplacements  = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
@@ -178,7 +178,7 @@ let add_trreplacements kind refs1 refs2 doc_string rs pos =
 
 (* Visitors *)
 
-let type_rrule rs pos =
+let type_rrule (rs: rt) pos : rtmt -> rt Errors.OrErrors.t =
   let open Errors.OrErrors in
   function
   | RRule (_, rule_id, type_fixes, rrule, doc_string) -> begin
@@ -211,7 +211,7 @@ let type_rrule rs pos =
     end
   | _ -> assert false
 
-let type_rtmt rs : rtmt -> rt Errors.WithErrors.t =
+let type_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
   let open Errors.OrErrors in
   let we = witherror ~default:rs in
   function

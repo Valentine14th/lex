@@ -24,17 +24,17 @@ type srefi = { rtmts: srtmt list }
 
 (* Conversion to rex *)
 
-let to_rrule = function
+let to_rrule : srrule -> rrule = function
   | SRefine (pos, fp, g) -> Refine (pos, to_pattern fp, List.map ~f:Formula.init g)
 
-let replace_includes (incl_map: (string, srefi, String.comparator_witness) Map.t) srefi =
+let replace_includes (incl_map: (string, srefi, String.comparator_witness) Map.t) (srefi: srefi) : srefi =
   let replace_include_rtmt = function
     | SRStmt (SSInclude (_, idents)) -> (Map.find_exn incl_map (Util.concat_all_filename idents)).rtmts
     | rtmt -> [rtmt]
   in
   { rtmts = List.concat_map ~f:replace_include_rtmt srefi.rtmts }
     
-let to_rtmt = function
+let to_rtmt : srtmt -> rtmt = function
   | SRStmt sstmt -> RStmt (to_stmt sstmt)
   | SRRule (pos, label, type_fixes, rrule, doc_string) -> RRule (pos, label, type_fixes, to_rrule rrule, doc_string)
   | SRType (pos, name, typ, doc_string) -> RType (pos, name, typ, doc_string)
@@ -42,7 +42,7 @@ let to_rtmt = function
   | SRAssume (pos, name, b, doc_string) -> RAssume (pos, name, b, doc_string)
   | SRRefine _ -> assert false
 
-let to_refi (srefi: srefi) =
+let to_refi (srefi: srefi) : refi =
   match srefi.rtmts with
   | SRRefine (_, lex_file) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; lex_file }
   | _ -> assert false

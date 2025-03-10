@@ -13,27 +13,27 @@ type import =
   | SIFormex     of LexingInfo.t * string list
   | SIAkomaNtoso of LexingInfo.t * string list
 
-let string_of_import = function
+let string_of_import : import -> string = function
   | SILex (_, idents) -> String.concat ~sep:"." idents
   | SIFormex (_, idents) -> String.concat ~sep:"." idents
   | SIAkomaNtoso (_, idents) -> String.concat ~sep:"." idents
 
-let pos_of_import = function
+let pos_of_import : import -> LexingInfo.t = function
   | SILex (pos, _) -> pos
   | SIFormex (pos, _) -> pos
   | SIAkomaNtoso (pos, _) -> pos
 
-let idents_of_import = function
+let idents_of_import : import -> string list = function
   | SILex (_, idents) -> idents
   | SIFormex (_, idents) -> idents
   | SIAkomaNtoso (_, idents) -> idents
 
-let extension_of_import = function
+let extension_of_import : import -> string = function
   | SILex _ -> ".lex"
   | SIFormex _ -> ".xml"
   | SIAkomaNtoso _ -> ".xml"
 
-let list_imports prog =
+let list_imports (prog: Lex.prog) : import list =
   let f = function
     | Lex.SImport (pos, ILex, idents)    -> Some (SILex (pos, idents))
     | Lex.SImport (pos, IFormex, idents) -> Some (SIFormex (pos, idents))
@@ -41,25 +41,25 @@ let list_imports prog =
     | _ -> None
   in List.filter_map ~f Lex.(prog.stmts)
 
-let list_lex_includes sprog =
+let list_lex_includes sprog : import list =
   let f = function
     | Slex.SSInclude (pos, idents) -> Some (SILex (pos, idents))
     | _ -> None
   in List.filter_map ~f Slex.(sprog.stmts)
 
-let list_rex_includes srefi =
+let list_rex_includes srefi : import list =
   let f = function
     | Srex.SRStmt (Slex.SSInclude (pos, idents)) -> Some (SILex (pos, idents))
     | _ -> None
   in List.filter_map ~f Srex.(srefi.rtmts)
 
-let suffix_of_import import =
+let suffix_of_import (import: import) : string =
   Util.concat_all_filename (idents_of_import import) ^ extension_of_import import
 
 let check_filename (prefix, filename) =
   Sys_unix.is_file_exn ~follow_symlinks:false (Filename.concat prefix filename)
 
-let find_filename seq import prefixes suffix =
+let find_filename seq import prefixes suffix : (string * string) Errors.OrErrors.t =
   let open Errors.OrErrors in
   let candidates = List.map prefixes ~f:(fun prefix -> (prefix, suffix)) in
   match List.find candidates ~f:check_filename with
@@ -85,7 +85,7 @@ let parse_with_error parse_fun lexbuf : 'a Errors.OrErrors.t =
   | Sys_error msg ->
      error (Errors.parser_error msg (LexingInfo.create1 lexbuf.lex_curr_p))
 
-let parse_lex_module filename: Slex.sprog Errors.OrErrors.t =
+let parse_lex_module filename : Slex.sprog Errors.OrErrors.t =
    let inx = try In_channel.create filename with
     | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
   in
@@ -95,7 +95,7 @@ let parse_lex_module filename: Slex.sprog Errors.OrErrors.t =
   In_channel.close inx;
   prog
 
-let parse_rex_module filename: Srex.srefi Errors.OrErrors.t =
+let parse_rex_module filename : Srex.srefi Errors.OrErrors.t =
    let inx = try In_channel.create filename with
     | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
   in
@@ -105,7 +105,7 @@ let parse_rex_module filename: Srex.srefi Errors.OrErrors.t =
   In_channel.close inx;
   prog
 
-let link_formex_stmt modules = function
+let link_formex_stmt modules : Tlex.tstmt -> Tlex.tstmt = function
   | Tlex.TSRule (_, _, _, _, _, Some _) as s -> s
   | TSSection (section_kind, full_label, label, None) ->
     let law = Label.qualified_name_of_law full_label.law in
@@ -132,17 +132,17 @@ let link_formex_stmt modules = function
      in TSRule (pos, idx, label, type_fixes, rule, doc_string)
   | s -> s
 
-let link_formex modules tprog =
+let link_formex modules tprog : Tlex.tprog =
   Tlex.{ tprog with tstmts = List.map tprog.tstmts ~f:(link_formex_stmt modules) }
 
-let init_tprog_from_modules modules =
+let init_tprog_from_modules modules : Tlex.tprog =
   let f ~key:_ ~data tprog =
     match data with
     | MLex eprog' -> Elex.tprog_import tprog eprog'
     | MLegalXml _ -> tprog in
   Map.fold modules ~init:Tlex.tempty ~f
 
-let rec load_lex_with_includes fullname seq' prefixes =
+let rec load_lex_with_includes fullname seq' prefixes : Slex.sprog Errors.OrErrors.t =
   let open Errors.OrErrors in
   let* sprog    = parse_lex_module fullname in
   let  includes = list_lex_includes sprog in
@@ -156,7 +156,7 @@ let rec load_lex_with_includes fullname seq' prefixes =
   let  incl_map = Map.of_alist_exn (module String) (List.zip_exn fns sprogs) in
   ok (Slex.replace_includes incl_map sprog)
 
-let rec load_rex_with_includes fullname seq' prefixes =
+let rec load_rex_with_includes fullname seq' prefixes : Srex.srefi Errors.OrErrors.t =
   let open Errors.OrErrors in
   let* srefi    = parse_rex_module fullname in
   let  includes = list_rex_includes srefi in
@@ -170,7 +170,7 @@ let rec load_rex_with_includes fullname seq' prefixes =
   let  incl_map = Map.of_alist_exn (module String) (List.zip_exn fns srefis) in
   ok (Srex.replace_includes incl_map srefi)
 
-let rec load_modules imports lexpath b seq' prefixes =
+let rec load_modules imports lexpath b seq' prefixes : (string * t) list Errors.OrErrors.t =
   let open Errors.OrErrors in
   let suffixes  = List.map imports ~f:suffix_of_import in
   let filenames = List.map (List.zip_exn imports suffixes)

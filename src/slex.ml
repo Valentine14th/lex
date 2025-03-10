@@ -16,7 +16,7 @@ type srule =
   | SExceptionC   of LexingInfo.t * SPattern.t * Ref.t list * Sformula.t list
   | SScope        of LexingInfo.t * SPattern.t * Ref.t list
 
-let pos_of_srule = function
+let pos_of_srule : srule -> LexingInfo.t = function
   | SObligation   (pos, _, _, _, _) -> pos
   | SPermission   (pos, _, _, _, _) -> pos
   | SConstitutive (pos, _, _)       -> pos
@@ -40,7 +40,7 @@ type sprog = { stmts: sstmt list }
 
 (* Conversion to lex *)
 
-let rec to_core_pattern = function
+let rec to_core_pattern : SPattern.patt -> Lex.Pattern.patt = function
   | SPattern.PPresent -> Pattern.PPresent
   | PEventually i -> PEventually i
   | PAlways i -> PAlways i
@@ -48,10 +48,10 @@ let rec to_core_pattern = function
   | POnce i -> POnce i
   | PHistorically i -> PHistorically i
   | PSince (i, f) -> PSince (i, Formula.init f)
-and to_pattern (p: SPattern.t) =
+and to_pattern (p: SPattern.t) : Lex.Pattern.t =
   Pattern.make (to_core_pattern p.patt) (List.map ~f:Formula.init p.fs)
 
-let to_rule = function
+let to_rule : srule -> rule = function
   | SObligation (pos, fp1, fp2, rt, rcs) -> Obligation (pos, to_pattern fp1, to_pattern fp2, rt, rcs)
   | SPermission (pos, fp1, fp2, rt, rcs) -> Permission (pos, to_pattern fp1, to_pattern fp2, rt, rcs)
   | SConstitutive (pos, fp, g) -> Constitutive (pos, to_pattern fp, List.map ~f:Formula.init g)
@@ -59,14 +59,14 @@ let to_rule = function
   | SScope (pos, fp, references) -> Scope (pos, to_pattern fp, references)
   | SExceptionC (pos, fp, references, g) -> ExceptionC (pos, to_pattern fp, references, List.map ~f:Formula.init g)
 
-let replace_includes (incl_map: (string, sprog, String.comparator_witness) Map.t) sprog =
+let replace_includes (incl_map: (string, sprog, String.comparator_witness) Map.t) (sprog: sprog) : sprog =
   let replace_include_stmt = function
     | SSInclude (_, idents) -> (Map.find_exn incl_map (Util.concat_all_filename idents)).stmts
     | stmt -> [stmt]
   in
   { stmts = List.concat_map ~f:replace_include_stmt sprog.stmts }
     
-let to_stmt = function
+let to_stmt : sstmt -> stmt = function
   | SSImport (pos, import_format, idents) -> SImport (pos, import_format, idents)
   | SSInclude _ -> assert false
   | SSSection (pos, section_kind, label, title) -> SSection (pos, section_kind, label, title)

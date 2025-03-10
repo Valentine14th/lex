@@ -3,7 +3,6 @@ open Lex_lib
 
 module Time = MFOTL_lib.Time
 
-(* TODO: introduce the upper bound `b` as a command line paramter - analogous to WhyEnf *)
 let modes = "mfotl (default), doc, template"
 let input_formats = "formex (default), akomaNtoso"
 
@@ -13,7 +12,7 @@ let loop filename mode f o b to_ () =
   let filepath = Filename.dirname filename
   and basename = Filename.basename filename in
   Util.z3_to := Option.value ~default:"1000" to_;
-  let b = match b with (* TODO: does this way of extracting an upper bound b make sense? *)
+  let b = match b with (* TODO: check if this way of extracting an upper bound b make sense? *)
     | None -> Time.Span.zero
     | Some b -> Time.Span.of_string b in
   match mode with
