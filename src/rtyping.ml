@@ -27,7 +27,8 @@ let add_trtmt tstmt trtmt rs =
   ok { s; trefi = { rs.trefi with trtmts = trtmt :: rs.trefi.trtmts } }
 
 let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingInfo.t) : rt Errors.OrErrors.t =
-  (* TODO[FH]: check that the type exists in the underlying lex code / that we can overwrite it *)
+  (* TODO[FH]: check that the type exists in the underlying lex code / that we can overwrite it
+     -[JD] implemented *)
   let open Errors.OrErrors in
   let* traliases =
     try ok (Map.add_exn rs.trefi.traliases ~key:name ~data:(typ, doc_string))
@@ -36,7 +37,11 @@ let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingIn
     { rs.trefi with trtmts = TRType (pos, name, typ, doc_string) :: rs.trefi.trtmts;
                     traliases } in
   let  s = rs.s in
-  let  s = { s with tprog = { s.tprog with taliases = Map.remove s.tprog.taliases name } } in
+  let* s = if Map.mem s.tprog.taliases name then 
+      ok { s with tprog = { s.tprog with taliases = Map.remove s.tprog.taliases name } }
+    else
+      error (Errors.type_error (Printf.sprintf "type %s does not exist in %s and thus cannot be refined" name (List.hd_exn rs.trefi.lex_file)) pos) in
+      (* TODO[JD] get the full or relative path to the lex file being refined, currently it is only a string without even a file extension *)
   let* s = add_talias name typ doc_string s pos in
   ok { s; trefi }
 
@@ -47,14 +52,19 @@ let add_trrefined rs name : rt Errors.OrErrors.t =
   ok (map rs f)
 
 let add_trhidden name b label doc_string (rs: rt) (pos: LexingInfo.t) : rt Errors.OrErrors.t =
-  (* TODO[FH]: check that the event exists in the underlying lex code *)
+  (* TODO[FH]: check that the event exists in the underlying lex code
+    -[JD] implemented *)
   let open Errors.OrErrors in
   let* trassumed = ok ((pos, name, b, label) :: rs.trefi.trassumed) in
   let* rs = add_trrefined rs name in
   let f trefi =
     { trefi with trtmts = TRAssume (pos, name, b, doc_string) :: trefi.trtmts;
                  trassumed } in
-  ok (map rs f)
+  if Map.mem rs.s.tprog.tevents name then
+    ok (map rs f)
+  else
+    error (Errors.type_error (Printf.sprintf "event %s does not exist in %s and thus cannot be hidden" name (List.hd_exn rs.trefi.lex_file)) pos)
+    (* TODO[JD] get the full or relative path to the lex file being refined, currently it is only a string without even a file extension *)
 
 let merge_t_vars m (tf: Tformula.t) : (string, TypeTerm.t, String.comparator_witness) Map.t =
   Map.merge ~f:(fun ~key:_ -> function
