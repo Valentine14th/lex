@@ -116,52 +116,62 @@ let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: tru
     f_imp_g in
   match kind, old_trule with
   | Strengthen, TConstitutive (pos', tpf, gs) ->
-     (* TODO[FH]: Check monotonicity *)
-     let check_strengthen_constitutive pos' tpf g =
-       let potential_replacements =
-         List.filter_map ~f:(function
-             | TConstitutive (_, tpf, gs') when List.mem gs' g ~equal:eq -> Some tpf
-             | _ -> None) new_trules in
-       let new_obligations =
-         List.filter_map ~f:(function
-             | TObligation (_, tpf, tpg, _, _) -> Some (tpf, tpg)
-             | _ -> None) new_trules in
-       let new_obligations_conj =
-         let t_vars' =
-           List.fold new_obligations ~init:(Map.empty (module String))
-             ~f:(fun m (tpf, tpg) ->
-               merge_t_vars (merge_t_vars m (tpf_to_tformula tpf)) (tpf_to_tformula tpg)) in
-         let t_vars = Map.to_alist t_vars' in
-         Tformula.make (
-             Tformula.conjs N (
-                 List.map ~f:(fun (tpf, tpg) ->
-                     make_always_imp true (tpf_to_tformula tpf) (tpf_to_tformula tpg))
-                   new_obligations))
-           { Tformula.Info.dummy with t_vars } in
-       let tf = tpf_to_tformula tpf in
-       debug ("check_strengthen_constitutive " ^ Tformula.to_string tf);
-       debug ("new_trules: " ^ Int.to_string (List.length new_trules));
-       debug ("potential_replacements: " ^ Int.to_string (List.length potential_replacements));
-       let b = List.exists potential_replacements ~f:(
-                   fun tpf' -> let tf' = tpf_to_tformula tpf' in
-                               let t_vars' = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars in
-                               let t_vars = Map.to_alist t_vars' in
-                               let imp = Tformula.make
-                                           (Tformula.imp N
-                                              new_obligations_conj (make_always_imp false tf' tf))
-                                           { Tformula.Info.dummy with t_vars } in
-                               Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp) in
-       if b then
-         ok ()
-       else
-         error (Errors.refinement_error
-                  (Printf.sprintf
-                     "Cannot strengthen constitutive rule defined at %s: cannot prove implication"
-                     (LexingInfo.to_string pos'))
-                  pos) in
-     let* _ = all (List.map ~f:(check_strengthen_constitutive pos' tpf) gs) in
-     ok ()
-  | _ -> (* TODO[FH]: Other cases *) assert false
+    (* TODO[FH]: Check monotonicity *)
+    let check_strengthen_constitutive pos' tpf g =
+      let potential_replacements =
+        List.filter_map ~f:(function
+            | TConstitutive (_, tpf, gs') when List.mem gs' g ~equal:eq -> Some tpf
+            | _ -> None) new_trules in
+      let new_obligations =
+        List.filter_map ~f:(function
+            | TObligation (_, tpf, tpg, _, _) -> Some (tpf, tpg)
+            | _ -> None) new_trules in
+      let new_obligations_conj =
+        let t_vars' =
+          List.fold new_obligations ~init:(Map.empty (module String))
+            ~f:(fun m (tpf, tpg) ->
+              merge_t_vars (merge_t_vars m (tpf_to_tformula tpf)) (tpf_to_tformula tpg)) in
+        let t_vars = Map.to_alist t_vars' in
+        Tformula.make (
+            Tformula.conjs N (
+                List.map ~f:(fun (tpf, tpg) ->
+                    make_always_imp true (tpf_to_tformula tpf) (tpf_to_tformula tpg))
+                  new_obligations))
+          { Tformula.Info.dummy with t_vars } in
+      let tf = tpf_to_tformula tpf in
+      debug ("check_strengthen_constitutive " ^ Tformula.to_string tf);
+      debug ("new_trules: " ^ Int.to_string (List.length new_trules));
+      debug ("potential_replacements: " ^ Int.to_string (List.length potential_replacements));
+      let b = List.exists potential_replacements ~f:(
+                  fun tpf' -> let tf' = tpf_to_tformula tpf' in
+                              let t_vars' = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars in
+                              let t_vars = Map.to_alist t_vars' in
+                              let imp = Tformula.make
+                                          (Tformula.imp N
+                                            new_obligations_conj (make_always_imp false tf' tf))
+                                          { Tformula.Info.dummy with t_vars } in
+                              Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp) in
+      if b then
+        ok ()
+      else
+        error (Errors.refinement_error
+                (Printf.sprintf
+                    "Cannot strengthen constitutive rule defined at %s: cannot prove implication"
+                    (LexingInfo.to_string pos'))
+                pos) in
+    let* _ = all (List.map ~f:(check_strengthen_constitutive pos' tpf) gs) in
+    ok ()
+  | Strengthen, TObligation _
+  | Strengthen, TPermission _
+  | Strengthen, TException _
+  | Strengthen, TExceptionC _
+  | Strengthen, TScope _
+  | Weaken, TObligation _
+  | Weaken, TPermission _
+  | Weaken, TConstitutive _
+  | Weaken, TException _
+  | Weaken, TExceptionC _
+  | Weaken, TScope _ -> assert false (* TODO[FH]: Other cases [JD] decide which other cases make sense and which do not *)
 
 let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
   (* TODO[FH]: check implications + monotonicity with Z3 *)
@@ -171,7 +181,7 @@ let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tle
     let  rtref_exprs = List.map ~f:Ref.to_rtref_expr refs in
     let* rules_idx =
       all (List.map rtref_exprs ~f:(fun ref ->
-               Label.RuleTree.find_rules_in_tree ref.pos ref.label rs.s.tprog.rule_tree.tree))
+              Label.RuleTree.find_rules_in_tree ref.pos ref.label rs.s.tprog.rule_tree.tree))
       >| List.concat in
     let f = function
       | TSRule (_, idx, _, _, trule, _) when List.mem rules_idx idx ~equal:Int.equal -> Some trule
