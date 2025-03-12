@@ -90,6 +90,7 @@ let tpf_to_tformula (tpf: Tlex.Pattern.t) : Tformula.t =
                        { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
 
 let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: trule list) (rs: rt) pos : unit Errors.OrErrors.t =
+  (* TODO[JD]: checks according to Imp rules: implications + monotonicity with Z3 *)
   let open Errors.OrErrors in
   let eq t t' = String.equal (Tformula.to_string t) (Tformula.to_string t') in
   let make_always_imp close f g =
@@ -115,18 +116,19 @@ let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: tru
                     f_imp_g in
     f_imp_g in
   match kind, old_trule with
-  | Strengthen, TConstitutive (pos', tpf, gs) ->
-    (* TODO[FH]: Check monotonicity *)
-    let check_strengthen_constitutive pos' tpf g =
-      let potential_replacements =
+  | Strengthen, TConstitutive (pos', tpf, gs) -> (* Imp-C+ *)
+    (* TODO[FH]: Check monotonicity 
+       [JD] monotonicity of predicates in `gs`, where `gs` should ony consist of predicates *)
+    let check_strengthen_constitutive pos' tpf g : unit Errors.OrErrors.t =
+      let potential_replacements: Tlex.Pattern.t list =
         List.filter_map ~f:(function
             | TConstitutive (_, tpf, gs') when List.mem gs' g ~equal:eq -> Some tpf
             | _ -> None) new_trules in
-      let new_obligations =
+      let new_obligations: (Tlex.Pattern.t * Tlex.Pattern.t) list =
         List.filter_map ~f:(function
             | TObligation (_, tpf, tpg, _, _) -> Some (tpf, tpg)
             | _ -> None) new_trules in
-      let new_obligations_conj =
+      let new_obligations_conj: Tformula.t =
         let t_vars' =
           List.fold new_obligations ~init:(Map.empty (module String))
             ~f:(fun m (tpf, tpg) ->
@@ -161,23 +163,25 @@ let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: tru
                 pos) in
     let* _ = all (List.map ~f:(check_strengthen_constitutive pos' tpf) gs) in
     ok ()
-  | Strengthen, TObligation _
+  | Strengthen, TObligation _ (* Imp-R *)
   | Strengthen, TPermission _
-  | Strengthen, TException _
-  | Strengthen, TExceptionC _
-  | Strengthen, TScope _
-  | Weaken, TObligation _
+  | Strengthen, TException _ (* Imp-E+ *)
+  | Strengthen, TExceptionC _ (* combination of Imp-E+ & Imp-C+ *)
+  | Strengthen, TScope _ (* Imp-E-? *)
+  | Weaken, TObligation _ (* not possible? *)
   | Weaken, TPermission _
-  | Weaken, TConstitutive _
-  | Weaken, TException _
-  | Weaken, TExceptionC _
-  | Weaken, TScope _ -> assert false (* TODO[FH]: Other cases [JD] decide which other cases make sense and which do not *)
+  | Weaken, TConstitutive _ (* Imp-C- *)
+  | Weaken, TException _ (* Imp-E- *)
+  | Weaken, TExceptionC _ (* combination of Imp-E- & Imp-C- *)
+  | Weaken, TScope _ (* Imp-E+? *)
+  -> assert false (* TODO[FH]: Other cases [JD] decide which other cases make sense and which do not *)
 
 let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
-  (* TODO[FH]: check implications + monotonicity with Z3 *)
+  (* TODO[FH]: check implications + monotonicity with Z3
+     [JD] These checks are done/to be implemented in `check_trreplacement` *)
   let open Errors.OrErrors in
-  let* trreplacements  = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
-  let rules_by_refs refs = 
+  let* trreplacements = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
+  let rules_by_refs (refs: Tlex.Ref.t list) : trule list Errors.OrErrors.t = 
     let  rtref_exprs = List.map ~f:Ref.to_rtref_expr refs in
     let* rules_idx =
       all (List.map rtref_exprs ~f:(fun ref ->
@@ -190,7 +194,7 @@ let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tle
   let* old_trules = rules_by_refs refs1 in
   let* new_trules = rules_by_refs refs2 in
   let* _ = fold_best_effort ~init:() ~f:(
-               fun () old -> check_trreplacement kind old new_trules rs pos) old_trules in
+               fun () old -> check_trreplacement kind old new_trules rs pos) old_trules in (* [JD] implication and monotonicity check is done here *)
   let f trefi =
     { trefi with trtmts = TRReplace (pos, kind, refs1, refs2, doc_string) :: trefi.trtmts;
                  trreplacements } in
