@@ -1,4 +1,4 @@
-[### Case and indentation
+### Case and indentation
 
 The Lex language is case and indentation-sensitive. The number of spaces introducing each indentation level is free, but must be consistent throughout the code. As a rule of thumb, we suggest using four spaces for each identation level.
 

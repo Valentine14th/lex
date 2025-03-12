@@ -1,4 +1,4 @@
-The core of a Lex formalization is a sequence of rules. We first present the general syntax of rules (a), then discuss the three different types or rules (b), and finally give a more complete reference of Lex's expression syntax (c).
+The core of a Lex formalization is a sequence of rules. We first present the general syntax of rules (a) and discuss the three different types or rules (b). Then, we give a more complete reference of Lex's expression syntax (c) and the optional patterns syntax (d).
 
 ### (a) Lex rules: General syntax
 
@@ -247,3 +247,46 @@ Terms used in event/predicate arguments and equations can be:
 * Unary (`-`) or binary (`+`,  `-`, `*`, `/`,`^`, `=`,`<>`, `<`, `>`, `<=`, `>=`) operators.
 * Function applications.
 
+#### (d) Patterns
+
+When all premisses or all conclusions of a rule should happen at the same time in the past or the future, a more natural, optional pattern syntax can be used. Patterns can be used after `whenever` and `oblige`, on the same line. Patterns cannot be used after `constitute` and `except`.
+
+The syntax of patterns is
+
+```
+pattern := `eventually` [long_future_itv]
+         | `once` [long_past_itv]
+         | `always` `in` `the` `future` [long_future_itv]
+         | `always` `in` `the` `past` [long_past_itv]
+         | `eventually` `delaying` `if` expr [long_future_itv]
+         | `always` `since` expr [long_past_itv]
+
+long_past_itv := long_itv
+               | `before` span
+               | `strictly` `before` span
+
+long_future_itv := long_itv
+                 | `after` span
+                 | `strictly` `after` span
+
+long_itv := `within` span
+          | `between` span `and` span
+          | `strictly` `between` span `and` span
+          | `between` span `and` span `excluded`
+          | `between` span `excluded` `and` span
+```
+
+###### Example
+
+>Whenever consent is given by a user, that user's personal data shall be processed at least once within a day
+
+can be formalized as
+
+```
+rule
+    whenever
+        GivesConsent(ds, c, p)
+    oblige eventually within 1d
+        DataProcessing(c, d, p, a)
+        PersonalData(d, ds)
+```

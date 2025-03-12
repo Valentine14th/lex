@@ -605,7 +605,7 @@ ty:
 pattern:
   |
     { PPresent }
-  | IEVENTUALLY                  past_interval
+  | IEVENTUALLY                  future_interval
     { PEventually $2 }
   | IONCE                        past_interval
     { POnce $2 }
@@ -615,7 +615,7 @@ pattern:
     { PAlways $5 }
   | IEVENTUALLY IDELAYING IIF e  future_interval
     { PUntil ($5, $4) }
-  | IALWAYS     ISINCE        e  future_interval
+  | IALWAYS     ISINCE        e  past_interval
     { PSince ($4, $3) }
 
 past_interval:
