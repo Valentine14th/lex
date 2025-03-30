@@ -5,6 +5,9 @@ open Tlex
 open Trex
 open Typing
 
+let debug_rtyping = ref true
+let debug msg = if !debug_rtyping then Errors.debug_print ~f_name:(Some "rtyping.ml") msg
+
 (* Typing state *)
 
 type rt =
@@ -89,7 +92,9 @@ let tpf_to_tformula (tpf: Tlex.Pattern.t) : Tformula.t =
   | PSince (i, g) -> Tformula.make (Tformula.since N i f g)
                        { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
 
-let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: trule list) (rs: rt) pos : unit Errors.OrErrors.t =
+(* let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: trule list) (rs: rt) pos : unit Errors.OrErrors.t = *)
+(* let check_trreplacement (mono: 'str_set) (antimono: 'str_set) (kind: replace_kind) (old_trule: trule) (new_trules: trule list) (rs: rt) pos : ('str_set * 'str_set) Errors.OrErrors.t = *)
+let check_trreplacement (mono: (string * LexingInfo.t) list) (antimono: (string * LexingInfo.t) list) (kind: replace_kind) (old_trule: trule) (new_trules: trule list) (rs: rt) pos : ('str_set * 'str_set) Errors.OrErrors.t =
   (* TODO[JD]: checks according to Imp rules: implications + monotonicity with Z3 *)
   let open Errors.OrErrors in
   let eq t t' = String.equal (Tformula.to_string t) (Tformula.to_string t') in
@@ -162,24 +167,81 @@ let check_trreplacement (kind: replace_kind) (old_trule: trule) (new_trules: tru
                     (LexingInfo.to_string pos'))
                 pos) in
     let* _ = all (List.map ~f:(check_strengthen_constitutive pos' tpf) gs) in
-    ok ()
-  | Strengthen, TObligation _ (* Imp-R *)
-  | Strengthen, TPermission _
-  | Strengthen, TException _ (* Imp-E+ *)
-  | Strengthen, TExceptionC _ (* combination of Imp-E+ & Imp-C+ *)
-  | Strengthen, TScope _ (* Imp-E-? *)
-  | Weaken, TObligation _ (* not possible? *)
-  | Weaken, TPermission _
-  | Weaken, TConstitutive _ (* Imp-C- *)
-  | Weaken, TException _ (* Imp-E- *)
-  | Weaken, TExceptionC _ (* combination of Imp-E- & Imp-C- *)
-  | Weaken, TScope _ (* Imp-E+? *)
-  -> assert false (* TODO[FH]: Other cases [JD] decide which other cases make sense and which do not *)
+    let r = List.map gs ~f:(fun x -> match x.form with Predicate (p, _) -> debug ("marking predicate " ^ p ^ " as required to be monotone at location " ^ LexingInfo.to_string x.info.pos); (p, x.info.pos) | _ -> assert false) in
+    ok (mono @ r, antimono)
+  | Weaken, TConstitutive (pos', tpf, gs) ->
+    (* TODO[JD]: Imp-C- *)
+    (* TODO[JD]: 'invert' implication check copied from strengthen case *)
+    let check_weaken_constitutive pos' tpf g : unit Errors.OrErrors.t =
+      let potential_replacements: Tlex.Pattern.t list =
+        List.filter_map ~f:(function
+            | TConstitutive (_, tpf, gs') when List.mem gs' g ~equal:eq -> Some tpf
+            | _ -> None) new_trules in
+      let new_obligations: (Tlex.Pattern.t * Tlex.Pattern.t) list =
+        List.filter_map ~f:(function
+            | TObligation (_, tpf, tpg, _, _) -> Some (tpf, tpg)
+            | _ -> None) new_trules in
+      let new_obligations_conj: Tformula.t =
+        let t_vars' =
+          List.fold new_obligations ~init:(Map.empty (module String))
+            ~f:(fun m (tpf, tpg) ->
+              merge_t_vars (merge_t_vars m (tpf_to_tformula tpf)) (tpf_to_tformula tpg)) in
+        let t_vars = Map.to_alist t_vars' in
+        Tformula.make (
+            Tformula.conjs N (
+                List.map ~f:(fun (tpf, tpg) ->
+                    make_always_imp true (tpf_to_tformula tpf) (tpf_to_tformula tpg))
+                  new_obligations))
+          { Tformula.Info.dummy with t_vars } in
+      let tf = tpf_to_tformula tpf in
+      debug ("check_weaken_constitutive " ^ Tformula.to_string tf);
+      debug ("new_trules: " ^ Int.to_string (List.length new_trules));
+      debug ("potential_replacements: " ^ Int.to_string (List.length potential_replacements));
+      let b = List.exists potential_replacements ~f:(
+                  fun tpf' -> let tf' = tpf_to_tformula tpf' in
+                              let t_vars' = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars in
+                              let t_vars = Map.to_alist t_vars' in
+                              let imp = Tformula.make
+                                          (Tformula.imp N
+                                            new_obligations_conj (make_always_imp false tf tf')) (* TODO[JD]: I just switched tf and tf' from the C+ case, is this enough? *)
+                                          { Tformula.Info.dummy with t_vars } in
+                              Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp) in
+      if b then
+        ok ()
+      else
+        error (Errors.refinement_error
+                (Printf.sprintf
+                    "Cannot weaken constitutive rule defined at %s: cannot prove implication"
+                    (LexingInfo.to_string pos'))
+                pos) in
+    let* _ = all (List.map ~f:(check_weaken_constitutive pos' tpf) gs) in
+    let r = List.map gs ~f:(fun x -> match x.form with Predicate (p, _) ->  debug ("marking predicate" ^ p ^ "as required to be anti-monotone"); (p, x.info.pos) | _ -> assert false) in
+    ok (mono, antimono @ r)
+    (* assert false *)
+  | Strengthen, TObligation _ | Weaken, TPermission _ ->
+    (* TODO[JD]: Imp-R? *)
+    assert false
+  | Strengthen, TException _ | Weaken, TScope _ ->
+    (* TODO[JD]: Imp-E+? *)
+    assert false
+  | Strengthen, TExceptionC _ ->
+    (* TODO[JD]: combination of Imp-E+ & Imp-C+ *)
+    assert false
+  | Weaken, TExceptionC _ ->
+    (* TODO[JD]: combination of Imp-E- & Imp-C- *)
+    assert false
+  | Strengthen, TScope _ | Weaken, TException _ ->
+    (* TODO[JD]: Imp-E- *)
+    assert false
+  | Strengthen, TPermission _ | Weaken, TObligation _ ->
+    (* impossible cases *)
+    assert false
 
 let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
   (* TODO[FH]: check implications + monotonicity with Z3
      [JD] These checks are done/to be implemented in `check_trreplacement` *)
   let open Errors.OrErrors in
+  debug ("add_trreplacements");
   let* trreplacements = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
   let rules_by_refs (refs: Tlex.Ref.t list) : trule list Errors.OrErrors.t = 
     let  rtref_exprs = List.map ~f:Ref.to_rtref_expr refs in
@@ -193,11 +255,17 @@ let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tle
     ok (List.filter_map ~f rs.s.tprog.tstmts) in
   let* old_trules = rules_by_refs refs1 in
   let* new_trules = rules_by_refs refs2 in
-  let* _ = fold_best_effort ~init:() ~f:(
-               fun () old -> check_trreplacement kind old new_trules rs pos) old_trules in (* [JD] implication and monotonicity check is done here *)
+  let* (trmonotone, trantimonotone) = fold_best_effort ~init:([], []) ~f:(
+               fun (mono, antimono) old -> check_trreplacement mono antimono kind old new_trules rs pos) old_trules in (* [JD] implication and monotonicity check is done here *)
+  let trmonotone = Map.of_alist_multi (module String) trmonotone
+                   |> Map.map ~f:(List.fold ~init:LexingInfo.dummy ~f:LexingInfo.add_range) in
+  let trantimonotone = Map.of_alist_multi (module String) trantimonotone
+                   |> Map.map ~f:LexingInfo.union_all in
   let f trefi =
     { trefi with trtmts = TRReplace (pos, kind, refs1, refs2, doc_string) :: trefi.trtmts;
-                 trreplacements } in
+                 trreplacements;
+                 trmonotone;
+                 trantimonotone } in
   ok (map rs f)
 
 (* Visitors *)
@@ -237,6 +305,7 @@ let type_rrule (rs: rt) pos : rtmt -> rt Errors.OrErrors.t =
 
 let type_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
   let open Errors.OrErrors in
+  debug ("type_rtmt");
   let we = witherror ~default:rs in
   function
   | RStmt stmt ->
@@ -265,6 +334,7 @@ let type_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
 
 let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t =
   let open Errors.WithErrors in
+  debug ("do_type");
   (*Map.iter_keys ~f:print_endline s.tprog.tevents;*)
   let label = Label.set_rule_id_force None s.label in
   let s = { s with tprog = { s.tprog with tstmts = s.tprog.tstmts @ [Tlex.TSSection (Article 0, label, "refinement", None)] } } in
@@ -272,6 +342,7 @@ let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t 
   (* First pass: type statements *)
   let* rs = fold refi.rtmts ~init ~f:type_rtmt in
   (* TODO[FH]: Implement typing of additional exceptions or generate errors *)
+  (* TODO[JD]: new except (and scope) rules require inserting additional constraints in other rules (for which they are exceptions of) *)
   let* variables = check_var_types rs.s.tprog in
   ok (rs.s, { rs.trefi with tprog = { rs.s.tprog with variables };
                             trtmts = List.rev rs.trefi.trtmts })

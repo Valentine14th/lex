@@ -6,6 +6,9 @@ open Erex
 module Interval = MFOTL_lib.Interval
 module Enftype = MFOTL_lib.Enftype
 
+let debug_refinement = ref true
+let debug msg = if !debug_refinement then Errors.debug_print ~f_name:(Some "refinement.ml") msg
+
 (* Visitors *)
 
 let type_trrule : trrule -> errule = function
@@ -100,10 +103,14 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
   let open Errors.OrErrors in
   (* TODO[FH]: check that the refinement is valid *)
   (* TODO[FH]: check that all events have been mapped *)
-  (*let* eprog = Enforceability.do_type trefi.tprog b in*)
+
+  (* TODO[JD]: sort refined rules topologically *)
+  (* TODO[JD]: based on topologically sorted rules, check monotonicity *)
+  (* TODO[JD]: figure out where monotonicity is required, possibly pass along from rtyping
+               - is inside of trefi.trmonotone and trefi.trantimonotone *)
+
   let* tprog = hide_and_replace trefi trefi.tprog in
-  (*print_endline (Tlex.string_of_tprog tprog);*)
-  let* eprog = Enforceability.do_type tprog b in
+  let* eprog = Enforceability.do_type ~mon_constrs:(trefi.trmonotone, trefi.trantimonotone) tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in
   ok {
     eprog;

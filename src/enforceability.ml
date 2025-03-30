@@ -131,7 +131,7 @@ let topological_sort (rule_indices: int list) (def: (int, string list, 'a) Map.t
     debug (Printf.sprintf "topological_sort result: %s" (Util.string_of_int_list order));
     ok order
 
-let check_used_events_are_defined (_: Tlex.tprog) def use =
+let check_used_events_are_defined (_: Tlex.tprog) def use : unit =
   let all_defined_events = List.concat (Map.data def)
                            |> List.dedup_and_sort
                               ~compare:String.compare in
@@ -375,9 +375,10 @@ let type_pattern itl_srp pos (pg_map: pg_map) enftype (tpf: Tlex.Pattern.t) : ve
     end
   | _ -> Possible CTT
 
-let pols_from_rule_constraints pos rcs =
+let pols_from_rule_constraints pos (rcs: Lex.rule_constr list) : 'pols option Err.WithErrors.t =
   let open Err.WithErrors in
-  let add_policy_constraint enftype pols = function
+  let add_policy_constraint (enftype: Enftype.t) (pols: 'pols) : Lex.rule_constr_kind -> 'pols Err.WithErrors.t =
+    function
     | Lex.CEvent id -> begin
       match Map.find pols id with
         | Some enftype' when Enftype.equal enftype enftype' ->
@@ -392,14 +393,15 @@ let pols_from_rule_constraints pos rcs =
       end
     | _ -> ok pols
   in
-  let aux pols = function
+  let aux (pols: 'pols) : Lex.rule_constr -> 'pols Err.WithErrors.t = function
     | Lex.Suppressing constr_kind ->
        fold constr_kind ~f:(add_policy_constraint Enftype.suppressable) ~init:pols
     | Lex.Causing constr_kind ->
        fold constr_kind ~f:(add_policy_constraint Enftype.causable) ~init:pols
   in
-  let make_option pols = if Map.is_empty pols then None
-                         else (Some pols) in
+  let make_option (pols: 'pols) : 'pols option =
+    if Map.is_empty pols then None
+    else Some pols in
   fold rcs ~f:aux ~init:(Map.empty (module String))
   >| make_option
 
@@ -1622,9 +1624,134 @@ let type_tstmt erule_map = function
      ESFunction (name, arg_types, return_type, doc_string)
   | TSNote text -> ESNote text
 
+(* Monotonicity *)
+
+let pos_from_infos infos =
+  List.fold infos ~init:LexingInfo.dummy ~f:(fun pos info -> LexingInfo.union_all [pos; info.pos])
+
+let combine_str_info_maps m1 m2 =
+  Map.merge m1 m2 ~f:(fun ~key:_ -> function
+      | `Both (v1, v2) -> Some (v1 @ v2)
+      | `Left v -> Some v
+      | `Right v -> Some v)
+
+let two_empty_maps = 
+  Map.empty (module String), Map.empty (module String)
+
+let four_empty_maps = 
+  Map.empty (module String), Map.empty (module String),
+  Map.empty (module String), Map.empty (module String)
+
+let not_monotone_formulas ?(init=four_empty_maps) fs =
+  let let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon = init in
+  let non_monotones = List.map fs ~f:(fun f -> Tformula.non_monotone_predicates ~let_ctxt_mon ~let_ctxt_anti_mon ~init_mon ~init_anti_mon f) in
+  let non_mons, non_anti_mons = List.unzip non_monotones in
+  let mon = List.fold non_mons ~init:init_mon ~f:(fun mon f -> combine_str_info_maps mon f) in
+  let anti_mon = List.fold non_anti_mons ~init:init_anti_mon ~f:(fun anti_mon f -> combine_str_info_maps anti_mon f) in
+  mon, anti_mon
+
+let not_monotone_pattern ?(init=four_empty_maps) (tpf: Tlex.Pattern.t) =
+  let let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon = init in 
+  let mon_fs, anti_mon_fs = not_monotone_formulas ~init tpf.fs in
+  match tpf.patt with
+  | PUntil (_, f) | PSince (_, f) ->
+    let mon_f, anti_mon_f = Tformula.non_monotone_predicates ~let_ctxt_mon ~let_ctxt_anti_mon ~init_mon ~init_anti_mon f in
+    let mon = combine_str_info_maps mon_fs mon_f in
+    let anti_mon = combine_str_info_maps anti_mon_fs anti_mon_f in
+    mon, anti_mon
+  | _ -> mon_fs, anti_mon_fs
+
+
+let not_monotone_disjunct ?(init=four_empty_maps) (disjunct: Tlex.tdisjunct) =
+  (* let let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon = init in  *)
+  let mon_pf, anti_mon_pf = not_monotone_pattern ~init disjunct.pf in
+  let mon_ex, anti_mon_ex = not_monotone_formulas ~init disjunct.exceptions in
+  let mon_sc, anti_mon_sc = not_monotone_formulas ~init disjunct.scopes in
+  let mon = combine_str_info_maps mon_pf (combine_str_info_maps anti_mon_ex mon_sc) in
+  let anti_mon = combine_str_info_maps anti_mon_pf (combine_str_info_maps mon_ex anti_mon_sc) in
+  mon, anti_mon
+
+let not_monotone_tcrule ?(init =four_empty_maps)  tcrule =
+  (** computes the predicates that appear none-(anti)-monotonely in a rule `rule`
+      along with information such as a which occurrence of a predicate is none-(anti)-monotone *)
+  let let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon = init in
+  match tcrule with
+  (* TODO[JD]: implement monotonicity check for rules *)
+  (* | TCImplication (i, tr_ty, info, p, fs, gs, q, t_ty, constrs) -> *)
+  | TCImplication (_, _, _, pf1, ex, sc, pf2, _, _) ->
+    let mon1, anti_mon1 = not_monotone_pattern ~init pf1 in
+    let mon2, anti_mon2 = not_monotone_pattern ~init pf2 in
+    let mon_ex, anti_mon_ex = not_monotone_formulas ~init ex in
+    let mon_sc, anti_mon_sc = not_monotone_formulas ~init sc in
+    let mon = combine_str_info_maps (combine_str_info_maps mon1 mon2) (combine_str_info_maps anti_mon_ex mon_sc) in
+    let anti_mon = combine_str_info_maps (combine_str_info_maps anti_mon1 anti_mon2) (combine_str_info_maps mon_ex anti_mon_sc) in
+    let_ctxt_mon, let_ctxt_anti_mon, mon, anti_mon
+  (* | TCDefinitionRef (i, tr_ty, info, p, fs, gs, refs, h) -> *)
+  (* | TCDefinitionRef (_, _, _, pf1, ex, sc, refs, f2) -> *)
+  | TCDefinitionRef (_, _, _, pf1, ex, sc, _, f2) ->
+    let mon1, anti_mon1 = not_monotone_pattern ~init pf1 in
+    let mon_ex, anti_mon_ex = not_monotone_formulas ~init ex in
+    let mon_sc, anti_mon_sc = not_monotone_formulas ~init sc in
+    let mon = combine_str_info_maps mon1 (combine_str_info_maps anti_mon_ex mon_sc) in
+    let anti_mon = combine_str_info_maps anti_mon1 (combine_str_info_maps mon_ex anti_mon_sc) in
+    let predicate_name = get_predicate_name_exn f2 in
+    let let_ctxt_mon = Map.update let_ctxt_mon predicate_name ~f:(fun _ -> mon) in
+    let let_ctxt_anti_mon = Map.update let_ctxt_anti_mon predicate_name ~f:(fun _ -> anti_mon) in
+    let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon
+  | TCDefinitionDis (discuncts, f) ->
+    let predicate_name = get_predicate_name_exn f in
+    let disjuncts_mons = Map.map discuncts ~f:(not_monotone_disjunct ~init) in
+    let mon_disjuncts = Map.fold disjuncts_mons ~init:init_mon ~f:(fun ~key:_ ~data:(mon, _) acc -> combine_str_info_maps acc mon) in
+    let anti_mon_disjuncts = Map.fold disjuncts_mons ~init:init_anti_mon ~f:(fun ~key:_ ~data:(_, anti_mon) acc -> combine_str_info_maps acc anti_mon) in
+    let let_ctxt_mon = Map.update let_ctxt_mon predicate_name ~f:(fun _ -> mon_disjuncts) in
+    let let_ctxt_anti_mon = Map.update let_ctxt_anti_mon predicate_name ~f:(fun _ -> anti_mon_disjuncts) in
+    let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon
+
+(* let check_mon_constrs (order: int list) (tprog:tprog) tcrules (mon_constrs: ('str_set * 'str_set) option) : unit Err.OrErrors.t = *)
+let check_mon_constrs (order: int list) tcrules (mon_constrs: ('str_map * 'str_map) option) : unit Err.OrErrors.t =
+  let open Err.OrErrors in
+  match mon_constrs with
+  | None -> ok ()
+  | Some (req_mon, req_anti_mon) ->
+    let _, _, not_mon, not_anti_mon = 
+      List.fold order
+      ~init:four_empty_maps
+      ~f:(fun init idx -> not_monotone_tcrule ~init (Map.find_exn tcrules idx))
+    in
+    let not_mon = Map.map not_mon ~f:(fun v -> pos_from_infos v) in
+    let not_anti_mon = Map.map not_anti_mon ~f:(fun v -> pos_from_infos v) in
+    let mon_err = Map.filter_keys not_mon ~f:(fun k -> Map.mem req_mon k) in
+    let anti_mon_err = Map.filter_keys not_anti_mon ~f:(fun k -> Map.mem req_anti_mon k) in
+    let monotone_error pred (pos1: LexingInfo.t) =
+      let pos2 = Map.find_exn req_mon pred in
+      let pos1_str = LexingInfo.to_string pos1 in
+      let msg = if List.length pos1.ranges > 1 then
+        Printf.sprintf "Predicate \"%s\" must be monotone, but appears in non-monotone ways at %s" pred pos1_str
+      else
+        Printf.sprintf "Predicate \"%s\" must be monotone, but appears in a non-monotone way at %s" pred pos1_str in
+      Err.refinement_error msg pos2 in
+    let anti_monotone_error pred (pos1: LexingInfo.t) =
+      let pos2 = Map.find_exn req_mon pred in
+      let pos1_str = LexingInfo.to_string pos1 in
+      let msg = if List.length pos1.ranges > 1 then
+        Printf.sprintf "Predicate \"%s\" must be anti-monotone, but appears in non-anti-monotone ways at %s" pred pos1_str
+      else
+        Printf.sprintf "Predicate \"%s\" must be anti-monotone, but appears in a non-anti-monotone way at %s" pred pos1_str in
+      Err.refinement_error msg pos2 in
+    match Map.is_empty mon_err, Map.is_empty anti_mon_err with
+    | true, true -> ok ()
+    | _, _ ->
+      let _, monotonicity_errors = Map.mapi mon_err
+        ~f:(fun ~key ~data -> monotone_error key data)
+        |> Map.to_alist |> List.unzip in
+      let _, anti_monotonicity_errors = Map.mapi anti_mon_err
+        ~f:(fun ~key ~data -> anti_monotone_error key data)
+        |> Map.to_alist |> List.unzip in
+      errors (monotonicity_errors @ anti_monotonicity_errors)
+
 (* Main typing function *)
 
-let do_type (tprog: Tlex.tprog) (b: Interval.v) : Elex.eprog Err.OrErrors.t =
+let do_type ?(mon_constrs: ('str_map * 'str_map) option) (tprog: Tlex.tprog) (b: Interval.v) : Elex.eprog Err.OrErrors.t =
   let open Err.OrErrors in
   (* Create tcrules *)
   let tcrules = create_tcrules tprog in
@@ -1633,6 +1760,8 @@ let do_type (tprog: Tlex.tprog) (b: Interval.v) : Elex.eprog Err.OrErrors.t =
   b_ref := b;
   (* Order tcrules topologically *)
   let* rule_order = topological_rule_order tprog tcrules in
+  (* TODO[jd]: compute monotonicity constraints if required *)
+  let* _ = check_mon_constrs rule_order tcrules mon_constrs in
   (* Compute verdict, solve constraints *)
   let* constraints, itl_srp, pg_map = type_tcrules tprog tcrules rule_order in
   Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.Constraint.to_string data)) constraints;
