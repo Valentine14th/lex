@@ -258,7 +258,7 @@ let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tle
   let* (trmonotone, trantimonotone) = fold_best_effort ~init:([], []) ~f:(
                fun (mono, antimono) old -> check_trreplacement mono antimono kind old new_trules rs pos) old_trules in (* [JD] implication and monotonicity check is done here *)
   let trmonotone = Map.of_alist_multi (module String) trmonotone
-                   |> Map.map ~f:(List.fold ~init:LexingInfo.dummy ~f:LexingInfo.add_range) in
+                   |> Map.map ~f:LexingInfo.union_all in
   let trantimonotone = Map.of_alist_multi (module String) trantimonotone
                    |> Map.map ~f:LexingInfo.union_all in
   let f trefi =

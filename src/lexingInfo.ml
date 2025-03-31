@@ -75,13 +75,16 @@ let add_range r r' = { start = min r.start r'.start; stop = max r.stop r'.stop }
 let add_range_to_info b (r : range) (i : t) =
   let rec f = function
     | [] -> [r]
-    | r'::t -> if String.equal r'.start.pos_fname r.start.pos_fname &&
+    | r'::t ->
+      if List.mem t r' ~equal:equal_range then
+        t
+      else if String.equal r'.start.pos_fname r.start.pos_fname &&
                     (b
                      || Int.equal r.start.pos_lnum r'.stop.pos_lnum && Int.equal (cnum r.start) (cnum r'.stop)
                      || Int.equal r.stop.pos_lnum r'.start.pos_lnum && Int.equal (cnum r.stop) (cnum r'.start)) then
                    (add_range r r') :: t
-                 else
-                   r' :: (f t)
+                else
+                  r' :: (f t)
   in { ranges = f i.ranges }
 
 let (++) i i' = List.fold_right i.ranges ~f:(add_range_to_info false) ~init:i'
@@ -104,6 +107,16 @@ let conclr_opt i_opt i i'_opt i' =
   | None  , Some i' -> i +> i'
   | None  , None    -> i +> i'
 
+let remove_duplicate_ranges i =
+  let rec f acc = function
+    | [] -> acc
+    | r::rs ->
+      if List.mem rs r ~equal:equal_range then
+        f acc rs 
+      else f (r::acc) rs in
+  { ranges = f [] i.ranges }
+
 let union_all = function
   | [] -> dummy
   | i::is -> List.fold_left is ~init:i ~f:(++)
+                        |> remove_duplicate_ranges
