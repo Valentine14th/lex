@@ -1,4 +1,4 @@
-refine paper_mono_err
+refine monotonicity
 
 type session_id is int
 type data_type  is string
@@ -74,7 +74,7 @@ rule "collection_before_processing"
     oblige
         ONCE (EXISTS b. DataProcessing(pr, c, b, d) AND PersonalData(d, ds) AND IsCollection(b))
     assume fulfilled
-        
+
 rule "consent_before_collection"
     whenever
         DataProcessing(pr, c, a, d)
@@ -88,6 +88,6 @@ replace
     strengthen
         article "6" paragraph "1" point "a"
     by
-        rule "new_lawfulness"
-        rule "collection_before_processing"
-        rule "consent_before_collection"
+        rule "new_lawfulness" # constitutive
+        rule "collection_before_processing" # obligation
+        rule "consent_before_collection" # obligation

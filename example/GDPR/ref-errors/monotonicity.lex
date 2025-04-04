@@ -48,6 +48,7 @@ rule
         PersonalData(d, ds)
     oblige
         not IsLawful(a) # This makes 'IsLawful' non-monotone
+        # IsLawful(a)
         IsFair(a)
         IsTransparent(a, ds)
     enforceable suppressing DataProcessing
