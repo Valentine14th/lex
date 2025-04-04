@@ -1624,7 +1624,7 @@ let type_tstmt erule_map = function
      ESFunction (name, arg_types, return_type, doc_string)
   | TSNote text -> ESNote text
 
-(* Monotonicity *)
+(* Monotonicity - used for refinement *)
 
 let pos_from_infos infos =
   List.fold infos ~init:LexingInfo.dummy ~f:(fun pos info -> LexingInfo.union_all [pos; info.pos])

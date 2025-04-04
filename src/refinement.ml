@@ -110,7 +110,7 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
                - is inside of trefi.trmonotone and trefi.trantimonotone *)
 
   let* tprog = hide_and_replace trefi trefi.tprog in
-  let* eprog = Enforceability.do_type ~mon_constrs:(trefi.trmonotone, trefi.trantimonotone) tprog b in
+  let* eprog = Enforceability.do_type ~mon_constrs:(trefi.tr_mon, trefi.tr_anti_mon) tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in
   ok {
     eprog;

@@ -27,12 +27,8 @@ type trefi =
     trstmts_to_add: tstmt list;
     trrefined:      (ident, Base.String.comparator_witness) Set.t;
     trreplacements: (LexingInfo.t * replace_kind * Ref.t list * Ref.t list) list;
-    (* trmonotone:     (ident, Base.String.comparator_witness) Set.t; *)
-    (* trantimonotone: (ident, Base.String.comparator_witness) Set.t; *)
-    trmonotone:     (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
-    trantimonotone: (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
-    (* trmonotone:     (ident * LexingInfo.t) list; *)
-    (* trantimonotone: (ident * LexingInfo.t) list; *)
+    tr_mon:         (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
+    tr_anti_mon:    (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
   }
 
 let trempty =
@@ -47,12 +43,8 @@ let trempty =
     trstmts_to_add = [];
     trrefined      = Set.empty (module String);
     trreplacements = [];
-    (* trmonotone     = Set.empty (module String); *)
-    (* trantimonotone = Set.empty (module String); *)
-    trmonotone     = Map.empty (module String);
-    trantimonotone = Map.empty (module String);
-    (* trmonotone     = []; *)
-    (* trantimonotone = []; *)
+    tr_mon         = Map.empty (module String);
+    tr_anti_mon    = Map.empty (module String);
   }
 
 
