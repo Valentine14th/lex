@@ -1,3 +1,5 @@
+## 4. Functions
+
 The syntax of function declarations is
 ```
 `function` ident
@@ -11,6 +13,7 @@ The syntax of function declarations is
 where identifiers  separated by a colon denote `(arg_type, arg_name)` pairs and the final identifier denotes the output type of the function. Function and argument identifiers are usually lower-case.
 
 Note that Lex function declaration do not have to have an executable body. They merely declare function symbols that can be used within rules.
+
 #### Examples
 
 Assume two types

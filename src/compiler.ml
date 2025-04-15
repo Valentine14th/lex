@@ -47,7 +47,7 @@ let compile_dom = function
   | Float f -> Float f
   | Bool b -> Int (if b then 1 else 0)
   | Time t -> Int (MFOTL_lib.Time.to_int t)
-  | Span _ -> assert false
+  | Span s -> Int (MFOTL_lib.Time.Span.max_seconds s)
   | Money (Money.M (a, _)) -> Int a
 
 let prefix_tt = function

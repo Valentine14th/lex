@@ -54,7 +54,6 @@
 \lstdefinestyle{mystyle}{
   % backgroundcolor=\color{backcolour},   
   commentstyle=\color{codegreen},
-  numberstyle=\tiny\color{white},
   stringstyle=\color{codepurple},
   basicstyle=\ttfamily\footnotesize,
   breakatwhitespace=false,         
@@ -66,7 +65,8 @@
   showspaces=false,                
   showstringspaces=false,
   showtabs=false,                  
-  tabsize=2
+  tabsize=2,
+  numbers=none,
 }
 
 \lstset{language=Lex, style=mystyle}
@@ -283,7 +283,7 @@ rule
         \begin{tabular}{ll}
           \kw{once}... & `some time in the past...' \\
           \kw{eventually}... & `some time in the future...'\\
-          ... \kw{within} \texttt{2}\bluekw{d}, \texttt{3}\bluekw{M}  & `... within 2 days, 3 months' \\
+          ... \kw{within} \texttt{2}\bluekw{d}  & `... within 2 days \\
           ... \kw{between} \texttt{2}\bluekw{d} \kw{and} \texttt{3}\bluekw{d}  & `... between 2 and 3 days'
         \end{tabular}
       \end{tcolorbox}

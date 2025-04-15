@@ -5,12 +5,6 @@ type data_class is string
 type data_field is string
 type data_id    is string
 
-observable event create
-    cls     : data_class
-    caller  : user_id
-    owner   : user_id
-    purpose : purpose
-
 suppressable event read
     cls     : data_class
     field   : data_field
@@ -28,29 +22,7 @@ suppressable event write
     owner   : user_id
     purpose : purpose
 
-causable observable event delete
-    cls     : data_class
-    id      : data_id
-    caller  : user_id
-    owner   : user_id
-    purpose : purpose
-
-observable event execute
-    cls     : data_class
-    field   : data_field
-    id      : data_id
-    caller  : user_id
-    owner   : user_id
-    purpose : purpose
-
 observable event input
-    func    : string
-    param   : string
-    value   : string
-    caller  : string
-    purpose : string
-
-suppressable event output
     func    : string
     param   : string
     value   : string

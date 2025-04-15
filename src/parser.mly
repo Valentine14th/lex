@@ -201,13 +201,13 @@ type_decl:
 /* Function declarations */
 
 fun_decl:
-  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term
+  | FUNCTION IDENT LPA NEWUP fun_args NEWLINE RPA SUB GT type_term
     { SSFunction (fst $2 +> fst $10, snd $2, $5, snd $10, None) }
-  | FUNCTION IDENT LPA NEWUP fun_args NEWDOWN RPA SUB GT type_term NEWUP DOCSTRING
+  | FUNCTION IDENT LPA NEWUP fun_args NEWLINE RPA SUB GT type_term NEWUP DOCSTRING
     { SSFunction (fst $2 +> fst $12, snd $2, $5, snd $10, Some (snd $12)) }
 
 fun_args:
-  | list(type_fix)
+  | separated_list(NEWWHITE, type_fix)
     { $1 }
 
 /* Event declarations */
@@ -219,12 +219,12 @@ event_decl:
   | pol event_type IDENT NEWUP DOCSTRING NEWWHITE args
     { SSEvent (conclr_opt (fst $1) (fst $2) (fst $7)  (fst $5),
 	      snd $2,                     snd $3, snd $7,                              snd $1, Some (snd $5)) }
-  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? args NEWDOWN? RPA SUB GT type_term
+  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWLINE RPA SUB GT type_term
     { SSEvent (concl_opt (fst $1) $2 (fst $12),
 	      Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, None) }
-  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? args NEWDOWN? RPA SUB GT type_term NEWUP DOCSTRING
-    { SSEvent (concl_opt (fst $1) $2 (fst $14),
-	      Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, Some (snd $14)) }
+  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWLINE RPA SUB GT type_term NEWUP DOCSTRING
+    { SSEvent (concl_opt (fst $1) $2 (fst $12),
+	       Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, Some (snd $14)) }
   | pol VARIABLE functional_event_type IDENT COL type_term
     { SSEvent (concl_opt (fst $1) $2 (fst $6),
 	      Lex.Event ($3, Variable),   snd $4,    ["~return_value", snd $6],        snd $1, None) }

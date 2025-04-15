@@ -1,3 +1,5 @@
+## 5. Events
+
 Together with type declarations, event declarations form the backbone of of a legal ontology. There are two kinds of events: *events proper*,  introduced with the keyword `event`, that denote real-world actions, and *predicates*, introduced with the keyword `predicate`, that denote relationships between entities.
 
 The syntax of event declarations is
@@ -10,7 +12,9 @@ The syntax of event declarations is
 
 event_kind := `event` | `predicate`
 
-capability := `causable` | `causable` `observable` | `causable` `suppressable` | `suppressable` | `observable` | `internal`
+capability := `causable` | `causable` `observable` 
+            | `causable` `suppressable` | `suppressable` 
+			| `observable` | `internal`
 ```
 where identifiers  separated by a colon denote `(arg_type, arg_name)` pairs. Event name identifiers usually use title case while event argument identifiers are lower-case. In documentation strings, one can refer to the value of argument `arg` using the syntax `{arg}`. Documentation strings should describe what concrete fact is being captured by the event declaration.
 
@@ -49,7 +53,8 @@ To define data processing of a certain data by a company for a given purpose, on
 
 ```
 suppressable event ProcessesData
-    """company {c} processes data {d} for purpose {p} as part of data processing activity {a}"""
+    """company {c} processes data {d} for purpose {p} 
+	   as part of data processing activity {a}"""
     c : company
     d : data
     p : purpose
@@ -64,7 +69,8 @@ To define a data subject giving consent to a company to use their data for a giv
 
 ```
 observable event GivesConsent
-    """data subject {ds} gives consent to company {c} to use their data for purpose {p}"""
+    """data subject {ds} gives consent to company {c} 
+	   to use their data for purpose {p}"""
     ds : data_subject
     c : company
     p : purpose

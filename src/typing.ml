@@ -247,9 +247,8 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('
                (TypeTerm.value_to_string arg_type) in
            error (Errors.type_error err_msg v.info.pos)
        in
-       match Map.find tfunctions f_name with
-       | Some (arg_types, typ, _) ->
-          let* folded = fold2 trms arg_types ~init:(typed_vars, []) ~f in
+       let aux arg_types typ =
+         let* folded = fold2 trms arg_types ~init:(typed_vars, []) ~f in
           begin match folded with
           | Base.List.Or_unequal_lengths.Ok (typed_vars, trms) ->
             ok (typed_vars, TTerm.make (TTerm.app f_name (List.rev trms)) { pos = v.info.pos; typ })
@@ -257,10 +256,23 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('
              let err_msg = Printf.sprintf "Function %s expects %d arguments, found %d"
                              f_name (List.length arg_types) (List.length trms) in
              error (Errors.type_error err_msg v.info.pos)
-          end
+          end in
+       match Map.find tfunctions f_name with
+       | Some (arg_types, typ, _) -> aux arg_types typ
        | None ->
-        let err_msg = Printf.sprintf "Function '%s' is undefined" f_name in
-        error (Errors.type_error err_msg v.info.pos)
+          (*(
+            match Map.find tevents f_name with
+            | Some (Event (_, Functional), arg_ret_types, _, _) ->
+               let arg_types = List.drop_last_exn arg_ret_types in
+               let (_, typ)  = List.last_exn arg_ret_types in
+               aux arg_types typ
+            | Some (Event (_, Variable), arg_ret_types, _, _) ->
+               let (_, typ)  = List.last_exn arg_ret_types in
+               aux [] typ
+            | _ ->*)
+          let err_msg = Printf.sprintf "Function '%s' is undefined" f_name in
+          error (Errors.type_error err_msg v.info.pos)
+                (* ) *)
      end
   | Unop (op, trm) ->
      begin
@@ -278,7 +290,7 @@ let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('
      end
   | Binop (trm, op, trm') ->
      begin
-       let* typed_vars, trm  = type_term tevents tfunctions taliases typed_vars trm None in
+       let* typed_vars, trm  = type_term tevents tfunctions taliases typed_vars trm  None in
        let* typed_vars, trm' = type_term tevents tfunctions taliases typed_vars trm' None in
        let f_op = match op with
          | BAdd -> type_badd
@@ -398,7 +410,7 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
   let* t_vars, form, event_type_opt = match f.form with
   | Formula.TT -> ok (t_vars, Tformula.tt, None)
   | FF -> ok (t_vars, Tformula.ff, None)
-  (*| EqConst ({ trm = Binop (x, BEq, y); info }, Dom.Bool true) -> begin
+  | EqConst ({ trm = Binop (x, BEq, y); info }, Dom.Bool true) -> begin
     match unpack_special_eq s.tevents x y with
     | Some (event_name, trms, event_type) ->
        let* t_vars, f = type_formula s ~event_type t_vars (Formula.make (Formula.predicate event_name trms) f.info) in
@@ -406,17 +418,20 @@ let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f:
     | None -> begin
       let* t_vars, x' = type_term s.tevents s.tfunctions s.taliases t_vars x None in
       let* t_vars, y' = type_term s.tevents s.tfunctions s.taliases t_vars y (Some x'.info.typ) in
-      if TypeTerm.equal x'.info.typ y'.info.typ then
-        t_vars,
-        EqConst ({ trm = TTerm.binop x' BEq y';
-                   info = { pos = info.pos; typ = TypeTerm.TypeConst (Dom.TBool) } },
-                 Dom.Bool true), None
-      else
+      match (TypeTerm.lub x'.info.typ y'.info.typ s.taliases,
+             TypeTerm.lub y'.info.typ x'.info.typ s.taliases) with
+      | Some _, _
+      | _, Some _ ->
+        ok (t_vars,
+            Tformula.EqConst (TTerm.{ trm = TTerm.binop x' BEq y';
+                                      info = { pos = info.pos; typ = TypeTerm.TypeConst (Dom.TBool) } },
+                              Dom.Bool true), None)
+      | _ ->
         let err_msg = Printf.sprintf "Ill-typed argument types in equality: '%s' vs '%s'"
                         (TypeTerm.to_string x'.info.typ) (TypeTerm.to_string y'.info.typ) in
-        Errors.type_error err_msg f.info.pos
+        error (Errors.type_error err_msg f.info.pos)
       end
-    end*)
+    end
   | EqConst (t, d) ->
      let* t_vars, t' = type_term s.tevents s.tfunctions s.taliases t_vars t None in
      begin match t'.info.typ with

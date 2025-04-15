@@ -17,7 +17,8 @@ open Elex
 module Interval = MFOTL_lib.Interval
 module Enftype = MFOTL_lib.Enftype
 
-let debug_enforcability = ref false
+
+let debug_enforcability = ref true
 let debug msg = if !debug_enforcability then Errors.debug_print ~f_name:(Some "enforceability.ml") msg
 
 (* Generators *)
@@ -1320,7 +1321,7 @@ let convert_enforceable_tdisjunct itl_srp pols t (td: tdisjunct): edisjunct * en
                     params_original = td.params_original;
                     params_new      = td.params_new;
                   }, Some enf_constr
-               | _ -> assert false (* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
+               | _ -> assert false(* TODO: test that this assertion cannot be triggered when enforcability typing succeeded previously *)
                end
             end
      end
@@ -1602,7 +1603,8 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
              let constr = snd (Map.find_exn edisjuncts_and_constrs first_possible) in
              let edisjuncts = Map.map edisjuncts_and_constrs ~f:fst in
              ok (ECDefinitionDis (edisjuncts, eg, t, constr))
-          | _ -> assert false
+          | _ ->  let edisjuncts = Map.map tdisjuncts ~f:edisjunct_of_tdisjunct in
+                  ok (ECDefinitionDis (edisjuncts, eg, Enftype.obs, None))
           end
        | None ->
           let edisjuncts = Map.map tdisjuncts ~f:edisjunct_of_tdisjunct in

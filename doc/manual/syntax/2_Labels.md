@@ -1,10 +1,13 @@
+## 2. Labels
+
 Labels define the structure of the law, dividing it into chapters, articles, paragraphs, etc.
 
 The syntax of labels is as follows:
 ```
 label_kind [`[` num `]`] quoted_string [quoted_string]
 
-label_kind := `law` | `title` | `chapter` | `section` | `article` | `paragraph` | `point` | `subpoint`
+label_kind := `law` | `title` | `chapter` | `section` 
+            | `article` | `paragraph` | `point` | `subpoint`
 ```
 where `num`denotes an integer $\geq 1$ and `quoted_string` denotes a string in double quoted.
 
@@ -19,6 +22,7 @@ Lex enforces the followings constraints on labels:
 * Every rule must be defined within a `law` and an `article`.
 * Every identifier at a given level must be unique among the identifiers of the next-higher level.
 * Identifiers of `article` must be unique within the scope of a `law`.
+
 #### Examples
 
 > Article 6. Lawfulness of processing

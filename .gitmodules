@@ -1,0 +1,4 @@
+[submodule "enfguard"]
+	path = enfguard
+	url = https://github.com/runtime-enforcement/whyenf
+	branch = alternative
