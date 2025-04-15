@@ -23,6 +23,7 @@ Lex - A Language for Compliance by Design
 # Repository Overview
 
 This repository contains:
+- A copy of the [EnfGuard](https://github.com/runtime-enforcement/enfguard) tool in a submodule `enfguard` (update it with `git submodule update --init --recursive` before using Lex)
 - The Instrlib library (`Instrlib/`)
 - The source code of Lex (`src/` and `bin/`)
 - A VS Code extension providing code coloring for Lex (`vscode/lex`)
