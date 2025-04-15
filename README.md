@@ -30,6 +30,7 @@ This repository contains:
 - Documentation for Lex (`doc/`) including a cheatsheet, a syntax manual, and the tutorial used in our user study (RQ4)
 - Examples of Lex and Rex code (`example/`): `BGG` (RQ1), `GDPR` (RQ1-3, including Rex code for Shynet and Minitwitter), `IRC` (RQ1), `user_study` (RQ4/auditing), `tutorial` (code of the tutorial), `unit` (basic examples)
 - The code of our case studies (`case_studies.zip`, RQ2-3)
+- The survey used in our user study (`user_study/`)
 
 # Installation
 ## VS Code Dev Container
