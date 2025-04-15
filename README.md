@@ -91,7 +91,7 @@ From the root directory of this repository, run:
 
 e.g.
 ```bash
-./bin/main.exe examples/hello.lex
+./bin/main.exe examples/unit/hello.lex
 ```
 
 ## With installation
