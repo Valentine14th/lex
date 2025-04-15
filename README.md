@@ -6,6 +6,7 @@ Lex - A Language for Compliance by Design
 # Table of Contents
 - [Lex - A language for Compliance by Design](#lex---a-language-for-compliance-by-design)
 - [Table of Contents](#table-of-contents)
+- [Repository Overview](#repository-overview)
 - [Installation](#installation)
   - [VS Code Dev Container](#vs-code-dev-container)
     - [Requirements:](#requirements)
@@ -18,7 +19,16 @@ Lex - A Language for Compliance by Design
   - [Setting up the environment](#setting-up-the-environment)
   - [Without installing Lex](#without-installing-lex)
   - [With installation](#with-installation)
-- [known issues](#known-issues)
+
+# Repository Overview
+
+This repository contains:
+- The Instrlib library (`Instrlib/`)
+- The source code of Lex (`src/` and `bin/`)
+- A VS Code extension providing code coloring for Lex (`vscode/lex`)
+- Documentation for Lex (`doc/`) including a cheatsheet, a syntax manual, and the tutorial used in our user study (RQ4)
+- Examples of Lex and Rex code (`example/`): `BGG` (RQ1), `GDPR` (RQ1-3, including Rex code for Shynet and Minitwitter), `IRC` (RQ1), `user_study` (RQ4/auditing), `tutorial` (code of the tutorial), `unit` (basic examples)
+- The code of our case studies (`case_studies.zip`, RQ2-3)
 
 # Installation
 ## VS Code Dev Container
