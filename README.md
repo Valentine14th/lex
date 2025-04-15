@@ -4,7 +4,7 @@ Lex - A Language for Compliance by Design
 ![Lex Logo](Logo.png "lex")
 
 # Table of Contents
-- [Lex - A language for formalizing legal texts](#lex---a-language-for-formalizing-legal-texts)
+- [Lex - A language for Compliance by Design](#lex---a-language-for-compliance-by-design)
 - [Table of Contents](#table-of-contents)
 - [Installation](#installation)
   - [VS Code Dev Container](#vs-code-dev-container)
