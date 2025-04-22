@@ -29,7 +29,7 @@
 					"name": "keyword.operator"
 				},
 				{
-					"match": "\\b(next|prev|once|eventually|historically|always|since|until|trigger|release)\\b",
+					"match": "(?i)\\b(next|prev|once|eventually|historically|always|since|until|trigger|release)\\b",
 					"name": "keyword.operator"
 				},
 				{
