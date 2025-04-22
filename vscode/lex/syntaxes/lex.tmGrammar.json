@@ -21,7 +21,7 @@
 					]
 				},
 				{
-					"match": "\\b(equiv|implies|or|and|not|exists|forall)\\b",
+					"match": "(?i)\\b(equiv|implies|or|and|not|exists|forall)\\b",
 					"name": "keyword.operator"
 				},
 				{
@@ -33,7 +33,7 @@
 					"name": "keyword.operator"
 				},
 				{
-					"match": "\\b(fix|whenever|oblige|permit|constitute|except|scope|let)\\b",
+					"match": "\\b(fix|whenever|oblige|permit|constitute|except|scope|let|refine|assume|strengthen|weaken|by)\\b",
 					"name": "keyword.control"
 				},
 				{
@@ -41,7 +41,7 @@
 					"name": "keyword.other"
 				},
 				{
-					"match": "\\b(type|is|event|predicate|rule)\\b",
+					"match": "\\b(type|is|event|predicate|rule|replace)\\b",
 					"name": "storage.type"
 				},
 				{
