@@ -85,7 +85,7 @@ let replace_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   ok { tprog with tstmts }
 
 let replace_inherit_exceptions (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
-  (* TODO[JD] handle "inherited" exceptions *)
+  (* TODO[JD] only inherit exceptions for directly replaced rules, explicitly do not do so for 'new' obligations *)
   let open Errors.OrErrors in
   let tlex_rtref_exprs_to_label_rtref_exprs = List.map ~f:(fun (pos, refs) -> (pos, List.map refs ~f:Ref.to_rtref_expr)) in
   let rules_in_rtref_expr pos (ref: Label.RuleTree.rtref_expr) =
@@ -169,11 +169,6 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
   let open Errors.OrErrors in
   (* TODO[FH]: check that the refinement is valid *)
   (* TODO[FH]: check that all events have been mapped *)
-
-  (* TODO[JD]: sort refined rules topologically *)
-  (* TODO[JD]: based on topologically sorted rules, check monotonicity *)
-  (* TODO[JD]: figure out where monotonicity is required, possibly pass along from rtyping
-               - is inside of trefi.trmonotone and trefi.trantimonotone *)
 
   let* tprog = hide_and_replace trefi trefi.tprog in
   let* eprog = Enforceability.do_type ~mon_constrs:(trefi.tr_mon, trefi.tr_anti_mon) tprog b in

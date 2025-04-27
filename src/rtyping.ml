@@ -148,7 +148,7 @@ let collect_potential_exceptions (rs: rt) (old_idx: int) (new_trules: (trule *in
       | TException (_, tpf, new_refs, p), new_idx
       | TExceptionC (_, tpf, new_refs, p, _), new_idx ->
         let new_referenced_rules = Map.find_exn rs.trefi.tprog.rule_tree.exceptions new_idx in
-        if Util.equal_int_lists old_referenced_rules new_referenced_rules then
+        if Util.equal_elements_int_lists old_referenced_rules new_referenced_rules then
           Some (tpf, new_refs, p)
         else
           let intersection = Util.intersection_of_int_lists old_referenced_rules new_referenced_rules in
@@ -177,7 +177,7 @@ let collect_potential_scopes (rs: rt) (old_idx: int) (new_trules: (trule * int) 
     function
       | TScope (_, tpf, new_refs, p), new_idx ->
         let new_referenced_rules = Map.find_exn rs.trefi.tprog.rule_tree.scopes new_idx in
-        if Util.equal_int_lists old_referenced_rules new_referenced_rules then
+        if Util.equal_elements_int_lists old_referenced_rules new_referenced_rules then
           Some (tpf, new_refs, p)
         else
           let intersection = Util.intersection_of_int_lists old_referenced_rules new_referenced_rules in

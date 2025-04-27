@@ -1,3 +1,5 @@
+(* Dummy tests *)
+
 let test_example () =
   Alcotest.(check int) "example test" 4 (2 + 2)
 
@@ -10,9 +12,11 @@ let example_tests = [ ("Example Suite", [
     ];)
   ]
 
+(* util.ml test cases*)
+
 let test_int_list_equality l1 l2 expected () =
   let open Lex_lib.Util in
-  Alcotest.(check bool) "Int List Equality" expected (equal_int_lists l1 l2)
+  Alcotest.(check bool) "Int List Equality" expected (equal_elements_int_lists l1 l2)
 
 let util_tests = [
   ("Util Int List Equality Tests", [
@@ -24,8 +28,14 @@ let util_tests = [
   ];)
 ]
 
+
+(* Combine all test suites *)
+
 let all_tests =
   example_tests @
   util_tests
+
+
+(* Run the tests *)
 
 let () = Alcotest.run "Lex Tests" all_tests
