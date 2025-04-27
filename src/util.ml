@@ -97,3 +97,9 @@ let concat k (k', v) = ((if String.is_empty k' then k else k ^ "__" ^ k'), v)
 let concat_all_filename = function
   | [] -> ""
   | init::idents -> List.fold_left idents ~init ~f:Filename.concat
+
+let intersection_of_int_lists (l1: int list) (l2: int list): int list =
+  List.filter l1 ~f:(fun x -> List.mem l2 x ~equal:Int.equal)
+
+let equal_int_lists l1 l2 =
+  List.length l1 = List.length l2 && List.for_all l1 ~f:(fun x -> List.mem l2 x ~equal:Int.equal)

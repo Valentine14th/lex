@@ -61,7 +61,6 @@ let add_section pos label s =
   let* tprog = Tlex.add_section pos label s.tprog in
   ok { s with tprog }
 
-(* let add_exception_first_pass i f refs s = *)
 let add_exception_first_pass i f (refs: Tlex.Ref.t list) s =
   let open Errors.OrErrors in
   ok { s with exceptions_first_pass = (i,f,refs)::s.exceptions_first_pass }
@@ -70,15 +69,17 @@ let add_scope_first_pass i f refs s =
   let open Errors.OrErrors in
   ok { s with scopes_first_pass = (i,f,refs)::s.scopes_first_pass}
 
-let add_exception i f refs s =
+(* TODO[JD] this function seems to be unused, remove if confirmed *)
+(* let add_exception i f refs s =
   let open Errors.OrErrors in
   let* tprog = Tlex.add_exception i f refs s.tprog in
-  ok { s with tprog }
+  ok { s with tprog } *)
 
-let add_scope i f refs s =
+(* TODO[JD] this function seems to be unused, remove if confirmed *)
+(* let add_scope i f refs s =
   let open Errors.OrErrors in
   let* tprog = Tlex.add_scope i f refs s.tprog in
-  ok { s with tprog }
+  ok { s with tprog } *)
 
 let set_labels pos section_kind label s =
   let open Errors.OrErrors in
