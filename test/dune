@@ -1,0 +1,3 @@
+(test
+  (name lex_test)
+  (libraries lex_lib MFOTL_lib alcotest))
