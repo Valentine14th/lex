@@ -4,21 +4,82 @@
 	"name": "Lex",
 	"patterns": [
 		{ "include": "#comment" },
+		{ "include": "#import" },
+		{ "include": "#section" },
 		{ "include": "#formula" }
 	],
 	"repository": {
+		"import": {
+			"patterns": [
+				{
+					"match": "\\b(import)(?:\\s+(formex|akomantoso))?(?:\\s+([a-zA-Z0-9_.-]+))?\\b",
+					"captures": {
+						"1": {
+							"name": "keyword"
+						},
+						"2": {
+							"name": "support"
+						},
+						"3": {
+							"name": "entity.name"
+						}
+					}
+				},
+				{
+					"match": "\\b(refine)(?:\\s+([a-zA-Z0-9_]+))?\\b",
+					"captures": {
+						"1": {
+							"name": "keyword"
+						},
+						"2": {
+							"name": "entity.name"
+						}
+					}
+				}
+			]
+
+		},
+		"section": {
+			"patterns": [
+				{
+						"begin": "\\b(law|title|chapter|section|article|paragraph|point|subpoint)\\b",
+						"beginCaptures": {
+							"1": {
+								"name": "keyword.control"
+							}
+						},
+						"end": "(?=$|\\n)",
+						"patterns": [
+							{
+								"name": "string.quoted.double",
+								"begin": "\"",
+								"end": "\"",
+								"patterns": [
+									{
+										"name": "constant.character.escape",
+										"match": "\\."
+									}
+								]
+							},
+							{
+								"name": "comment.block.documentation",
+								"begin": "\"",
+								"end": "\"",
+								"patterns": [
+									{
+										"name": "constant.character.escape",
+										"match": "\\."
+									}
+								]
+							}
+						]
+				}
+			]
+		},
 		"formula": {
 			"patterns": [
 				{
-					"name": "string.regexp",
-					"begin": "r\"",
-					"end": "\"",
-					"patterns": [
-						{
-							"name": "constant.character.escape.untitled",
-							"match": "\\."
-						}
-					]
+					"include": "#rString"
 				},
 				{
 					"match": "(?i)\\b(equiv|implies|or|and|not|exists|forall)\\b",
@@ -37,7 +98,7 @@
 					"name": "keyword.control"
 				},
 				{
-					"match": "\\b(law|title|chapter|section|article|paragraph|point|subpoint|import|causing|suppressing)\\b",
+					"match": "\\b(causing|suppressing)\\b",
 					"name": "keyword.other"
 				},
 				{
@@ -47,6 +108,10 @@
 				{
 					"match": "\\b(string|int|float|causable|suppressable|observable|internal|enforceable|transparently)\\b",
 					"name": "support.type"
+				},
+				{
+					"match": "\\b(fulfilled)\\b",
+					"name": "keyword.other"
 				},
 				{
 					"match": "\\b(false|true)\\b",
@@ -71,15 +136,7 @@
 					"include": "#var"
 				},
 				{
-					"name": "string.quoted.double",
-					"begin": "\"",
-					"end": "\"",
-					"patterns": [
-						{
-							"name": "constant.character.escape.untitled",
-							"match": "\\."
-						}
-					]
+					"include": "#string"
 				}
 			],
 			"repository": {
@@ -152,6 +209,28 @@
 					"match": "\\b(CNT|MIN|MAX|SUM|AVG|MED)\\b",
 					"name": "keyword.operator"
 				},
+				"string": {
+					"name": "string.quoted.double",
+					"begin": "\"",
+					"end": "\"",
+					"patterns": [
+						{
+							"name": "constant.character.escape.untitled",
+							"match": "\\."
+						}
+					]
+				},
+				"rString": {
+					"name": "string.regexp",
+					"begin": "r\"",
+					"end": "\"",
+					"patterns": [
+						{
+							"name": "constant.character.escape.untitled",
+							"match": "\\."
+						}
+					]
+				},
 				"sString": {
 					"name": "string.quoted.single",
 					"begin": "'",
@@ -164,7 +243,7 @@
 					]
 				},
 				"dString": {
-					"name": "string.quoted.double",
+					"name": "string.quoted.description",
 					"begin": "\"",
 					"end": "\"",
 					"patterns": [
@@ -179,9 +258,6 @@
 		"comment": {
 			"patterns": [
 				{
-					"include": "#block-comment"
-				},
-				{
 					"include": "#line-comment"
 				}
 			],
@@ -189,11 +265,6 @@
 				"line-comment": {
 					"match": "#.*",
 					"name": "comment.line"
-				},
-				"block-comment": {
-					"begin": "\\(\\#",
-					"end": "\\#\\)",
-					"name": "comment.block"
 				}
 			}
 		}
