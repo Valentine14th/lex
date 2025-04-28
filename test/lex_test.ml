@@ -33,9 +33,7 @@ let util_tests = [
 
 let all_tests =
   example_tests @
-  util_tests
-
-
-(* Run the tests *)
+  util_tests @
+  Label_test.label_tests
 
 let () = Alcotest.run "Lex Tests" all_tests
