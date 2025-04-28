@@ -16,13 +16,13 @@ let example_tests = [ ("Example Suite", [
 
 let test_int_list_equality l1 l2 expected () =
   let open Lex_lib.Util in
-  Alcotest.(check bool) "Int List Equality" expected (equal_elements_int_lists l1 l2)
+  Alcotest.(check bool) "Int List Equality" expected (int_list_equality_as_set l1 l2)
 
 let util_tests = [
   ("Util Int List Equality Tests", [
     Alcotest.test_case "Int List Equality 1" `Quick (test_int_list_equality [1; 2; 3] [1; 2; 3] true);
     Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [1; 2; 3] [3; 2; 1] true);
-    Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [1; 1; 2; 3] [3; 2; 1] false);
+    Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [1; 1; 2; 3] [3; 2; 1] true);
     Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [] [3; 2; 1] false);
     Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [] [] true);
   ];)

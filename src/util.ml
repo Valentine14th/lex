@@ -101,5 +101,5 @@ let concat_all_filename = function
 let intersection_of_int_lists (l1: int list) (l2: int list): int list =
   List.filter l1 ~f:(fun x -> List.mem l2 x ~equal:Int.equal)
 
-let equal_elements_int_lists l1 l2 =
-  List.length l1 = List.length l2 && List.for_all l1 ~f:(fun x -> List.mem l2 x ~equal:Int.equal)
+let int_list_equality_as_set l1 l2 =
+  Set.equal (Set.of_list (module Int) l1) (Set.of_list (module Int) l2)
