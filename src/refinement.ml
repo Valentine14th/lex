@@ -87,18 +87,60 @@ let replace_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
 let replace_inherit_exceptions (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   (* TODO[JD] only inherit exceptions for directly replaced rules, explicitly do not do so for 'new' obligations *)
   let open Errors.OrErrors in
-  let tlex_rtref_exprs_to_label_rtref_exprs = List.map ~f:(fun (pos, refs) -> (pos, List.map refs ~f:Ref.to_rtref_expr)) in
+  let ref_to_rtref_expr (pos, refs) = pos, List.map refs ~f:Ref.to_rtref_expr in
   let rules_in_rtref_expr pos (ref: Label.RuleTree.rtref_expr) =
     Label.RuleTree.find_rules_in_tree pos ref.label tprog.rule_tree.tree in
   let rules_in_rtref_exprs ((pos, refs) : (LexingInfo.t * Label.RuleTree.rtref_expr list)) =
     List.map refs ~f:(rules_in_rtref_expr pos)
     |> List.fold_right ~init:(Ok []) ~f:(fun a l -> map2 a l List.append)
   in
-  let* rules_refs1 =
-    List.map trefi.trreplacements ~f:(fun (pos, _, refs1, _) -> (pos, refs1))
-    |> tlex_rtref_exprs_to_label_rtref_exprs
+  let rules_in_refs refs =
+    List.map ~f:ref_to_rtref_expr refs
     |> List.map ~f:rules_in_rtref_exprs
     |> all
+  in
+  let* rules_refs1 =
+    List.map trefi.trreplacements ~f:(fun (pos, _, refs1, _) -> (pos, refs1))
+    |> rules_in_refs
+  in
+  let* rules_refs2 =
+    List.map trefi.trreplacements ~f:(fun (pos, _, _, refs2) -> (pos, refs2))
+    |> rules_in_refs
+  in
+  let positions = List.map trefi.trreplacements ~f:(fun (pos, _, _, _) -> pos) in
+  let rules_of_ids (ids: int list) = all (List.map ~f:(Tlex.find_trule_by_id tprog) ids) in
+  let* old_rules = all (List.map ~f:rules_of_ids rules_refs2) in
+  let contains_obligation =
+    List.exists ~f:(function
+        | TObligation _ -> true
+        | _ -> false)
+  in
+  let is_obligation_replacement = List.map ~f:contains_obligation old_rules in
+  let remove_obligations rule_ids =
+    let* trules = rules_of_ids rule_ids in
+    let ids_and_trules = List.zip_exn rule_ids trules in
+    let ids_filtered = List.filter_map ids_and_trules ~f:(fun (id, trule) ->
+        match trule with
+        | TObligation _ -> None
+        | _ -> Some id)
+    in
+    ok ids_filtered
+  in
+  let* rules_refs2' =
+    List.map2_exn rules_refs2 is_obligation_replacement
+    ~f:(fun rule_ids is_obligation ->
+        if is_obligation then ok rule_ids
+        else remove_obligations rule_ids)
+    |> all
+  in
+  let _ =
+    let zipped_id_lists = List.zip_exn rules_refs1 rules_refs2 in
+    List.iter2_exn positions zipped_id_lists ~f:(fun pos ids1_and_2 ->
+      let ids1, ids2 = ids1_and_2 in
+      if List.length ids1 <> List.length ids2 then
+        let msg = "Note that the exceptions are only inherited for non-obligation rules, NO exceptions will apply to the new obligation(s) in this replacement" in
+        Errors.warn msg (Some pos)
+    )
   in
   let positions = List.map trefi.trreplacements ~f:(fun (pos, _, _, _) -> pos) in
   let check_same_ex_or_sc idx_lists =
@@ -120,12 +162,6 @@ let replace_inherit_exceptions (trefi: trefi) (tprog: tprog) : tprog Errors.OrEr
   in
   let* exceptions_refs1 = ex_or_sc_of_refs tprog.rule_tree.exceptions rules_refs1 in
   let* scopes_refs1 = ex_or_sc_of_refs tprog.rule_tree.scopes rules_refs1 in
-  let* rules_refs2 =
-    List.map trefi.trreplacements ~f:(fun (pos, _, _, refs2) -> (pos, refs2))
-    |> tlex_rtref_exprs_to_label_rtref_exprs
-    |> List.map ~f:rules_in_rtref_exprs
-    |> all
-  in
   let refs1_flat = List.concat rules_refs1 in
   let exceptions_new' : (int, int list, Int.comparator_witness) Map.t =
     List.fold refs1_flat
@@ -137,8 +173,8 @@ let replace_inherit_exceptions (trefi: trefi) (tprog: tprog) : tprog Errors.OrEr
       ~init:tprog.rule_tree.scopes
       ~f:(fun scopes idx -> Map.remove_multi scopes idx)
   in
-  let refs2_and_ex = List.zip_exn rules_refs2 exceptions_refs1 in
-  let refs2_and_sc = List.zip_exn rules_refs2 scopes_refs1 in
+  let refs2_and_ex = List.zip_exn rules_refs2' exceptions_refs1 in
+  let refs2_and_sc = List.zip_exn rules_refs2' scopes_refs1 in
   let exceptions: (int, int list, Int.comparator_witness) Map.t =
     List.fold refs2_and_ex ~init:exceptions_new'
       ~f:(fun exceptions (refs2, ex) ->
@@ -153,7 +189,7 @@ let replace_inherit_exceptions (trefi: trefi) (tprog: tprog) : tprog Errors.OrEr
   in
   ok { tprog with rule_tree = { tprog.rule_tree with exceptions; scopes}}
 
-let hide_and_replace trefi (tprog: tprog) : tprog Errors.OrErrors.t =
+let hide_and_replace (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
   ok tprog
   >>= insert_refinement_rules trefi

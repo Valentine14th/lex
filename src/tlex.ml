@@ -131,7 +131,7 @@ let tempty =
 
 (* Functions to extend programs *)
 
-let add_tstmt tstmt tprog = { tprog with tstmts = tstmt::tprog.tstmts }
+let add_tstmt (tstmt: tstmt) (tprog: tprog) = { tprog with tstmts = tstmt::tprog.tstmts }
 
 let add_talias name typ doc_string tprog pos =
   let open Errors.OrErrors in
@@ -190,6 +190,22 @@ let add_rule pos rule_num label tprog =
 let add_section pos label tprog =
   let open Errors.OrErrors in
   ok { tprog with rule_tree = Label.RuleTree.add_section pos label tprog.rule_tree }
+
+let find_rule_statement_by_id (tprog: tprog) (id: int) : tstmt Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let rule = List.find tprog.tstmts ~f:(function
+      | TSRule (_, i, _, _, _, _) -> Int.equal i id
+      | _ -> false) in
+  match rule with
+  | Some r -> ok r
+  | None -> error (Errors.type_error (Printf.sprintf "rule with id %d not found" id) LexingInfo.dummy)
+
+let find_trule_by_id (tprog: tprog) (id: int) : trule Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let* tstmt = find_rule_statement_by_id tprog id in
+  match tstmt with
+  | TSRule (_, _, _, _, trule, _) -> ok trule
+  | _ -> assert false
 
 (* Signature *)
 

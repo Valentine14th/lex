@@ -422,6 +422,21 @@ let check_trreplacement (mono: 'str_info_map * 'str_info_map)
     (* impossible cases *)
     assert false
 
+let check_trreplacement_types (pos: LexingInfo.t) (old_trules: trule list) : unit Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let is_obligation = function
+    | TObligation _ -> true
+    | _ -> false in
+  let contains_obligation trules =
+    List.exists trules ~f:is_obligation in
+  let only_obligations = List.for_all ~f:is_obligation in
+  if contains_obligation old_trules && not (only_obligations old_trules) then
+    (* TODO[JD]: is this error message understandable or does it need more clarification? *)
+    let msg = "Cannot replace obligations and other rule types in the same replace-rule" in
+    error (Errors.refinement_error msg pos)
+  else
+    ok ()
+
 let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
   (* TODO[FH]: check implications + monotonicity with Z3
      [JD] These checks are done/to be implemented in `check_trreplacement` *)
@@ -439,6 +454,7 @@ let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tle
     ok (List.filter_map ~f rs.s.tprog.tstmts) in
   let* old_trules = rules_by_refs refs1 in
   let* new_trules = rules_by_refs refs2 in
+  let* _ = check_trreplacement_types pos (List.map ~f:fst old_trules) in
   let* (tr_mon, tr_anti_mon) =
     fold_best_effort ~init:(Map.empty (module String), Map.empty (module String))
         ~f:(fun mono old_rule ->
