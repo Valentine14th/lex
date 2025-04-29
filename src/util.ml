@@ -103,3 +103,5 @@ let intersection_of_int_lists (l1: int list) (l2: int list): int list =
 
 let int_list_equality_as_set l1 l2 =
   Set.equal (Set.of_list (module Int) l1) (Set.of_list (module Int) l2)
+
+let all_int_lists_set_equality : int list list -> int list option = List.all_equal ~equal:int_list_equality_as_set

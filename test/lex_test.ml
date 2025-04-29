@@ -22,9 +22,9 @@ let util_tests = [
   ("Util Int List Equality Tests", [
     Alcotest.test_case "Int List Equality 1" `Quick (test_int_list_equality [1; 2; 3] [1; 2; 3] true);
     Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [1; 2; 3] [3; 2; 1] true);
-    Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [1; 1; 2; 3] [3; 2; 1] true);
-    Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [] [3; 2; 1] false);
-    Alcotest.test_case "Int List Equality 2" `Quick (test_int_list_equality [] [] true);
+    Alcotest.test_case "Int List Equality 3" `Quick (test_int_list_equality [1; 1; 2; 3] [3; 2; 1] true);
+    Alcotest.test_case "Int List Equality 4" `Quick (test_int_list_equality [] [3; 2; 1] false);
+    Alcotest.test_case "Int List Equality 5" `Quick (test_int_list_equality [] [] true);
   ];)
 ]
 

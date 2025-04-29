@@ -84,110 +84,92 @@ let replace_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let tstmts = List.filter ~f tprog.tstmts in
   ok { tprog with tstmts }
 
-let replace_inherit_exceptions (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
-  (* TODO[JD] only inherit exceptions for directly replaced rules, explicitly do not do so for 'new' obligations *)
+let inherit_ex_or_sc_trreplacement ref_kind
+                                   (tprog: tprog)
+                                   ((pos, _, old_refs, new_refs): LexingInfo.t * Rex.replace_kind * Tlex.Ref.t list * Tlex.Ref.t list)
+                                   : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
-  let ref_to_rtref_expr (pos, refs) = pos, List.map refs ~f:Ref.to_rtref_expr in
-  let rules_in_rtref_expr pos (ref: Label.RuleTree.rtref_expr) =
-    Label.RuleTree.find_rules_in_tree pos ref.label tprog.rule_tree.tree in
-  let rules_in_rtref_exprs ((pos, refs) : (LexingInfo.t * Label.RuleTree.rtref_expr list)) =
-    List.map refs ~f:(rules_in_rtref_expr pos)
-    |> List.fold_right ~init:(Ok []) ~f:(fun a l -> map2 a l List.append)
+  let trules_from_ids (tprog: tprog) (ids: int list) : trule list Errors.OrErrors.t =
+    let open Errors.OrErrors in
+    all (List.map ~f:(Tlex.find_trule_by_id tprog) ids) in
+  let string_of_ref_kind = match ref_kind with
+                            | `Exceptions -> "exceptions"
+                            | `Scopes -> "scopes" in
+  let old_ex_or_sc = match ref_kind with
+                      | `Exceptions -> tprog.rule_tree.exceptions
+                      | `Scopes -> tprog.rule_tree.scopes in
+  let rule_ids_in_refs =
+    let f (ref: Tlex.Ref.t) = Label.RuleTree.find_rules_in_tree ref.pos ref.label tprog.rule_tree.tree in
+    List.map ~f in
+  let* old_trule_ids = rule_ids_in_refs old_refs |> all in
+  let old_trule_ids = List.concat old_trule_ids in
+  let* new_trule_ids = rule_ids_in_refs new_refs |> all in
+  let new_trule_ids = List.concat new_trule_ids in
+  let* old_trules = trules_from_ids tprog old_trule_ids in
+  let* new_trules = trules_from_ids tprog new_trule_ids in
+  let string_of_old_trules = List.map ~f:(Label.RuleTree.string_of_rule_idx tprog.rule_tree) old_trule_ids in
+  let ex_or_sc_of_old_trules = List.map ~f:(Map.find_multi old_ex_or_sc) old_trule_ids in
+  let string_ex_or_sc_of_old_trules =
+    List.map ~f:(List.map ~f:(Label.RuleTree.string_of_rule_idx tprog.rule_tree)) ex_or_sc_of_old_trules in
+  let strings_of_ex_or_sc_of_old_trules =
+    List.map ~f:(String.concat ~sep:"\t\n") string_ex_or_sc_of_old_trules in
+  let strings_of_old_trules_with_ex_or_sc = 
+    let f old_trule_string ex_or_sc_string =
+      Printf.sprintf "The 'old' referenced rule %s has the %s:\n%s"
+        string_of_ref_kind
+        old_trule_string
+        ex_or_sc_string in
+    List.map2_exn string_of_old_trules strings_of_ex_or_sc_of_old_trules ~f in
+  let* old_unified_ex_or_sc =
+    match Util.all_int_lists_set_equality ex_or_sc_of_old_trules with
+    | Some ex_or_sc -> ok ex_or_sc
+    | None ->
+      let msg =
+        let s = String.concat ~sep:"\n" strings_of_old_trules_with_ex_or_sc in
+        Printf.sprintf "Rules being replaced must have the same %s, but here we have the following rules with their respective exceptions:\n%s"
+        string_of_ref_kind s
+      in
+      error (Errors.refinement_error msg pos)
   in
-  let rules_in_refs refs =
-    List.map ~f:ref_to_rtref_expr refs
-    |> List.map ~f:rules_in_rtref_exprs
-    |> all
+  let is_obligation = function
+    | TObligation _ -> true
+    | _ -> false in
+  let old_only_obligation = List.for_all ~f:is_obligation old_trules in
+  let new_trule_ids_filtered =
+    if old_only_obligation then
+      new_trule_ids
+    else
+      let f (id, trule) = if is_obligation trule then Some id else None in
+      List.filter_map (List.zip_exn new_trule_ids new_trules) ~f (* TODO *)
   in
-  let* rules_refs1 =
-    List.map trefi.trreplacements ~f:(fun (pos, _, refs1, _) -> (pos, refs1))
-    |> rules_in_refs
+  let _ = if List.length new_trule_ids <> List.length new_trule_ids_filtered then
+    let msg = Printf.sprintf "Note that the %s are only inherited for non-obligation rules, NO exceptions will apply to the new obligation(s) in this replacement" string_of_ref_kind in
+    Errors.warn msg (Some pos)
   in
-  let* rules_refs2 =
-    List.map trefi.trreplacements ~f:(fun (pos, _, _, refs2) -> (pos, refs2))
-    |> rules_in_refs
-  in
-  let positions = List.map trefi.trreplacements ~f:(fun (pos, _, _, _) -> pos) in
-  let rules_of_ids (ids: int list) = all (List.map ~f:(Tlex.find_trule_by_id tprog) ids) in
-  let* old_rules = all (List.map ~f:rules_of_ids rules_refs2) in
-  let contains_obligation =
-    List.exists ~f:(function
-        | TObligation _ -> true
-        | _ -> false)
-  in
-  let is_obligation_replacement = List.map ~f:contains_obligation old_rules in
-  let remove_obligations rule_ids =
-    let* trules = rules_of_ids rule_ids in
-    let ids_and_trules = List.zip_exn rule_ids trules in
-    let ids_filtered = List.filter_map ids_and_trules ~f:(fun (id, trule) ->
-        match trule with
-        | TObligation _ -> None
-        | _ -> Some id)
-    in
-    ok ids_filtered
-  in
-  let* rules_refs2' =
-    List.map2_exn rules_refs2 is_obligation_replacement
-    ~f:(fun rule_ids is_obligation ->
-        if is_obligation then ok rule_ids
-        else remove_obligations rule_ids)
-    |> all
-  in
-  let _ =
-    let zipped_id_lists = List.zip_exn rules_refs1 rules_refs2 in
-    List.iter2_exn positions zipped_id_lists ~f:(fun pos ids1_and_2 ->
-      let ids1, ids2 = ids1_and_2 in
-      if List.length ids1 <> List.length ids2 then
-        let msg = "Note that the exceptions are only inherited for non-obligation rules, NO exceptions will apply to the new obligation(s) in this replacement" in
-        Errors.warn msg (Some pos)
-    )
-  in
-  let positions = List.map trefi.trreplacements ~f:(fun (pos, _, _, _) -> pos) in
-  let check_same_ex_or_sc idx_lists =
-    List.map ~f:(List.dedup_and_sort ~compare:Int.compare) idx_lists
-    |> List.all_equal ~equal:(fun a b -> Set.equal (Set.of_list (module Int) a) (Set.of_list (module Int) b))
-  in
-  let option_to_error pos = function
-    | Some x -> ok x
-    | None -> error (Errors.refinement_error "Rules being replaced must have the same exceptions or scopes, but differ here" pos)
-    (* TODO[JD]: maybe allow for differing sets of exceptions across rules being replaced *)
-    (* TODO[JD]: display exceptions and rules that differ, replace use of `List.all_equal` with custom function *)
-  in
-  let ex_or_sc_of_refs map refs =
-    List.map refs ~f:(List.map ~f:(Map.find_multi map))
-    |> List.map ~f:check_same_ex_or_sc
-    |> List.zip_exn positions
-    |> List.map ~f:(fun (pos, ex) -> option_to_error pos ex)
-    |> all
-  in
-  let* exceptions_refs1 = ex_or_sc_of_refs tprog.rule_tree.exceptions rules_refs1 in
-  let* scopes_refs1 = ex_or_sc_of_refs tprog.rule_tree.scopes rules_refs1 in
-  let refs1_flat = List.concat rules_refs1 in
-  let exceptions_new' : (int, int list, Int.comparator_witness) Map.t =
-    List.fold refs1_flat
-      ~init:tprog.rule_tree.exceptions
-      ~f:(fun exceptions idx -> Map.remove_multi exceptions idx)
-  in
-  let scopes_new': (int, int list, Int.comparator_witness) Map.t =
-    List.fold refs1_flat
-      ~init:tprog.rule_tree.scopes
-      ~f:(fun scopes idx -> Map.remove_multi scopes idx)
-  in
-  let refs2_and_ex = List.zip_exn rules_refs2' exceptions_refs1 in
-  let refs2_and_sc = List.zip_exn rules_refs2' scopes_refs1 in
-  let exceptions: (int, int list, Int.comparator_witness) Map.t =
-    List.fold refs2_and_ex ~init:exceptions_new'
-      ~f:(fun exceptions (refs2, ex) ->
-          List.fold refs2 ~init:exceptions
-            ~f:(fun exceptions idx -> Map.add_exn exceptions ~key:idx ~data:ex))
-  in
-  let scopes: (int, int list, Int.comparator_witness) Map.t =
-    List.fold refs2_and_sc ~init:scopes_new'
-      ~f:(fun scopes (refs2, ex) ->
-          List.fold refs2 ~init:scopes
-            ~f:(fun scopes idx -> Map.add_exn scopes ~key:idx ~data:ex))
-  in
-  ok { tprog with rule_tree = { tprog.rule_tree with exceptions; scopes}}
+  let new_ex_or_sc = 
+    List.fold ~init:old_ex_or_sc
+      ~f:(fun ex_or_sc key ->
+          List.fold old_unified_ex_or_sc ~init:ex_or_sc
+            ~f:(fun ex_or_sc data -> Map.add_multi ex_or_sc ~key ~data))
+      new_trule_ids_filtered in
+  match ref_kind with
+    | `Exceptions -> ok { tprog with rule_tree = { tprog.rule_tree with exceptions = new_ex_or_sc}}
+    | `Scopes -> ok { tprog with rule_tree = { tprog.rule_tree with scopes = new_ex_or_sc }}
+
+let inherit_reference_trreplacement (tprog: tprog)
+                                    (replacement: LexingInfo.t * Rex.replace_kind * Tlex.Ref.t list * Tlex.Ref.t list)
+                                    : tprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let* tprog' = inherit_ex_or_sc_trreplacement `Exceptions tprog replacement in
+  let* tprog'' = inherit_ex_or_sc_trreplacement `Scopes tprog' replacement in
+  ok tprog''
+
+let inherit_references_trreplacements (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let* tprog' = Errors.OrErrors.fold trefi.trreplacements ~init:tprog ~f:inherit_reference_trreplacement in
+  ok tprog'
+
+(* Hide and replace *)
 
 let hide_and_replace (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
@@ -196,7 +178,7 @@ let hide_and_replace (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   >| update_types trefi
   >| insert_assumed_event_rules trefi
   >| internalize_events trefi
-  >>= replace_inherit_exceptions trefi
+  >>= inherit_references_trreplacements trefi
   >>= replace_rules trefi
 
 (* Main typing function *)
