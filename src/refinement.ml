@@ -126,7 +126,8 @@ let inherit_ex_or_sc_trreplacement ref_kind
     | None ->
       let msg =
         let s = String.concat ~sep:"\n" strings_of_old_trules_with_ex_or_sc in
-        Printf.sprintf "Rules being replaced must have the same %s, but here we have the following rules with their respective exceptions:\n%s"
+        Printf.sprintf
+        "Rules being replaced must have the same %s, but here we have the following rules with their respective exceptions:\n%s"
         string_of_ref_kind s
       in
       error (Errors.refinement_error msg pos)

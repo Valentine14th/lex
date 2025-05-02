@@ -437,32 +437,45 @@ let check_trreplacement_types (pos: LexingInfo.t) (old_trules: trule list) : uni
   else
     ok ()
 
-let add_trreplacements (kind: replace_kind) (refs1: Tlex.Ref.t list) (refs2: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
-  (* TODO[FH]: check implications + monotonicity with Z3
-     [JD] These checks are done/to be implemented in `check_trreplacement` *)
+let check_new_trule_types (tprog: tprog) (pos: LexingInfo.t) (new_trules: (trule * int) list) : unit Errors.OrErrors.t =
+  (** Checks that the new rules in a replacements contain at most one non-obligaiton rule *)
   let open Errors.OrErrors in
-  let* trreplacements = ok ((pos, kind, refs1, refs2) :: rs.trefi.trreplacements) in
-  let rules_by_refs (refs: Tlex.Ref.t list) : (trule * int) list Errors.OrErrors.t = 
-    let  rtref_exprs = List.map ~f:Ref.to_rtref_expr refs in
-    let* rules_idx =
-      all (List.map rtref_exprs ~f:(fun ref ->
-              Label.RuleTree.find_rules_in_tree ref.pos ref.label rs.s.tprog.rule_tree.tree))
-      >| List.concat in
+  let non_obligations =
     let f = function
-      | TSRule (_, idx, _, _, trule, _) when List.mem rules_idx idx ~equal:Int.equal -> Some (trule, idx)
+      | TObligation _, _ -> None
+      | _, idx -> Some (Label.RuleTree.string_of_rule_idx tprog.rule_tree idx) in
+    List.filter_map ~f new_trules in
+  if List.is_empty non_obligations then
+    ok ()
+  else
+    let msg = Printf.sprintf
+      "The rules used to replace one or more other rules can either be a set of obligations or a (possibly empty) set of obligations combined with exactly on non-obligation rule, but here multiple non-obligation rules are provided:\n%s"
+      (String.concat ~sep:"\n" non_obligations) in
+    error (Errors.refinement_error msg pos)
+
+let add_trreplacements (kind: replace_kind) (old_refs: Tlex.Ref.t list) (new_refs: Tlex.Ref.t list) doc_string (rs: rt) pos : rt Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let trules_and_ids_from_refs (refs: Tlex.Ref.t list) : (trule * int) list Errors.OrErrors.t = 
+    let  rtref_exprs = List.map ~f:Ref.to_rtref_expr refs in
+    let* rule_ids =
+      let f (ref: Label.RuleTree.rtref_expr) =
+        Label.RuleTree.find_rules_in_tree ref.pos ref.label rs.s.tprog.rule_tree.tree in
+      all (List.map rtref_exprs ~f) >| List.concat in
+    let f = function
+      | TSRule (_, idx, _, _, trule, _) when List.mem rule_ids idx ~equal:Int.equal -> Some (trule, idx)
       | _ -> None in
     ok (List.filter_map ~f rs.s.tprog.tstmts) in
-  let* old_trules = rules_by_refs refs1 in
-  let* new_trules = rules_by_refs refs2 in
+  let* old_trules = trules_and_ids_from_refs old_refs in
+  let* new_trules = trules_and_ids_from_refs new_refs in
+  let* _ = check_new_trule_types rs.trefi.tprog pos new_trules in
   let* _ = check_trreplacement_types pos (List.map ~f:fst old_trules) in
   let* (tr_mon, tr_anti_mon) =
-    fold_best_effort ~init:(Map.empty (module String), Map.empty (module String))
-        ~f:(fun mono old_rule ->
-          check_trreplacement mono kind old_rule new_trules rs pos)
-        old_trules in
+    let f mono old_rule = check_trreplacement mono kind old_rule new_trules rs pos in
+    let init = Map.empty (module String), Map.empty (module String) in
+    fold_best_effort ~init ~f old_trules in
   let f trefi =
-    { trefi with trtmts = TRReplace (pos, kind, refs1, refs2, doc_string) :: trefi.trtmts;
-                 trreplacements;
+    { trefi with trtmts = TRReplace (pos, kind, old_refs, new_refs, doc_string) :: trefi.trtmts;
+                 trreplacements = (pos, kind, old_refs, new_refs) :: rs.trefi.trreplacements;
                  tr_mon;
                  tr_anti_mon } in
   ok (map rs f)
@@ -518,11 +531,11 @@ let type_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
      we (type_rrule rs pos rrule)
   | RType (pos, name, typ, doc_string) -> 
      we (add_tralias name typ doc_string rs pos)
-  | RReplace (pos, kind, refs1, refs2, doc_string) ->
+  | RReplace (pos, kind, old_refs, new_refs, doc_string) ->
      let rs = 
-       let* reference_labels1 = all (List.map ~f:(merge_reference_with_label pos rs.s.label) refs1) in 
-       let* reference_labels2 = all (List.map ~f:(merge_reference_with_label pos rs.s.label) refs2) in
-       add_trreplacements kind reference_labels1 reference_labels2 doc_string rs pos in
+       let* old_reference_labels = all (List.map ~f:(merge_reference_with_label pos rs.s.label) old_refs) in 
+       let* new_reference_labels = all (List.map ~f:(merge_reference_with_label pos rs.s.label) new_refs) in
+       add_trreplacements kind old_reference_labels new_reference_labels doc_string rs pos in
      we rs
   | RAssume (pos, name, b, doc_string) ->
      let label = Label.set_rule_id_force (Some ("assume_" ^ name)) rs.s.label in
