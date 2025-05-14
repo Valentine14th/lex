@@ -6,7 +6,11 @@
 		{ "include": "#comment" },
 		{ "include": "#import" },
 		{ "include": "#section" },
-		{ "include": "#formula" }
+		{ "include": "#formula" },
+		{
+            "match": "\\[\\)|\\(\\]",
+            "name": "punctuation.definition.bracket.interval"
+        }
 	],
 	"repository": {
 		"import": {
@@ -82,7 +86,7 @@
 					"include": "#rString"
 				},
 				{
-					"match": "(?i)\\b(equiv|implies|or|and|not|exists|forall)\\b",
+					"match": "\\b(EQUIV|IMPLIES|OR|AND|NOT|EXISTS|FORALL)\\b",
 					"name": "keyword.operator"
 				},
 				{
@@ -90,11 +94,27 @@
 					"name": "keyword.operator"
 				},
 				{
-					"match": "(?i)\\b(next|prev|once|eventually|historically|always|since|until|trigger|release)\\b",
+					"match": "\\b(NEXT|PREV|PREVIOUS|ONCE|EVENTUALLY|HISTORICALLY|GLOBALLY_PAST|ALWAYS|GLOBALLY|SINCE|UNTIL|TRIGGER|RELEASE)\\b",
 					"name": "keyword.operator"
 				},
 				{
-					"match": "\\b(fix|whenever|oblige|permit|constitute|except|scope|let|refine|assume|strengthen|weaken|by)\\b",
+					"match": "\\b(S|U|R|T|X|Y|G|F)\\b",
+					"name": "keyword.operator"
+				},
+				{
+					"match": "(¬|∧|∨|→|↔|∃|∀|○|●|□|◊|■|⧫|<\\-)",
+					"name": "keyword.operator"
+				},
+				{
+					"match": "\\b(refine|assume|strengthen|weaken|by)\\b",
+					"name": "keyword.control"
+				},
+				{
+					"match": "\\b(refine|assume|strengthen|weaken|by)\\b",
+					"name": "keyword.control"
+				},
+				{
+					"match": "\\b(LET|IN)\\b",
 					"name": "keyword.control"
 				},
 				{
@@ -115,6 +135,10 @@
 				},
 				{
 					"match": "\\b(false|true)\\b",
+					"name": "constant.language.boolean"
+				},
+				{
+					"match": "(⊥|⊤)",
 					"name": "constant.language.boolean"
 				},
 				{
