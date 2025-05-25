@@ -94,6 +94,10 @@
 					"name": "keyword.operator"
 				},
 				{
+					"match": "\\b(fix|whenever|oblige|permit|constitute|except|scope|let)\\b",
+					"name": "keyword.control"
+				},
+				{
 					"match": "\\b(NEXT|PREV|PREVIOUS|ONCE|EVENTUALLY|HISTORICALLY|GLOBALLY_PAST|ALWAYS|GLOBALLY|SINCE|UNTIL|TRIGGER|RELEASE)\\b",
 					"name": "keyword.operator"
 				},
