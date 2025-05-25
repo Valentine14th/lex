@@ -448,7 +448,7 @@ let check_new_trule_types (tprog: tprog) (pos: LexingInfo.t) (new_trules: (trule
     ok ()
   else
     let msg = Printf.sprintf
-      "The rules used to replace one or more other rules can either be a set of obligations or a (possibly empty) set of obligations combined with exactly on non-obligation rule, but here multiple non-obligation rules are provided:\n%s"
+      "The rules used to replace one or more other rules can either be a set of obligations or a (possibly empty) set of obligations combined with exactly one non-obligation rule, but here multiple non-obligation rules are provided:\n%s"
       (String.concat ~sep:"\n" non_obligations) in
     error (Errors.refinement_error msg pos)
 
