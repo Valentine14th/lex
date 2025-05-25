@@ -138,7 +138,6 @@ let eq_form t t' = String.equal (Tformula.to_string t) (Tformula.to_string t')
 let collect_potential_constitutive_replacements (pred: Tformula.t) (trules: trule list) : Tlex.Pattern.t list =
   List.filter_map ~f:(function
       | TConstitutive (_, tpf, gs') when List.mem gs' pred ~equal:eq_form -> Some tpf
-      (* TODO[JD] do we actually want the entire predicate, including arguments to be equal or just the name? *)
       | _ -> None) trules
 
 let collect_potential_exceptions (rs: rt) (old_idx: int) (new_trules: (trule *int) list) : (Tlex.Pattern.t * Tlex.Ref.t list * Tformula.t) list =
