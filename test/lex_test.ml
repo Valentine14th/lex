@@ -36,4 +36,4 @@ let all_tests =
   util_tests @
   Label_test.label_tests
 
-let () = Alcotest.run "Lex Tests" all_tests
+let () = Alcotest.run "Lex_Tests" all_tests
