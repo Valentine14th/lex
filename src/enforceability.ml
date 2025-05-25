@@ -612,15 +612,6 @@ let type_exceptions itl_srp (pg_map: pg_map) (exceptions: Tformula.t list) enfty
 let type_scopes itl_srp (pg_map: pg_map) scopes enftype : verdict =
   type_tformulas pg_map itl_srp scopes enftype
 
-(* TODO: may be used for a later version of rule-constraints *)
-(* let combine_with_internal_events internal_events pols =
-  Map.merge internal_events pols ~f:(fun ~key:_ -> function
-    | `Right enftype -> Some enftype
-    | `Left Itl -> Some Itl
-    | `Left _ -> None
-    | `Both (_, enftype) -> Some enftype
-  ) *)
-
 let parse_rule_constraints pos n rcs =
   let open Err.WithErrors in
   let* pol_constrs = pols_from_rule_constraints pos rcs in
@@ -638,7 +629,7 @@ let parse_rule_constraints pos n rcs =
     update_suppress_indices_with_suppress_conditions pos suppress_indices suppress_conditions in
   let cause_effects, suppress_conditions =
     combine_cause_effects_and_suppress_conditions pos cause_effects suppress_conditions in
-  ok (suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions)
+  ok (pol_constrs, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions)
 
 let update_pols_with_transparency_conditions pols pols_tr =
   Map.merge pols pols_tr ~f:(fun ~key:_ -> function
@@ -774,8 +765,10 @@ let get_predicate_params_exn f = match f.form with
   | Predicate (_, ts) -> ts
   | _ -> assert false
 
-let type_tdisjunct itl_srp pg_map t rule (d: tdisjunct) : verdict Err.WithErrors.t =
+let type_tdisjunct itl_srp (pg_map: pg_map) (t: Enftype.t) (rule: tcrule) (d: tdisjunct) : verdict Err.WithErrors.t =
   let open Err.WithErrors in
+  debug (Printf.sprintf "type_tdisjunct: %s" (Tlex.Pattern.to_string d.pf));
+  debug (Printf.sprintf "Enftype: %s" (Enftype.to_string t));
   let v_ex = type_exceptions itl_srp pg_map d.exceptions Enftype.causable in
   let v_sc = type_scopes itl_srp pg_map d.scopes Enftype.suppressable in
   let v_pf = type_pattern itl_srp d.rule_pos pg_map t d.pf in
@@ -785,9 +778,9 @@ let type_tdisjunct itl_srp pg_map t rule (d: tdisjunct) : verdict Err.WithErrors
   in
   (*debug (Printf.sprintf "type_tdisjunct (event: %s)" e);*)
   let param_names = List.map params ~f:get_trm_name in
-  begin match Enftype.is_causable t, Enftype.is_suppressable t with
+  let* v = match Enftype.is_causable t, Enftype.is_suppressable t with
     | true, _ -> (* all parts of the definition must be Cau *)
-       let verdict_references = conj v_ex v_sc in
+      let verdict_references = conj v_ex v_sc in
       ok (conj v_pf verdict_references)
     | _, true -> (* only one part of the definition must be Sup *)
       (* let fv_params, fv_unbound = Map.partitioni_tf (fv_of_tcrule rule) ~f:(fun ~key:x ~data:_ -> List.mem param_names x ~equal:String.equal) in *)
@@ -797,7 +790,9 @@ let type_tdisjunct itl_srp pg_map t rule (d: tdisjunct) : verdict Err.WithErrors
       let verdict_references = disj v_ex v_sc in
       ok (disj v_pf verdict_references)
     | _ -> ok (Possible CTT)
-  end
+  in 
+  debug (Printf.sprintf "type_tdisjunct verdict: %s" (verdict_to_string v));
+  ok v
 
 let srp_if_transparent_else_true transparent is_srp =
   if transparent then is_srp else true
@@ -811,8 +806,9 @@ let pg_map_of_pattern_exceptions_scope_fv tpf ex sc fv pg_map =
   let f ts x = Map.update ts x ~f:(fun _ -> solve_past_guarded_of_pattern_exceptions_scopes tpf ex sc x pg_map)
   in Set.fold fv ~init:pg_map ~f
 
-let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : verdict Err.OrErrors.t =
+let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) (rule: tcrule) : verdict Err.OrErrors.t =
   let open Err.OrErrors in
+  debug (Printf.sprintf "type_tcrule current verdict: %s" (verdict_to_string verdict));
   let itl_itvs, itl_strict, itl_observable = match itl_srp with
     | Some (i, s, o) -> i, s, o
     | _ -> Map.empty (module String), Map.empty (module String), Map.empty (module String) in
@@ -850,7 +846,7 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
        debug (Printf.sprintf "srp_conditions: %b" srp_conditions);
        debug (Printf.sprintf "srp_effects: %b" srp_effects);
        let* _ = of_witherror (vars_are_past_guarded_tcrule_exn ~pg_map (fv_of_tcrule rule) rule) in
-       let* suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
+       let* pol_constrs, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
          of_witherror (parse_rule_constraints pos (List.length pf1.fs) rcs)
        in
        let pg_map = pg_map_of_pattern_exceptions_scope_fv pf1 exceptions scopes (fv_of_tcrule rule) pg_map in
@@ -863,7 +859,7 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
                              ["scopes"; "conditions"; "effects"]
                              [srp_scopes; srp_conditions; srp_effects] in
              Impossible (ERule ("make " ^ not_srp ^ " observable to allow for exceptions to be transparently caused"))
-         else Impossible (ERule ("cause an exception to the rule"))
+         else Impossible (ERule ("cause an exception to enforce the rule"))
        in
        let verdict_scopes =
          if suppress_scopes then
@@ -914,7 +910,10 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
        in
        let verdict_rule_implication = disj verdict_conditions verdict_effects |> conj verdict in
        begin match verdict_rule_implication with
-       | Possible _ -> ok verdict_rule_implication
+       | Possible _ -> begin match pol_constrs with
+          | Some _ -> ok verdict_rule_implication (* TODO[JD] respect 'supressing <predeicate>' style constraints *)
+          | None -> ok verdict_rule_implication
+          end
        | Impossible e ->
           let err_msg =
             if transparent then
@@ -966,8 +965,8 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
        ok (Constraints.disjs verdicts)
     | TCDefinitionDis (disjuncts, g) ->
        let e = get_predicate_name_exn g in
-       debug (Printf.sprintf "typing TCDefinitionDis: %s" e);
-       let aux v_pols =
+       debug (Printf.sprintf "type_tcrule (TCDefinitionDis): typing TCDefinitionDis: %s" e);
+       let f v_pols =
          let enftype, itl_srp =
            begin match Map.find v_pols e with
            | Some constr ->
@@ -984,7 +983,8 @@ let type_tcrule (s: tprog) itl_srp (pg_map: pg_map) (verdict: verdict) rule : ve
          >| Constraints.disjs
          >| conj verdict
        in
-       let* verdicts = all (List.map solution ~f:aux) in
+       let* verdicts = all (List.map solution ~f) in
+       debug (Printf.sprintf "type_tcrule (TCDefinitionDis %s): verdicts: %s" e (Util.string_of_string_list (List.map ~f:verdict_to_string verdicts)));
        ok (Constraints.disjs verdicts)
 
 
@@ -1078,7 +1078,7 @@ let pg_map_of_tcrules tcrules: pg_map =
   List.fold tcrules ~init:(Map.empty (module StringVar)) ~f:pg_map_of_tcrule
 
 let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) (rule_order: int list) :
-      ((string, Enftype.Constraint.t, 'string_comp) Map.t * 'itl_srp * pg_map) Err.OrErrors.t =
+      ((string, Enftype.Constraint.t, 'string_comp) Map.t list * 'itl_srp * pg_map) Err.OrErrors.t =
   let open Err.OrErrors in
   debug (Printf.sprintf "Sorted rule indices: %s" (Util.string_of_int_list rule_order));
   let tcrules_sorted = List.map rule_order ~f:(fun idx -> Map.find_exn tcrules idx) in
@@ -1087,7 +1087,7 @@ let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) (rule_ord
   let itl_observable = List.fold (List.rev tcrules_sorted) ~f:observable_itl ~init:(Map.empty (module String)) in
   let pg_map = pg_map_of_tcrules (List.rev tcrules_sorted) in
   let f = type_tcrule tprog (Some (itl_itvs, itl_strict, itl_observable)) pg_map in
-  let* verdict = fold_best_effort tcrules_sorted ~f ~init:(Possible CTT) in
+  let* verdict = fold_best_effort (List.rev tcrules_sorted) ~f ~init:(Possible CTT) in
   let* constraints = match verdict with
     | Possible c -> ok c
     | Impossible e ->
@@ -1095,11 +1095,12 @@ let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) (rule_ord
       error (Err.enforceability_error err_msg LexingInfo.dummy)
   in
   let possible_policies = Constraints.solve constraints in
-  let found_pol_constraints = match possible_policies with
+  debug (Printf.sprintf "type_tcrules verdict: %s" (verdict_to_string verdict));
+  (* let found_pol_constraints = match possible_policies with
     | c::_ -> c
     | [] -> Map.empty (module String)
-  in
-  ok (found_pol_constraints, (itl_itvs, itl_strict, itl_observable), pg_map)
+  in *)
+  ok (possible_policies, (itl_itvs, itl_strict, itl_observable), pg_map)
 
 (* Conversion to erules *)
 
@@ -1387,7 +1388,8 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
              non-transparent case (assuming that the enforcement
              checking until this point is correct) *)
           (* do not overwrite the pol value passed to this conversion function, by re-initializing the policies *)
-          let* suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
+          (* let* pol_constrs, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions = *)
+          let* _, suppress_indices, suppress_conditions, cause_effects, suppress_scopes, cause_exceptions =
             of_witherror (parse_rule_constraints pos (List.length pf1.fs) rcs)
           in
           debug (Printf.sprintf "suppress_conditions: %b" suppress_conditions);
@@ -1564,13 +1566,18 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
              ok (ECDefinitionDis (edisjuncts, eg, t, Some (ESdd constrs)))
           | true, _ ->
              let type_tdisjunct (k, v) = Err.WithErrors.(type_tdisjunct itl_srp pg_map t rule v >| (fun v -> (k, v))) in
-             let aux (_, verdict) = match verdict with
+             let* typed_tdisjuncts = of_witherror (Err.WithErrors.all (List.map (Map.to_alist tdisjuncts) ~f:type_tdisjunct)) in
+             debug (Printf.sprintf "typed_tdisjuncts: %s" (String.concat ~sep:", " (List.map typed_tdisjuncts ~f:(fun (k, v) -> Printf.sprintf "%d: %s" k (verdict_to_string v)))));
+             let f (_, verdict) = match verdict with
                | Possible _ -> true
                | _ -> false
              in
-             let* typed_tdisjuncts = of_witherror (Err.WithErrors.all (List.map (Map.to_alist tdisjuncts) ~f:type_tdisjunct)) in
-             let all_possible = List.filter ~f:aux typed_tdisjuncts in
-             let first_possible = fst (List.hd_exn all_possible) in
+             let all_possible = List.filter ~f typed_tdisjuncts in
+             let* first_possible =
+              let* head = match List.hd all_possible with
+                | Some v -> ok v
+                | None -> error (Err.enforceability_error "no disjuncts can be made enforceable" LexingInfo.dummy)
+              in ok (fst head) in
              let aux2 ~key ~data:td =
                if key = first_possible then
                  let ed, c_opt = convert_enforceable_tdisjunct itl_srp pg_map t td in
@@ -1595,10 +1602,14 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
        end
   in ecrule
 
-let ecrules_from_tcrules (pg_map: pg_map) itl_srp pols rules =
+let ecrules_from_tcrules (pg_map: pg_map) itl_srp pols rules :
+    (int, ecrule, Base.Int.comparator_witness) Base.Map.t Err.OrErrors.t =
   let open Err.OrErrors in
+  debug (Printf.sprintf "ecrules_from_tcrules: pols: %s" (Util.string_of_pols ~f:Enftype.to_string pols));
   let rules_list = Map.to_alist rules in
-  let* rules_list = all (List.map ~f:(fun (k, v) -> ecrule_from_tcrule pg_map itl_srp pols v >| (fun v -> (k, v))) rules_list) in
+  let* rules_list = all (List.map ~f:(fun (k, v) ->
+                        ecrule_from_tcrule pg_map itl_srp pols v
+                        >| (fun v -> (k, v))) rules_list) in
   ok (Map.of_alist_exn (module Int) rules_list)
 
 (* Visitors for statements *)
@@ -1760,18 +1771,30 @@ let do_type ?(mon_constrs: ('str_map * 'str_map) option) (tprog: Tlex.tprog) (b:
   b_ref := b;
   (* Order tcrules topologically *)
   let* rule_order = topological_rule_order tprog tcrules in
-  (* TODO[jd]: compute monotonicity constraints if required *)
   let* _ = check_mon_constrs rule_order tcrules mon_constrs in
   (* Compute verdict, solve constraints *)
-  let* constraints, itl_srp, pg_map = type_tcrules tprog tcrules rule_order in
-  Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.Constraint.to_string data)) constraints;
-  let pols = Map.map ~f:Enftype.Constraint.solve constraints in
-  Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.to_string data)) pols;
+  let* constraints_list, itl_srp, pg_map = type_tcrules tprog tcrules rule_order in
+  (* Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.Constraint.to_string data)) constraints; *)
+  let possible_pols = List.map ~f:(Map.map ~f:Enftype.Constraint.solve) constraints_list in
+
+
+  (* Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.to_string data)) pols;
   debug (Printf.sprintf "rule_order: %s\n" (Util.string_of_int_list rule_order));
-  debug (Util.string_of_pols ~f:Enftype.to_string pols);
+  debug (Util.string_of_pols ~f:Enftype.to_string pols); *)
+
   (* Convert tcrules to erules and ecrules *)
   let erules = erules_from_tcrules tcrules in
-  let* ecrules = ecrules_from_tcrules pg_map itl_srp pols tcrules in
+
+  let f pols =
+    match ecrules_from_tcrules pg_map itl_srp pols tcrules with
+      | Ok ecrules -> Some (ecrules, pols)
+      | Errors _ -> None
+  in
+  let possible_ecrules = List.filter_map possible_pols ~f in
+  let* ecrules, pols = match possible_ecrules with
+  | [] -> error (Err.enforceability_error "No policies found that allow to type the program" LexingInfo.dummy)
+  | (ecrules, pols)::_ -> ok (ecrules, pols)
+  in
   ok {
     estmts            = List.map tprog.tstmts ~f:(type_tstmt erules);
     ealiases          = tprog.taliases;
