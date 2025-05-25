@@ -91,3 +91,4 @@ replace
         rule "new_lawfulness" # constitutive
         rule "collection_before_processing" # obligation
         rule "consent_before_collection" # obligation
+    # assume fulfilled
