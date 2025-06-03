@@ -16,6 +16,7 @@ type individual
 type property
 
 # test
+# TODO[JD] Parser error at example/tax code/tax.lex:20:87: invalid character
 internal functional event amount_excluded_from_gross_income_by_property (p : property, i: individual) -> money USD
   """ the amount excluded from gross income of individual {i} due to sale or exchange of property {p} """
 

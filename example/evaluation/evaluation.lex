@@ -55,3 +55,4 @@ rule
   oblige
     AbleToDemonstrateConsent(c, co)
   transparently enforceable suppressing Processes
+  # TODO[JD] the compiler says that c, co, and ds are not past-guarded

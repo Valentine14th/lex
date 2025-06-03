@@ -22,3 +22,4 @@ suppressable event PersonalDataProcessing
 # docstring should be optional
 
 causable event EventWithoutDocstringOrParameters
+# TODO[JD] this event definition throws a pareser error, because of missing parameters

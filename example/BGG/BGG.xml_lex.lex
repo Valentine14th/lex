@@ -206,6 +206,7 @@ note " Es richtet seine Dienste ein und stellt das nötige Personal an."
 paragraph "3"
 note " Es führt eine eigene Rechnung."
 article "a"
+# TODO[JD] there are multiple article "a" -> fix xml parsing (I believe the article ids in the xml have the form art_25_a and my guess is that only the part after the final underscore gets used for the lex id)
 paragraph "1"
 note " Für die Bereitstellung, die Bewirtschaftung und den Unterhalt der vom Bundesgericht benutzten Gebäude ist das Eidgenössische Finanzdepartement zuständig. Dieses hat die Bedürfnisse des Bundesgerichts angemessen zu berücksichtigen."
 paragraph "2"

@@ -12,43 +12,43 @@ internal event Consent
     u: user_id
     p: purpose
 
-rule 1
+rule "1"
     whenever
         phoneConsent(u, p)
     constitute
         Consent(u, p)
 
-rule 2
+rule "2"
     whenever
         emailConsent(u, p)
     constitute
         Consent(u, p)
 
-rule 3
+rule "3"
     whenever
         phoneConsent(u,p) OR emailConsent(u, p)
     constitute
         Consent(u, p)
 
-rule 4
+rule "4"
     whenever
         Consent(u, p)
     refine
         GiveConsent(u, "myfirm", p)
 
-rule 5
+rule "5"
     whenever
         phoneConsent(u, p)
     refine
         GiveConsent(u, "myfirm", p)
 
-rule 6
+rule "6"
     whenever
         emailConsent(u, p)
     refine
         GiveConsent(u, "myfirm", p)
 
-rule 7
+rule "7"
     whenever
         phoneConsent(u,p) OR emailConsent(u, p)
     refine
