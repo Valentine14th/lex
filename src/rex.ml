@@ -17,7 +17,15 @@ type rtmt =
   | RReplace  of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
   | RAssume   of LexingInfo.t * ident * bool * string option
 
-type refi = { rtmts: rtmt list; lex_file: string list }
+type rfnmt_ext =
+  | RefineLex
+  | RefineRex
+
+let string_of_rfnmt_ext = function
+  | RefineLex -> "lex"
+  | RefineRex -> "rex"
+
+type refi = { rtmts: rtmt list; lex_file: string list; base_file_type: rfnmt_ext option }
 
 (* Printing functions *)
 
@@ -88,8 +96,13 @@ let string_of_rtmt ?(i=0) =
       Printf.sprintf "%shide %b %s%s" (Util.tabs i) b name description
 
 let string_of_refi refi =
-  "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
-  ^ String.concat ~sep:"\n" (List.map refi.rtmts ~f:string_of_rtmt)
+  match refi.base_file_type with
+  | Some rfnmt_ext ->
+    "refine " ^ string_of_rfnmt_ext rfnmt_ext ^ " " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
+    ^ String.concat ~sep:"\n" (List.map refi.rtmts ~f:string_of_rtmt)
+  | None ->
+    "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
+    ^ String.concat ~sep:"\n" (List.map refi.rtmts ~f:string_of_rtmt)
       
 let print_refi refi =
   Stdio.printf "%s\n" (string_of_refi refi)

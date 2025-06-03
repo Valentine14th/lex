@@ -196,4 +196,5 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
     eprog;
     ertmts = List.map trefi.trtmts ~f:(type_estmt erules);
     lex_file = trefi.lex_file;
+    base_file_type = trefi.base_file_type;
   }

@@ -547,7 +547,7 @@ let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t 
   (*Map.iter_keys ~f:print_endline s.tprog.tevents;*)
   let label = Label.set_rule_id_force None s.label in
   let s = { s with tprog = { s.tprog with tstmts = s.tprog.tstmts @ [Tlex.TSSection (Article 0, label, "refinement", None)] } } in
-  let init = { s; trefi = { trempty with lex_file = refi.lex_file } } in
+  let init = { s; trefi = { trempty with lex_file = refi.lex_file; base_file_type = refi.base_file_type } } in
   (* First pass: type statements *)
   let* rs: rt = fold refi.rtmts ~init ~f:type_rtmt in
   (* TODO[FH]: Implement typing of additional exceptions or generate errors *)

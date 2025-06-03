@@ -14,7 +14,7 @@ let pos_of_srrule = function
 
 type srtmt =
   | SRStmt     of sstmt
-  | SRRefine   of LexingInfo.t * string list
+  | SRRefine   of LexingInfo.t * rfnmt_ext option * string list
   | SRRule     of LexingInfo.t * string option * (ident * TypeTerm.t) list * srrule * string option
   | SRType     of LexingInfo.t * ident * (TypeTerm.t option) * string option
   | SRReplace  of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
@@ -44,7 +44,7 @@ let to_rtmt : srtmt -> rtmt = function
 
 let to_refi (srefi: srefi) : refi =
   match srefi.rtmts with
-  | SRRefine (_, lex_file) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; lex_file }
+  | SRRefine (_, base_file_type, lex_file) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; lex_file; base_file_type }
   | _ -> assert false
 
 (* Printing functions *)
@@ -70,8 +70,10 @@ let string_of_rtmt ?(i=0) =
   let string_of_ref r = Util.tabs (i+1) ^ Ref.to_string r in
   function
   | SRStmt sstmt -> string_of_stmt ~i sstmt
-  | SRRefine (_, idents) ->
+  | SRRefine (_, None, idents) ->
      Printf.sprintf "%srefine %s" (Util.tabs i) (String.concat ~sep:"." idents)
+  | SRRefine (_, Some ext, idents) ->
+     Printf.sprintf "%srefine %s %s" (string_of_rfnmt_ext ext) (Util.tabs i) (String.concat ~sep:"." idents)
   | SRRule (_, label, type_fixes, rrule, doc_string) ->
      let description =
        match doc_string with

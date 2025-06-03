@@ -18,9 +18,10 @@ type ertmt =
 
 type erefi =
   {
-    eprog:    eprog;
-    ertmts:   ertmt list;
-    lex_file: string list;
+    eprog:          eprog;
+    ertmts:         ertmt list;
+    lex_file:       string list;
+    base_file_type: rfnmt_ext option;
   }
 
 let erempty =
@@ -28,6 +29,7 @@ let erempty =
     eprog    = eempty;
     ertmts   = [];
     lex_file = [];
+    base_file_type = None;
   }
 
 (* Deconstructors for rules *)
@@ -95,8 +97,13 @@ let string_of_ertmt eprog ?(i=0) =
       Printf.sprintf "%shide %b %s%s" (Util.tabs i) b name description
 
 let string_of_erefi erefi =
-  "refine " ^ String.concat ~sep:"." erefi.lex_file ^ "\n" 
-  ^ String.concat ~sep:"\n" (List.map erefi.ertmts ~f:(string_of_ertmt erefi.eprog))
+  match erefi.base_file_type with
+  | Some rfnmt_ext ->
+    "refine " ^ string_of_rfnmt_ext rfnmt_ext ^ " " ^ String.concat ~sep:"." erefi.lex_file ^ "\n" 
+    ^ String.concat ~sep:"\n" (List.map erefi.ertmts ~f:(string_of_ertmt erefi.eprog))
+  | None ->
+    "refine " ^ String.concat ~sep:"." erefi.lex_file ^ "\n" 
+    ^ String.concat ~sep:"\n" (List.map erefi.ertmts ~f:(string_of_ertmt erefi.eprog))
       
 let print_erefi refi =
   Stdio.printf "%s\n" (string_of_erefi refi)

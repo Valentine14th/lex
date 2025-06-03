@@ -1,5 +1,6 @@
 open Core
 open Lexing
+open Rex
 
 let debug_modules = ref true
 let debug msg = if !debug_modules then Errors.debug_print ~f_name:(Some "modules.ml") msg
@@ -9,33 +10,35 @@ type t =
   | MLegalXml of LegalXml.t
 
 type import =
-  | SILex        of LexingInfo.t * string list
+  | SILex        of LexingInfo.t * string list * rfnmt_ext option
   | SIFormex     of LexingInfo.t * string list
   | SIAkomaNtoso of LexingInfo.t * string list
 
 let string_of_import : import -> string = function
-  | SILex (_, idents) -> String.concat ~sep:"." idents
+  | SILex (_, idents, _) -> String.concat ~sep:"." idents
   | SIFormex (_, idents) -> String.concat ~sep:"." idents
   | SIAkomaNtoso (_, idents) -> String.concat ~sep:"." idents
 
 let pos_of_import : import -> LexingInfo.t = function
-  | SILex (pos, _) -> pos
+  | SILex (pos, _, _) -> pos
   | SIFormex (pos, _) -> pos
   | SIAkomaNtoso (pos, _) -> pos
 
 let idents_of_import : import -> string list = function
-  | SILex (_, idents) -> idents
+  | SILex (_, idents, _) -> idents
   | SIFormex (_, idents) -> idents
   | SIAkomaNtoso (_, idents) -> idents
 
 let extension_of_import : import -> string = function
+  | SILex (_, _, Some RefineRex) -> ".rex"
+  | SILex (_, _, Some RefineLex) -> ".lex"
   | SILex _ -> ".lex"
   | SIFormex _ -> ".xml"
   | SIAkomaNtoso _ -> ".xml"
 
 let list_imports (prog: Lex.prog) : import list =
   let f = function
-    | Lex.SImport (pos, ILex, idents)    -> Some (SILex (pos, idents))
+    | Lex.SImport (pos, ILex, idents)    -> Some (SILex (pos, idents, None))
     | Lex.SImport (pos, IFormex, idents) -> Some (SIFormex (pos, idents))
     | Lex.SImport (pos, IAkomaNtoso, idents) -> Some (SIAkomaNtoso (pos, idents))
     | _ -> None
@@ -43,13 +46,13 @@ let list_imports (prog: Lex.prog) : import list =
 
 let list_lex_includes sprog : import list =
   let f = function
-    | Slex.SSInclude (pos, idents) -> Some (SILex (pos, idents))
+    | Slex.SSInclude (pos, idents) -> Some (SILex (pos, idents, None))
     | _ -> None
   in List.filter_map ~f Slex.(sprog.stmts)
 
-let list_rex_includes srefi : import list =
+let list_rex_includes (srefi: Srex.srefi) : import list =
   let f = function
-    | Srex.SRStmt (Slex.SSInclude (pos, idents)) -> Some (SILex (pos, idents))
+    | Srex.SRStmt (Slex.SSInclude (pos, idents)) -> Some (SILex (pos, idents, None))
     | _ -> None
   in List.filter_map ~f Srex.(srefi.rtmts)
 
@@ -96,7 +99,7 @@ let parse_lex_module filename : Slex.sprog Errors.OrErrors.t =
   prog
 
 let parse_rex_module filename : Srex.srefi Errors.OrErrors.t =
-   let inx = try In_channel.create filename with
+  let inx = try In_channel.create filename with
     | Sys_error msg -> eprintf "Cannot open file %s: %s\n" filename msg; exit (-1)
   in
   let lexbuf = Lexing.from_channel inx in
@@ -195,56 +198,33 @@ let rec load_modules imports lexpath b seq' prefixes : (string * t) list Errors.
 and do_type_lex lexpath b fullname seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   let open Errors.OrErrors in
   Errors.print_mem_stat ();
-  debug "do_type_lex 1";
   let* sprog    = load_lex_with_includes fullname seq' prefixes in
-  debug "do_type_lex 2";
   let  prog     = Slex.to_prog sprog in
-  debug "do_type_lex 3";
   let  imports  = list_imports prog in
-  debug "do_type_lex 4";
   let* modules  = load_modules imports lexpath b seq' prefixes in
-  debug "do_type_lex 5";
   let  modules  = Map.of_alist_exn (module String) modules in
-  debug "do_type_lex 6";
   let  init     = init_tprog_from_modules modules in
-  debug "do_type_lex 7";
   let* s, tprog = of_witherror (Typing.do_type init prog) in
-  debug "do_type_lex 9";
   let  tprog    = link_formex modules tprog in
-  debug "do_type_lex 10";
   let* eprog    = Enforceability.do_type tprog b in
-  debug "do_type_lex 11";
   ok (s, eprog)
 
 and do_type_rex lexpath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  debug "do_type_rex 1";
   let* srefi         = load_rex_with_includes fullname seq' prefixes in
-  debug "do_type_rex 2";
   let  refi          = Srex.to_refi srefi in
-  debug "do_type_rex 3";
-  let  prog_import   = SILex (LexingInfo.dummy, refi.lex_file) in
-  debug "do_type_rex 4";
+  let  prog_import   = SILex (LexingInfo.dummy, refi.lex_file, refi.base_file_type) in
   let  prog_suffix   = suffix_of_import prog_import in
-  debug "do_type_rex 5";
   let* filepath, prog_filename = find_filename seq' prog_import prefixes prog_suffix in
-  debug "do_type_rex 6";
   let* s, _          = do_type lexpath ~seq b filepath prog_filename in
-  debug "do_type_rex 7";
   let* s, trefi      = of_witherror (Rtyping.do_type s refi) in
-  debug "do_type_rex 8";
   let* erefi         = Refinement.do_type trefi b in
-  debug "do_type_rex 9";
   ok (s, erefi.eprog)
 
 and do_type lexpath ?seq:(seq=[]) b filepath filename : (Typing.t * Elex.eprog) Errors.OrErrors.t =
-  debug "do_type 1";
   let fullname = Filename.concat filepath filename in
-  debug "do_type 2";
   let seq'     = seq @ [fullname] in
-  debug "do_type 3";
   let prefixes = filepath :: lexpath in
-  debug "do_type 4";
   if String.is_suffix filename ~suffix:".rex" then
     do_type_rex lexpath b fullname seq seq' prefixes
   else 

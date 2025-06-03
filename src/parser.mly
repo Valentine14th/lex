@@ -55,7 +55,7 @@
 %token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR
 %token <LexingInfo.t> SUM AVG MED CNT MIN MAX
 %token <LexingInfo.t> FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE
-%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY ASSUME FULFILLED
+%token <LexingInfo.t> REFINE LEX REX STRENGTHEN WEAKEN BY ASSUME FULFILLED
 
 /* Tokens: intervals */
 
@@ -663,8 +663,12 @@ refi:
 rtmt:
   | stmt
     { SRStmt $1 }
+  | REFINE LEX import_name
+    { SRRefine ($1 +> $2 +> (fst $3), Some RefineLex, snd $3) }
+  | REFINE REX import_name
+    { SRRefine ($1 +> $2 +> (fst $3), Some RefineRex, snd $3) }
   | REFINE import_name
-    { SRRefine ($1 +> (fst $2), snd $2) }
+    { SRRefine ($1 +> (fst $2), None, snd $2) }
   | rrule_decl
     { $1 }
   | type_refi_decl
