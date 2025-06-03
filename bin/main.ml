@@ -3,6 +3,9 @@ open Lex_lib
 
 module Time = MFOTL_lib.Time
 
+let debug_main = ref true
+let debug msg = if !debug_main then Errors.debug_print ~f_name:(Some "main.ml") msg
+
 let modes = "mfotl (default), doc, template"
 let input_formats = "formex (default), akomaNtoso"
 
@@ -53,6 +56,8 @@ let loop filename mode f o b to_ () =
     exit (-1)
 
 let () =
+  Printf.printf "HELP";
+  debug "entered main";
   Command.basic_spec ~summary:"Parse Lex"
     Command.Spec.(empty
                   +> anon ("filename" %: string)

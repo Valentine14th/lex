@@ -1,7 +1,7 @@
 open Core
 open Lexing
 
-let debug_modules = ref false
+let debug_modules = ref true
 let debug msg = if !debug_modules then Errors.debug_print ~f_name:(Some "modules.ml") msg
 
 type t =
@@ -110,9 +110,9 @@ let link_formex_stmt modules : Tlex.tstmt -> Tlex.tstmt = function
   | TSSection (section_kind, full_label, label, None) ->
     let law = Label.qualified_name_of_law full_label.law in
     let title = begin
-        debug (String.concat ~sep:" " (
+        (* debug (String.concat ~sep:" " (
                           List.map (Label.full_filters full_label)
-                            ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident)));
+                            ~f:(fun (kind, ident) -> Lex.string_of_section_kind kind ^ " " ^ ident))); *)
         match Map.find modules law with
         | Some (MLegalXml xml) ->
           Option.map (LegalXml.find_title xml (List.tl_exn (Label.full_filters full_label)))
@@ -194,33 +194,57 @@ let rec load_modules imports lexpath b seq' prefixes : (string * t) list Errors.
   
 and do_type_lex lexpath b fullname seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   let open Errors.OrErrors in
+  Errors.print_mem_stat ();
+  debug "do_type_lex 1";
   let* sprog    = load_lex_with_includes fullname seq' prefixes in
+  debug "do_type_lex 2";
   let  prog     = Slex.to_prog sprog in
+  debug "do_type_lex 3";
   let  imports  = list_imports prog in
+  debug "do_type_lex 4";
   let* modules  = load_modules imports lexpath b seq' prefixes in
+  debug "do_type_lex 5";
   let  modules  = Map.of_alist_exn (module String) modules in
+  debug "do_type_lex 6";
   let  init     = init_tprog_from_modules modules in
+  debug "do_type_lex 7";
   let* s, tprog = of_witherror (Typing.do_type init prog) in
+  debug "do_type_lex 9";
   let  tprog    = link_formex modules tprog in
+  debug "do_type_lex 10";
   let* eprog    = Enforceability.do_type tprog b in
+  debug "do_type_lex 11";
   ok (s, eprog)
 
 and do_type_rex lexpath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   let open Errors.OrErrors in
+  debug "do_type_rex 1";
   let* srefi         = load_rex_with_includes fullname seq' prefixes in
+  debug "do_type_rex 2";
   let  refi          = Srex.to_refi srefi in
+  debug "do_type_rex 3";
   let  prog_import   = SILex (LexingInfo.dummy, refi.lex_file) in
+  debug "do_type_rex 4";
   let  prog_suffix   = suffix_of_import prog_import in
+  debug "do_type_rex 5";
   let* filepath, prog_filename = find_filename seq' prog_import prefixes prog_suffix in
+  debug "do_type_rex 6";
   let* s, _          = do_type lexpath ~seq b filepath prog_filename in
+  debug "do_type_rex 7";
   let* s, trefi      = of_witherror (Rtyping.do_type s refi) in
+  debug "do_type_rex 8";
   let* erefi         = Refinement.do_type trefi b in
+  debug "do_type_rex 9";
   ok (s, erefi.eprog)
 
 and do_type lexpath ?seq:(seq=[]) b filepath filename : (Typing.t * Elex.eprog) Errors.OrErrors.t =
+  debug "do_type 1";
   let fullname = Filename.concat filepath filename in
+  debug "do_type 2";
   let seq'     = seq @ [fullname] in
+  debug "do_type 3";
   let prefixes = filepath :: lexpath in
+  debug "do_type 4";
   if String.is_suffix filename ~suffix:".rex" then
     do_type_rex lexpath b fullname seq seq' prefixes
   else 

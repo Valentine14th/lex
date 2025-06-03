@@ -7,6 +7,44 @@ let debug_print ?(f_name=None) msg =
     | Some f_name -> Printf.printf "[DEBUG] %s: %s\n" f_name msg
     | None -> Printf.printf "[DEBUG]: %s\n" msg
 
+let mem_stat = Gc.stat ()
+
+let bytes_to_readable_string bytes =
+  let kb = bytes /. 1024.0 in
+  let mb = kb /. 1024.0 in
+  let gb = mb /. 1024.0 in
+  if Float.(gb >= 1.0) then
+    Printf.sprintf "%.2f GB" gb
+  else if Float.(mb >= 1.0) then
+    Printf.sprintf "%.2f MB" mb
+  else if Float.(kb >= 1.0) then
+    Printf.sprintf "%.2f KB" kb
+  else
+    Printf.sprintf "%.0f bytes" bytes
+
+let print_mem_stat () =
+  if !debug then begin
+    let stat = Gc.stat () in
+    let word_size = float_of_int (Sys.word_size_in_bits / 8) in (* Convert word size to bytes *)
+    Printf.printf "\n#########################################################\n";
+    Printf.printf "Memory statistics:\n";
+    Printf.printf "  minor words: %s\n" 
+      (bytes_to_readable_string (stat.minor_words *. word_size));
+    Printf.printf "  promoted words: %s\n" 
+      (bytes_to_readable_string (stat.promoted_words *. word_size));
+    Printf.printf "  major words: %s\n" 
+      (bytes_to_readable_string (stat.major_words *. word_size));
+    Printf.printf "  minor collections: %d\n" stat.minor_collections;
+    Printf.printf "  major collections: %d\n" stat.major_collections;
+    Printf.printf "  heap size: %s\n" 
+      (bytes_to_readable_string (float_of_int stat.heap_words *. word_size));
+    Printf.printf "  live size: %s\n" 
+      (bytes_to_readable_string (float_of_int stat.live_words *. word_size));
+    Printf.printf "  free size: %s\n" 
+      (bytes_to_readable_string (float_of_int stat.free_words *. word_size));
+    Printf.printf "#########################################################\n\n";
+  end
+
 type error_type =
   | LexerError
   | ParserError

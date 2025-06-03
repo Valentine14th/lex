@@ -5,7 +5,7 @@ open Tlex
 open Trex
 open Typing
 
-let debug_rtyping = ref true
+let debug_rtyping = ref false
 let debug msg = if !debug_rtyping then Errors.debug_print ~f_name:(Some "rtyping.ml") msg
 
 (* Typing state *)
@@ -444,7 +444,7 @@ let check_new_trule_types (tprog: tprog) (pos: LexingInfo.t) (new_trules: (trule
       | TObligation _, _ -> None
       | _, idx -> Some (Label.RuleTree.string_of_rule_idx tprog.rule_tree idx) in
     List.filter_map ~f new_trules in
-  if List.is_empty non_obligations then
+  if List.length non_obligations <= 1 then
     ok ()
   else
     let msg = Printf.sprintf
@@ -466,7 +466,7 @@ let add_trreplacements (kind: replace_kind) (old_refs: Tlex.Ref.t list) (new_ref
     ok (List.filter_map ~f rs.s.tprog.tstmts) in
   let* old_trules = trules_and_ids_from_refs old_refs in
   let* new_trules = trules_and_ids_from_refs new_refs in
-  let* _ = check_new_trule_types rs.trefi.tprog pos new_trules in
+  let* _ = check_new_trule_types rs.s.tprog pos new_trules in
   let* _ = check_trreplacement_types pos (List.map ~f:fst old_trules) in
   let* (tr_mon, tr_anti_mon) =
     let f mono old_rule = check_trreplacement mono kind old_rule new_trules rs pos in

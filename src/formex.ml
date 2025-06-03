@@ -2,7 +2,7 @@ open Core
 
 open LegalXml
 
-let debug_formex = ref true
+let debug_formex = ref false
 let debug msg = if !debug_formex then Errors.debug_print ~f_name:(Some "formex.ml") msg
 
 let format_ident =
