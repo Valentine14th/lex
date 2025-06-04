@@ -17,7 +17,7 @@ open Elex
 module Interval = MFOTL_lib.Interval
 module Enftype = MFOTL_lib.Enftype
 
-let debug_enforceability = ref false
+let debug_enforceability = ref true
 let debug msg = if !debug_enforceability then Errors.debug_print ~f_name:(Some "enforceability.ml") msg
 
 (* Generators *)
@@ -1728,17 +1728,21 @@ let not_monotone_tcrule ?(init =four_empty_maps)  tcrule =
     let let_ctxt_anti_mon = Map.update let_ctxt_anti_mon predicate_name ~f:(fun _ -> anti_mon_disjuncts) in
     let_ctxt_mon, let_ctxt_anti_mon, init_mon, init_anti_mon
 
-(* let check_mon_constrs (order: int list) (tprog:tprog) tcrules (mon_constrs: ('str_set * 'str_set) option) : unit Err.OrErrors.t = *)
 let check_mon_constrs (order: int list) tcrules (mon_constrs: ('str_map * 'str_map) option) : unit Err.OrErrors.t =
   let open Err.OrErrors in
   match mon_constrs with
   | None -> ok ()
+  (* | Some (req_mon, req_anti_mon) when Map.is_empty req_mon && Map.is_empty req_anti_mon ->
+    ok () *) 
   | Some (req_mon, req_anti_mon) ->
+    (* if Option.is_some mon_constrs then (Err.print_mem_stat (); debug (Printf.sprintf "mono: %d, anti mono: %d" (Map.length req_mon) (Map.length req_anti_mon)); assert false); *)
+    (* TODO[JD] example/GDPR/ref-debug/gdpr_mgow.rex runs out of memory here *)
     let _, _, not_mon, not_anti_mon = 
       List.fold order
       ~init:four_empty_maps
       ~f:(fun init idx -> not_monotone_tcrule ~init (Map.find_exn tcrules idx))
     in
+    if Option.is_some mon_constrs then (Err.print_mem_stat (); debug (Printf.sprintf "mono: %d, anti mono: %d" (Map.length req_mon) (Map.length req_anti_mon)); assert false);
     let not_mon = Map.map not_mon ~f:(fun v -> pos_from_infos v) in
     let not_anti_mon = Map.map not_anti_mon ~f:(fun v -> pos_from_infos v) in
     let mon_err = Map.filter_keys not_mon ~f:(fun k -> Map.mem req_mon k) in
@@ -1782,6 +1786,7 @@ let do_type ?(mon_constrs: ('str_map * 'str_map) option) (tprog: Tlex.tprog) (b:
   (* Order tcrules topologically *)
   let* rule_order = topological_rule_order tprog tcrules in
   let* _ = check_mon_constrs rule_order tcrules mon_constrs in (* Only relevant for refinement *)
+  (* if Option.is_some mon_constrs then (Err.print_mem_stat (); assert false); *)
   (* Compute verdict, solve constraints *)
   let* constraints_list, itl_srp, pg_map = type_tcrules tprog tcrules rule_order in
   (* Map.iteri ~f:(fun ~key ~data -> debug (key ^ " -> " ^ Enftype.Constraint.to_string data)) constraints; *)
@@ -1805,8 +1810,6 @@ let do_type ?(mon_constrs: ('str_map * 'str_map) option) (tprog: Tlex.tprog) (b:
     | [] -> error (Err.enforceability_error "No policies found that allow to type the program" LexingInfo.dummy)
     | (ecrules, pols)::_ -> ok (ecrules, pols) in
   let estmts = List.map tprog.tstmts ~f:(type_tstmt erules) in
-  (* let _, _, _ = ecrules, pols, estmts in
-  assert false *)
   ok {
     estmts;
     ealiases          = tprog.taliases;

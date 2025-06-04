@@ -219,11 +219,8 @@ and do_type_rex lexpath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) E
   let  prog_suffix   = suffix_of_import prog_import in
   let* filepath, prog_filename = find_filename seq' prog_import prefixes prog_suffix in
   let* s, _          = do_type lexpath ~seq b filepath prog_filename in
-  (* let* _, trefi      = of_witherror (Rtyping.do_type s refi) in *)
   let* s, trefi      = of_witherror (Rtyping.do_type s refi) in
-  (* let* _             = Refinement.do_type trefi b in *)
   let* tprog, erefi = Refinement.do_type trefi b in
-  (* assert false *)
   ok ({s with tprog}, erefi.eprog)
 
 and do_type lexpath ?seq:(seq=[]) b filepath filename : (Typing.t * Elex.eprog) Errors.OrErrors.t =
