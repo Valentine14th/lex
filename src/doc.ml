@@ -236,7 +236,7 @@ let html_of_erule ecrules rule_id erule =
     let pf, refs, g = get_exceptionc_params ecrules erule in
     string_of_refc_rule (verb_of_erule erule) pf refs g
   | EScope _ ->
-    let pf, refs = get_exception_params ecrules erule in
+    let pf, refs = get_scope_params ecrules erule in
     string_of_ref_rule (verb_of_erule erule) pf refs
 
 let html_of_tannot = function
