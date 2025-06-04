@@ -4,6 +4,9 @@ module Patt = Pattern
 
 open Lex
 open Tlex
+
+let debug_elex = ref true
+let debug msg = if !debug_elex then Errors.debug_print ~f_name:(Some "elex.ml") msg
  
 (* Temporal patterns *)
 
@@ -196,7 +199,7 @@ let get_constitutive_params ecrules = function
 let get_exception_params ecrules = function
   | EException (_, c_idx) ->
     (match Map.find_exn ecrules c_idx with
-     | ECDefinitionRef (_, _, _, pf, _, _,  erefs, _, _, _) -> (pf, erefs)
+      | ECDefinitionRef (_, _, _, pf, _, _,  erefs, _, _, _) -> (pf, erefs)
       | _ -> assert false)
   | _ -> assert false
 
