@@ -17,7 +17,7 @@ open Elex
 module Interval = MFOTL_lib.Interval
 module Enftype = MFOTL_lib.Enftype
 
-let debug_enforceability = ref true
+let debug_enforceability = ref false
 let debug msg = if !debug_enforceability then Errors.debug_print ~f_name:(Some "enforceability.ml") msg
 
 (* Generators *)
@@ -1802,17 +1802,19 @@ let do_type ?(mon_constrs: ('str_map * 'str_map) option) (tprog: Tlex.tprog) (b:
   in
   let possible_ecrules = List.filter_map possible_pols ~f in
   let* ecrules, pols = match possible_ecrules with
-  | [] -> error (Err.enforceability_error "No policies found that allow to type the program" LexingInfo.dummy)
-  | (ecrules, pols)::_ -> ok (ecrules, pols)
-  in
+    | [] -> error (Err.enforceability_error "No policies found that allow to type the program" LexingInfo.dummy)
+    | (ecrules, pols)::_ -> ok (ecrules, pols) in
+  let estmts = List.map tprog.tstmts ~f:(type_tstmt erules) in
+  (* let _, _, _ = ecrules, pols, estmts in
+  assert false *)
   ok {
-    estmts            = List.map tprog.tstmts ~f:(type_tstmt erules);
+    estmts;
     ealiases          = tprog.taliases;
     eevents           = tprog.tevents;
     efunctions        = tprog.tfunctions;
     variables         = tprog.variables;
     rule_tree         = tprog.rule_tree;
-    ecrules           = ecrules;
+    ecrules;
     compilation_order = rule_order;
     pols
   }

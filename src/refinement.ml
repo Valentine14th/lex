@@ -184,7 +184,7 @@ let hide_and_replace (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
 
 (* Main typing function *)
 
-let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
+let do_type (trefi: Trex.trefi) (b: Interval.v) : (Tlex.tprog * Erex.erefi) Errors.OrErrors.t =
   let open Errors.OrErrors in
   (* TODO[FH]: check that the refinement is valid *)
   (* TODO[FH]: check that all events have been mapped *)
@@ -192,9 +192,10 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
   let* tprog = hide_and_replace trefi trefi.tprog in
   let* eprog = Enforceability.do_type ~mon_constrs:(trefi.tr_mon, trefi.tr_anti_mon) tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in
-  ok {
+  let erefi = {
     eprog;
     ertmts = List.map trefi.trtmts ~f:(type_estmt erules);
     lex_file = trefi.lex_file;
     base_file_type = trefi.base_file_type;
-  }
+  } in
+  ok (tprog, erefi)

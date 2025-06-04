@@ -196,6 +196,7 @@ let rec load_modules imports lexpath b seq' prefixes : (string * t) list Errors.
   all modules
   
 and do_type_lex lexpath b fullname seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
+  debug (Printf.sprintf "do_type_lex: %s" fullname);
   let open Errors.OrErrors in
   Errors.print_mem_stat ();
   let* sprog    = load_lex_with_includes fullname seq' prefixes in
@@ -210,6 +211,7 @@ and do_type_lex lexpath b fullname seq' prefixes : (Typing.t * Elex.eprog) Error
   ok (s, eprog)
 
 and do_type_rex lexpath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
+  debug (Printf.sprintf "do_type_rex: %s" fullname);
   let open Errors.OrErrors in
   let* srefi         = load_rex_with_includes fullname seq' prefixes in
   let  refi          = Srex.to_refi srefi in
@@ -217,9 +219,12 @@ and do_type_rex lexpath b fullname seq seq' prefixes : (Typing.t * Elex.eprog) E
   let  prog_suffix   = suffix_of_import prog_import in
   let* filepath, prog_filename = find_filename seq' prog_import prefixes prog_suffix in
   let* s, _          = do_type lexpath ~seq b filepath prog_filename in
+  (* let* _, trefi      = of_witherror (Rtyping.do_type s refi) in *)
   let* s, trefi      = of_witherror (Rtyping.do_type s refi) in
-  let* erefi         = Refinement.do_type trefi b in
-  ok (s, erefi.eprog)
+  (* let* _             = Refinement.do_type trefi b in *)
+  let* tprog, erefi = Refinement.do_type trefi b in
+  (* assert false *)
+  ok ({s with tprog}, erefi.eprog)
 
 and do_type lexpath ?seq:(seq=[]) b filepath filename : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   let fullname = Filename.concat filepath filename in
