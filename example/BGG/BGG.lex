@@ -24,7 +24,7 @@ predicate trifft
   g: gericht
   a: akt
 
-event beurteilt
+suppressable event beurteilt
   """ Gericht {g} beurteilt Beschwerde {b} """
   g: gericht
   b: beschwerde
@@ -90,7 +90,7 @@ rule "principle"
     beurteilt(g, b)
   oblige
     zulaessig(g, b)
-  transparently enforceable
+  transparently enforceable suppressing beurteilt
 
 paragraph "1"
 point "a"

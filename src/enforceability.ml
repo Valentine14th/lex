@@ -1149,7 +1149,6 @@ let convert enftype (f: Tformula.t) : Eformula.t =
       (Enftype.to_string enftype)
       (Tformula.to_string f)
     in
-    (* Err.enf_error err_msg None *)
     debug err_msg;
     assert false
 
