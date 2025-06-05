@@ -7,6 +7,6 @@
 
 (library
  (name lex_lib)
- (libraries core core_unix core_unix.sys_unix re xml-light calendar MFOTL_lib)
+ (libraries core core_unix core_unix.sys_unix re xml-light calendar z3 MFOTL_lib)
  (preprocess
   (pps ppx_jane)))
