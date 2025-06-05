@@ -225,8 +225,7 @@ event_decl:
   | pol event_type IDENT NEWUP DOCSTRING
     { SSEvent (conclr_opt (fst $1) (fst $2) None  (fst $5),
 	      snd $2,                     snd $3, [],                                  snd $1, Some (snd $5)) }
-  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWLINE RPA SUB GT type_term
-  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? args NEWDOWN? RPA SUB GT type_term
+  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWDOWN RPA SUB GT type_term
     { SSEvent (concl_opt (fst $1) $2 (fst $12),
 	      Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, None) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWLINE RPA SUB GT type_term NEWUP DOCSTRING
