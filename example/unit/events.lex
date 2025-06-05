@@ -17,6 +17,10 @@ suppressable event PersonalDataProcessing
     x: processorid
     z: dataid
 
-causable event EventWithoutParameters
-    """ """
+# causable event EventWithoutParameters
+#     """ """
 # docstring should be optional
+
+causable event EventWithoutDocstringOrParameters
+    # a: string
+# TODO[JD] this event definition throws a pareser error, because of missing parameters

@@ -9,7 +9,12 @@ let format_ident =
   Re.replace (Re.compile (Re.(alt [char '('; char ')'; char '.']))) ~f:(fun _ -> "")
 
 let get_law_title xml =
-  let title_xml = XML.get_child_by_tag_name "TITLE" xml in
+  let title_xml =
+    try XML.get_child_by_tag_name "TITLE" xml
+    with Not_found_s msg as e ->
+      debug ("XML file does not contain a TITLE tag: " ^ Sexp.to_string_hum msg);
+      raise e
+  in
   XML.text title_xml
 
 let get_enacting_terms = XML.get_child_by_tag_name "ENACTINGTERMS"

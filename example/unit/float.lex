@@ -8,7 +8,7 @@ note "This is a test file"
 internal event cause
     j: id
 
-observable event action
+suppressable event action
     i: id
     f: value
 

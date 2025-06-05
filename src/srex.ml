@@ -14,7 +14,7 @@ let pos_of_srrule = function
 
 type srtmt =
   | SRStmt     of sstmt
-  | SRRefine   of LexingInfo.t * string list
+  | SRRefine   of LexingInfo.t * rfnmt_ext option * string list
   | SRRule     of LexingInfo.t * string option * (ident * TypeTerm.t) list * srrule * string option
   | SRType     of LexingInfo.t * ident * (TypeTerm.t option) * string option
   | SRReplace  of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
@@ -24,17 +24,17 @@ type srefi = { rtmts: srtmt list }
 
 (* Conversion to rex *)
 
-let to_rrule = function
+let to_rrule : srrule -> rrule = function
   | SRefine (pos, fp, g) -> Refine (pos, to_pattern fp, List.map ~f:Formula.init g)
 
-let replace_includes (incl_map: (string, srefi, String.comparator_witness) Map.t) srefi =
+let replace_includes (incl_map: (string, srefi, String.comparator_witness) Map.t) (srefi: srefi) : srefi =
   let replace_include_rtmt = function
     | SRStmt (SSInclude (_, idents)) -> (Map.find_exn incl_map (Util.concat_all_filename idents)).rtmts
     | rtmt -> [rtmt]
   in
   { rtmts = List.concat_map ~f:replace_include_rtmt srefi.rtmts }
     
-let to_rtmt = function
+let to_rtmt : srtmt -> rtmt = function
   | SRStmt sstmt -> RStmt (to_stmt sstmt)
   | SRRule (pos, label, type_fixes, rrule, doc_string) -> RRule (pos, label, type_fixes, to_rrule rrule, doc_string)
   | SRType (pos, name, typ, doc_string) -> RType (pos, name, typ, doc_string)
@@ -42,9 +42,9 @@ let to_rtmt = function
   | SRAssume (pos, name, b, doc_string) -> RAssume (pos, name, b, doc_string)
   | SRRefine _ -> assert false
 
-let to_refi (srefi: srefi) =
+let to_refi (srefi: srefi) : refi =
   match srefi.rtmts with
-  | SRRefine (_, lex_file) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; lex_file }
+  | SRRefine (_, base_file_type, lex_file) :: rtmts -> { rtmts = List.map ~f:to_rtmt rtmts; lex_file; base_file_type }
   | _ -> assert false
 
 (* Printing functions *)
@@ -70,8 +70,10 @@ let string_of_rtmt ?(i=0) =
   let string_of_ref r = Util.tabs (i+1) ^ Ref.to_string r in
   function
   | SRStmt sstmt -> string_of_stmt ~i sstmt
-  | SRRefine (_, idents) ->
+  | SRRefine (_, None, idents) ->
      Printf.sprintf "%srefine %s" (Util.tabs i) (String.concat ~sep:"." idents)
+  | SRRefine (_, Some ext, idents) ->
+     Printf.sprintf "%srefine %s %s" (string_of_rfnmt_ext ext) (Util.tabs i) (String.concat ~sep:"." idents)
   | SRRule (_, label, type_fixes, rrule, doc_string) ->
      let description =
        match doc_string with

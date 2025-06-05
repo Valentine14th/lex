@@ -55,7 +55,7 @@
 %token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR
 %token <LexingInfo.t> SUM AVG MED CNT MIN MAX
 %token <LexingInfo.t> FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE
-%token <LexingInfo.t> REFINE STRENGTHEN WEAKEN BY ASSUME FULFILLED
+%token <LexingInfo.t> REFINE LEX REX STRENGTHEN WEAKEN BY ASSUME FULFILLED
 
 /* Tokens: intervals */
 
@@ -216,10 +216,17 @@ event_decl:
   | pol event_type IDENT NEWUP args
     { SSEvent (conclr_opt (fst $1) (fst $2) (fst $5)  (fst $3),
 	      snd $2,                     snd $3, snd $5,                              snd $1, None) }
+  | pol event_type IDENT
+    { SSEvent (conclr_opt (fst $1) (fst $2) None  (fst $3),
+	      snd $2,                     snd $3, [],                                  snd $1, None) }
   | pol event_type IDENT NEWUP DOCSTRING NEWWHITE args
     { SSEvent (conclr_opt (fst $1) (fst $2) (fst $7)  (fst $5),
-	      snd $2,                     snd $3, snd $7,                              snd $1, Some (snd $5)) }
+	       snd $2,                     snd $3, snd $7,                              snd $1, Some (snd $5)) }
+  | pol event_type IDENT NEWUP DOCSTRING
+    { SSEvent (conclr_opt (fst $1) (fst $2) None  (fst $5),
+	      snd $2,                     snd $3, [],                                  snd $1, Some (snd $5)) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWLINE RPA SUB GT type_term
+  | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP? args NEWDOWN? RPA SUB GT type_term
     { SSEvent (concl_opt (fst $1) $2 (fst $12),
 	      Lex.Event ($3, Functional), snd $4, (snd $7)@["~return_value", snd $12], snd $1, None) }
   | pol FUNCTIONAL functional_event_type IDENT LPA NEWUP args NEWLINE RPA SUB GT type_term NEWUP DOCSTRING
@@ -657,8 +664,12 @@ refi:
 rtmt:
   | stmt
     { SRStmt $1 }
+  | REFINE LEX import_name
+    { SRRefine ($1 +> $2 +> (fst $3), Some RefineLex, snd $3) }
+  | REFINE REX import_name
+    { SRRefine ($1 +> $2 +> (fst $3), Some RefineRex, snd $3) }
   | REFINE import_name
-    { SRRefine ($1 +> (fst $2), snd $2) }
+    { SRRefine ($1 +> (fst $2), None, snd $2) }
   | rrule_decl
     { $1 }
   | type_refi_decl

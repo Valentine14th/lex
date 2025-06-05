@@ -6,12 +6,15 @@ open Erex
 module Interval = MFOTL_lib.Interval
 module Enftype = MFOTL_lib.Enftype
 
+let debug_refinement = ref true
+let debug msg = if !debug_refinement then Errors.debug_print ~f_name:(Some "refinement.ml") msg
+
 (* Visitors *)
 
-let type_trrule = function
+let type_trrule : trrule -> errule = function
   | TRefine (pos', pf, g) -> ERefine (pos', Elex.epf_of_tpf pf, Eformula.of_tformulas g)
 
-let type_estmt erule_map = function
+let type_estmt erule_map : trtmt -> ertmt = function
   | TRStmt tstmt ->
      ERStmt (Enforceability.type_tstmt erule_map tstmt)
   | TRRule (pos, i, label, type_fixes, trrule, doc_string) ->
@@ -39,7 +42,7 @@ let update_types (trefi: trefi) (tprog: tprog) : tprog =
   let taliases = Map.fold trefi.traliases ~init:tprog.taliases ~f in
   { tprog with taliases }
 
-let hide_events (trefi: trefi) (tprog: tprog) : tprog =
+let insert_assumed_event_rules (trefi: trefi) (tprog: tprog) : tprog =
   let make_tsrule b (pos, name, label) =
     let (_, vars, _, _) = Map.find_exn tprog.tevents name in
     let f (x, typ) = Eformula.ETerm.make (Eformula.ETerm.var x) { pos = LexingInfo.dummy; typ } in
@@ -75,38 +78,124 @@ let replace_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
     all (List.map rtref_exprs ~f:(fun ref ->
              Label.RuleTree.find_rules_in_tree ref.pos ref.label tprog.rule_tree.tree))
     >| List.concat in
-  (*print_endline (Int.to_string (List.length rules_in_tree));*)
   let f = function
     | TSRule (_, idx, _, _, _, _) -> not (List.mem rules_idx_to_replace idx ~equal:Int.equal)
     | _ -> true in
   let tstmts = List.filter ~f tprog.tstmts in
   ok { tprog with tstmts }
 
-let hide_and_replace trefi (tprog: tprog) : tprog Errors.OrErrors.t =
+let inherit_ex_or_sc_trreplacement ref_kind
+                                   (tprog: tprog)
+                                   ((pos, _, old_refs, new_refs): LexingInfo.t * Rex.replace_kind * Tlex.Ref.t list * Tlex.Ref.t list)
+                                   : tprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let trules_from_ids (tprog: tprog) (ids: int list) : trule list Errors.OrErrors.t =
+    let open Errors.OrErrors in
+    all (List.map ~f:(Tlex.find_trule_by_id tprog) ids) in
+  let string_of_ref_kind = match ref_kind with
+                            | `Exceptions -> "exceptions"
+                            | `Scopes -> "scopes" in
+  let old_ex_or_sc = match ref_kind with
+                      | `Exceptions -> tprog.rule_tree.exceptions
+                      | `Scopes -> tprog.rule_tree.scopes in
+  let rule_ids_in_refs =
+    let f (ref: Tlex.Ref.t) = Label.RuleTree.find_rules_in_tree ref.pos ref.label tprog.rule_tree.tree in
+    List.map ~f in
+  let* old_trule_ids = rule_ids_in_refs old_refs |> all in
+  let old_trule_ids = List.concat old_trule_ids in
+  let* new_trule_ids = rule_ids_in_refs new_refs |> all in
+  let new_trule_ids = List.concat new_trule_ids in
+  let* old_trules = trules_from_ids tprog old_trule_ids in
+  let* new_trules = trules_from_ids tprog new_trule_ids in
+  let string_of_old_trules = List.map ~f:(Label.RuleTree.string_of_rule_idx tprog.rule_tree) old_trule_ids in
+  let ex_or_sc_of_old_trules = List.map ~f:(Map.find_multi old_ex_or_sc) old_trule_ids in
+  let string_ex_or_sc_of_old_trules =
+    List.map ~f:(List.map ~f:(Label.RuleTree.string_of_rule_idx tprog.rule_tree)) ex_or_sc_of_old_trules in
+  let strings_of_ex_or_sc_of_old_trules =
+    List.map ~f:(String.concat ~sep:"\t\n") string_ex_or_sc_of_old_trules in
+  let strings_of_old_trules_with_ex_or_sc = 
+    let f old_trule_string ex_or_sc_string =
+      Printf.sprintf "The 'old' referenced rule %s has the %s:\n%s"
+        string_of_ref_kind
+        old_trule_string
+        ex_or_sc_string in
+    List.map2_exn string_of_old_trules strings_of_ex_or_sc_of_old_trules ~f in
+  let* old_unified_ex_or_sc =
+    match Util.all_int_lists_set_equality ex_or_sc_of_old_trules with
+    | Some ex_or_sc -> ok ex_or_sc
+    | None ->
+      let msg =
+        let s = String.concat ~sep:"\n" strings_of_old_trules_with_ex_or_sc in
+        Printf.sprintf
+        "Rules being replaced must have the same %s, but here we have the following rules with their respective exceptions:\n%s"
+        string_of_ref_kind s
+      in
+      error (Errors.refinement_error msg pos)
+  in
+  let is_obligation = function
+    | TObligation _ -> true
+    | _ -> false in
+  let old_only_obligation = List.for_all ~f:is_obligation old_trules in
+  let new_trule_ids_filtered =
+    if old_only_obligation then
+      new_trule_ids
+    else
+      let f (id, trule) = if is_obligation trule then Some id else None in
+      List.filter_map (List.zip_exn new_trule_ids new_trules) ~f (* TODO *)
+  in
+  let _ = if List.length new_trule_ids <> List.length new_trule_ids_filtered then
+    let msg = Printf.sprintf "Note that the %s are only inherited for non-obligation rules, NO exceptions will apply to the new obligation(s) in this replacement" string_of_ref_kind in
+    Errors.warn msg (Some pos)
+  in
+  let new_ex_or_sc = 
+    List.fold ~init:old_ex_or_sc
+      ~f:(fun ex_or_sc key ->
+          List.fold old_unified_ex_or_sc ~init:ex_or_sc
+            ~f:(fun ex_or_sc data -> Map.add_multi ex_or_sc ~key ~data))
+      new_trule_ids_filtered in
+  match ref_kind with
+    | `Exceptions -> ok { tprog with rule_tree = { tprog.rule_tree with exceptions = new_ex_or_sc}}
+    | `Scopes -> ok { tprog with rule_tree = { tprog.rule_tree with scopes = new_ex_or_sc }}
+
+let inherit_reference_trreplacement (tprog: tprog)
+                                    (replacement: LexingInfo.t * Rex.replace_kind * Tlex.Ref.t list * Tlex.Ref.t list)
+                                    : tprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let* tprog' = inherit_ex_or_sc_trreplacement `Exceptions tprog replacement in
+  let* tprog'' = inherit_ex_or_sc_trreplacement `Scopes tprog' replacement in
+  ok tprog''
+
+let inherit_references_trreplacements (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
+  let open Errors.OrErrors in
+  let* tprog' = Errors.OrErrors.fold trefi.trreplacements ~init:tprog ~f:inherit_reference_trreplacement in
+  ok tprog'
+
+(* Hide and replace *)
+
+let hide_and_replace (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
   ok tprog
   >>= insert_refinement_rules trefi
   >| update_types trefi
-  >| hide_events trefi
+  >| insert_assumed_event_rules trefi
   >| internalize_events trefi
+  >>= inherit_references_trreplacements trefi
   >>= replace_rules trefi
-  (*print_endline (Elex.string_of_eprog eprog);
-  print_endline ("REPLACEMENT2 "^ String.concat ~sep:";" (List.map ~f:(fun (_, _, refs, _) -> (String.concat ~sep:"," (List.map refs ~f:Tlex.Ref.to_string ))) trefi.trreplacements));*)
-
 
 (* Main typing function *)
 
-let do_type (trefi: Trex.trefi) (b: Interval.v) : Erex.erefi Errors.OrErrors.t =
+let do_type (trefi: Trex.trefi) (b: Interval.v) : (Tlex.tprog * Erex.erefi) Errors.OrErrors.t =
   let open Errors.OrErrors in
   (* TODO[FH]: check that the refinement is valid *)
   (* TODO[FH]: check that all events have been mapped *)
-  (*let* eprog = Enforceability.do_type trefi.tprog b in*)
+
   let* tprog = hide_and_replace trefi trefi.tprog in
-  (*print_endline (Tlex.string_of_tprog tprog);*)
-  let* eprog = Enforceability.do_type tprog b in
+  let* eprog = Enforceability.do_type ~mon_constrs:(trefi.tr_mon, trefi.tr_anti_mon) tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in
-  ok {
+  let erefi = {
     eprog;
     ertmts = List.map trefi.trtmts ~f:(type_estmt erules);
     lex_file = trefi.lex_file;
-  }
+    base_file_type = trefi.base_file_type;
+  } in
+  ok (tprog, erefi)

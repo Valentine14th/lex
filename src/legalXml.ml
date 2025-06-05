@@ -84,13 +84,39 @@ module XML = struct
   let dot_regex =
     Re.compile (Re.char '.')
 
+  let string_of_xml_error_msg = function
+    | Xml_light_errors.UnterminatedComment -> "Unterminated comment"
+    | Xml_light_errors.UnterminatedString -> "Unterminated string"
+    | Xml_light_errors.UnterminatedEntity -> "Unterminated entity"
+    | Xml_light_errors.IdentExpected -> "Ident expected"
+    | Xml_light_errors.CloseExpected -> "Element close expected"
+    | Xml_light_errors.NodeExpected -> "Xml node expected"
+    | Xml_light_errors.AttributeNameExpected -> "Attribute name expected"
+    | Xml_light_errors.AttributeValueExpected -> "Attribute value expected"
+    | Xml_light_errors.EndOfTagExpected tag -> Printf.sprintf "End of tag expected : '%s'" tag
+    | Xml_light_errors.EOFExpected -> "End of file expected"
+
+  let string_of_error_pos filename { Xml_light_errors.eline; eline_start; emin; emax } =
+    Printf.sprintf "\"%s\", line %d, characters, %d-%d"
+      filename eline (emin-eline_start) (emax-eline_start)
+
+  let string_of_xml_error filename (msg, pos) =
+    Printf.sprintf "%s at %s"
+      (string_of_xml_error_msg msg)
+      (string_of_error_pos filename pos)
+
   let parse_file filename =
     let contents = In_channel.read_all filename in
     let f group =
       let string = Re.Group.get group 0 in
       Re.replace dot_regex ~f:(fun _ -> "") string in
     let contents = Re.replace tag_regex ~f contents in
-    Xml.parse_string contents
+    try Xml.parse_string contents
+    with
+      | Xml_light_errors.Xml_error err ->
+        Printf.eprintf "Error parsing XML file: %s\n" (string_of_xml_error filename err);
+         raise (Xml_light_errors.Xml_error err)
+      | _ as e -> raise e
 
   let has_child_by_tag_name tag xml =
     List.exists ~f:(fun x -> String.equal (Xml.tag x) tag) (Xml.children xml)

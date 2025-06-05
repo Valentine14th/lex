@@ -18,7 +18,7 @@
     "languages": [
       {
         "id": "lex",
-        "extensions": [".lex"],
+        "extensions": [".lex", ".rex", ".mfotl", ".sig"],
         "configuration": "./language-configuration.json"
       }
     ],

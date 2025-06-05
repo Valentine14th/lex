@@ -20,6 +20,7 @@ type trefi =
     tprog:          tprog;
     trtmts:         trtmt list;
     lex_file:       string list;
+    base_file_type: rfnmt_ext option;
     traliases:      (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
     trassumed:      (LexingInfo.t * ident * bool * Label.t) list;
     trvars_to_add:  (int * var_types) list;
@@ -27,6 +28,8 @@ type trefi =
     trstmts_to_add: tstmt list;
     trrefined:      (ident, Base.String.comparator_witness) Set.t;
     trreplacements: (LexingInfo.t * replace_kind * Ref.t list * Ref.t list) list;
+    tr_mon:         (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
+    tr_anti_mon:    (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
   }
 
 let trempty =
@@ -34,6 +37,7 @@ let trempty =
     tprog          = tempty;
     trtmts         = [];
     lex_file       = [];
+    base_file_type = None;
     traliases      = Map.empty (module String);
     trassumed      = [];
     trvars_to_add  = [];
@@ -41,6 +45,8 @@ let trempty =
     trstmts_to_add = [];
     trrefined      = Set.empty (module String);
     trreplacements = [];
+    tr_mon         = Map.empty (module String);
+    tr_anti_mon    = Map.empty (module String);
   }
 
 
@@ -109,8 +115,11 @@ let string_of_trtmt ?(i=0) =
       Printf.sprintf "%shide %b %s%s" (Util.tabs i) b name description
 
 let string_of_trefi refi =
-  "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
-  ^ String.concat ~sep:"\n" (List.map refi.trtmts ~f:string_of_trtmt)
+  match refi.base_file_type with
+  | Some ext -> "refine " ^ string_of_rfnmt_ext ext ^ " " ^ String.concat ~sep:"." refi.lex_file ^ "\n"
+  | None ->
+    "refine " ^ String.concat ~sep:"." refi.lex_file ^ "\n" 
+    ^ String.concat ~sep:"\n" (List.map refi.trtmts ~f:string_of_trtmt)
       
 let print_trefi refi =
   Stdio.printf "%s\n" (string_of_trefi refi)

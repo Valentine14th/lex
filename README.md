@@ -60,6 +60,15 @@ Refer to the [usage](#usage) chapter for further instructions on using Lex
 ## Build from source
 ### requirements
 - [Ocaml](https://ocaml.org/docs/installing-ocaml)
+- MFOTL library
+
+To setup the MFOTL library (which is currently part of the WhyEnf project) a symlink is required:
+```bash
+git clone git@github.com:runtime-enforcement/whyenf.git
+cd whyenf
+git checkout lifeboat
+ln -s <path/to/whyenf>/whyenf/MFOTL <path/to/lex>/lex/MFOTL_lib
+```
 
 Set the Ocaml version:
 
@@ -107,12 +116,19 @@ e.g.
 ```
 
 ## With installation
-Alternatively, Lex can be installed using opam:
+Alternatively, Lex can be installed using either opam or dune:
 In the root directory of this repository, run:
+
 ```bash
+# using opam
 opam install .
+# using dune
+dune biuld
+dune install
 ```
 Then you can run lex from anywhere in your terminal:
 ```bash
 lex <path/to/.lex file> [-mode (mfotl|doc)]
 ```
+Use `lex -help` to get more information about the usage of lex.
+

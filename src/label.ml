@@ -6,8 +6,8 @@ let debug_label = ref false
 let debug = if !debug_label then Errors.debug_print ~f_name:(Some "label.ml") else ignore
 
 (** First identifier: number, letter, etc. describing
-                      the section in question (e.g. "2")
-    second identifier: descriptive, title (e.g. "Material Scope") *)
+                      the section in question (e.g. "2"),
+    optional second identifier: descriptive, title (e.g. "Material Scope") *)
 type label_levels = (ident * ident option) list 
 
 type loc =
@@ -15,10 +15,9 @@ type loc =
   | LRule of ident
   | LNone
 
-let string_of_loc = function
+let string_of_loc : loc -> ident = function
   | LSection (sk, n) -> "LSection " ^ string_of_section_kind sk ^ " \"" ^ n ^ "\""
-  (* | LRule n -> "rule " ^ n *)
-  | LRule n -> "LRule \"" ^ n ^ "\"" (* TODO: choose sensible string representation for rule locations *)
+  | LRule n -> "LRule \"" ^ n ^ "\""
   | LNone -> "LNone"
 
 type t =
@@ -34,7 +33,7 @@ type t =
     rule_id:   ident option
   }
 
-let empty =
+let empty: t =
   {
     law       = [];
     title     = [];
@@ -47,7 +46,7 @@ let empty =
     rule_id   = None
   }
 
-let is_empty = function
+let is_empty: t -> bool = function
   | { law       = [];
       title     = [];
       chapter   = [];
@@ -59,13 +58,14 @@ let is_empty = function
       rule_id   = None } -> true
   | _ -> false
 
-let qualified_label l =
+(** Removes any levels between 'law' and 'article' (i.e. 'title', 'chapter', and 'section') *)
+let qualified_label (l: t) : t =
   let h = match l.law with
   | h::_ -> [h]
   | [] -> []
   in { l with law = h; title = []; chapter = []; section = []; }
 
-let lowest_level = function
+let lowest_level: t -> loc = function
   | { rule_id   = Some r; _ } -> LRule r
   | { subpoint  = levels;  _ } when List.length levels > 0 ->
      LSection (Subpoint  (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
@@ -85,7 +85,7 @@ let lowest_level = function
      LSection (Law       (List.length levels - 1), fst (List.hd_exn (List.rev levels)))
   | _ -> LNone
 
-let combine_with_previous = function
+let combine_with_previous: (section_kind * section_kind) -> section_kind = function
   | Law       i, Law       j -> Law (i+j)
   | Title     i, Title     j -> Title (i+j)
   | Chapter   i, Chapter   j -> Chapter (i+j)
@@ -96,7 +96,7 @@ let combine_with_previous = function
   | Subpoint  i, Subpoint  j -> Subpoint (i+j)
   | cur        , _           -> cur
 
-let highest_level ?(previous_sk=Law 0) = function
+let highest_level ?(previous_sk: section_kind=Law 0) : t -> loc = function
   | { law       = (l,_)::_; _ } ->
      LSection (combine_with_previous (Law 0, previous_sk), l)
   | { title     = (l,_)::_; _ } ->
@@ -117,7 +117,7 @@ let highest_level ?(previous_sk=Law 0) = function
      LRule r
   | _ -> LNone
 
-let remove_highest_level = function
+let remove_highest_level: t -> t = function
   | { law       = _::ls;  _ } as t -> { t with law       = ls   }
   | { title     = _::ls;  _ } as t -> { t with title     = ls   }
   | { chapter   = _::ls;  _ } as t -> { t with chapter   = ls   }
@@ -129,7 +129,7 @@ let remove_highest_level = function
   | { rule_id   = Some _; _ } as t -> { t with rule_id   = None } (* not strictly necessary, will be the same as the empty case in the pattern matching *)
   | _ -> empty
 
-let valid_rule_label pos = function
+let valid_rule_label (pos: LexingInfo.t) : t -> unit OrErrors.t = function
   | { law = []; _ } ->
      OrErrors.error (Errors.label_error "No 'law' section defined (yet). A rule must be inside of a 'law' section" pos)
   | { article = []; _ } ->
@@ -137,7 +137,7 @@ let valid_rule_label pos = function
   | _ ->
      OrErrors.ok ()
 
-let set pos section_kind label_name l =
+let set (pos: LexingInfo.t) (section_kind: section_kind) (label_name: ident * ident option) (l: t) : t OrErrors.t =
   try
     OrErrors.ok (
         match section_kind with
@@ -159,18 +159,18 @@ let set pos section_kind label_name l =
            { l     with subpoint  = Util.take l.subpoint i  @ [label_name]; rule_id = None;}
       )
   with
-  | Invalid_argument idx ->
+  | Invalid_argument (idx: ident) ->
      (* TODO: give more complete error message with a string representation of the entire label *)
      let err_msg = Printf.sprintf "wrong sub-level index '%s' in '%s'" idx (string_of_section_kind section_kind) in
      OrErrors.error (Errors.label_error err_msg pos)
 
-let set_rule_id rule_id l = { l with rule_id = rule_id }
+let set_rule_id (rule_id: ident option) (l: t) : t = { l with rule_id = rule_id }
 
-let set_rule_id_force rule_id l = match rule_id with
+let set_rule_id_force (rule_id: ident option) (l: t) : t = match rule_id with
   | Some _ -> { l with rule_id = rule_id }
   | _      -> { l with rule_id = Some "" }
 
-let reference_of_label label pos =
+let reference_of_label (label: t) (pos: LexingInfo.t) : Lex.Ref.t =
   let rec aux sk ls = match sk, ls with
   | _          , [] -> []
   | Law       i, [(n,_)]     -> [(Law i, n)]
@@ -201,9 +201,9 @@ let reference_of_label label pos =
   let levels    = List.rev (List.concat_map ~f:List.rev [subpoint; point; paragraph; article; section; chapter; title; law]) in
   Ref.{ sks = levels; rule = label.rule_id; pos }
 
-let string_of_label l = Ref.to_string (reference_of_label l LexingInfo.dummy)
+let string_of_label (l: t) : ident = Ref.to_string (reference_of_label l LexingInfo.dummy)
 
-let qualified_name_of_law ?(exn=false) = function
+let qualified_name_of_law ?(exn: bool=false) : (ident * ident option) list -> ident = function
   | [] -> begin match exn with
     | false -> ""
     | true -> failwith "No 'law' section defined (yet). A rule must be inside of a 'law' section"
@@ -377,7 +377,7 @@ module RuleTree = struct
       scopes = Map.empty (module Int);
     }
 
-  let update_rule_map pos m k v =
+  let update_rule_map (pos: LexingInfo.t) (m: rule_map) k v : rule_map OrErrors.t=
     try OrErrors.ok (Map.add_exn m ~key:k ~data:v)
     with _ ->
       OrErrors.error
@@ -386,7 +386,7 @@ module RuleTree = struct
           | _ -> Errors.label_error ("A rule with the label '" ^ k ^ "' already exists in this section") pos
           end
 
-  let rec insert_section_in_tree ?(previous_sk=Law 0) pos tree l =
+  let rec insert_section_in_tree ?(previous_sk: section_kind=Law 0) (pos: LexingInfo.t) (tree: level_tree) (l: t) : level_tree =
     let highest = highest_level ~previous_sk:previous_sk l in
     let lowest = lowest_level l in
     let _ = match lowest with | LRule _ -> assert false | _ -> () in
@@ -411,7 +411,7 @@ module RuleTree = struct
       end
     end
 
-  let rec insert_rule_in_tree ?(previous_sk=Law 0) pos tree l ri =
+  let rec insert_rule_in_tree ?(previous_sk: section_kind=Law 0) (pos: LexingInfo.t) (tree: level_tree) (l: t) (ri: int) : level_tree OrErrors.t =
     let open OrErrors in
     let highest = highest_level ~previous_sk:previous_sk l in
     let lowest = lowest_level l in
@@ -466,13 +466,18 @@ module RuleTree = struct
           end
        end
 
-  let rec collect_rules_in_tree = function
+  let rec collect_rules_in_tree: level_tree -> int list = function
     | Intermediate map ->
        List.concat_map (Map.to_alist map)
          ~f:(fun (_, (tree, rules)) -> collect_rules_in_tree tree @ Map.data rules)
     | Leaf -> []
 
-  let rec infer_intermediate_levels pos map sk name intermediate_levels current_key =
+  let rec infer_intermediate_levels (map: 'loc_tree_map)
+                                    (sk: section_kind)
+                                    (name: ident)
+                                    (intermediate_levels: Location.t list)
+                                    (current_key: Location.t option)
+                                    : ('loc_tree_map * Location.t list) list =
     let sk_name, sk_int = match sk with
     | Law i when i > 0 -> "law", i
     | Title i -> "title", i
@@ -492,9 +497,9 @@ module RuleTree = struct
       in
       let rec aux = function
       | [] -> assert false
-      | [(k, m)] -> infer_intermediate_levels pos m sk name intermediate_levels (Some k)
+      | [(k, m)] -> infer_intermediate_levels m sk name intermediate_levels (Some k)
       | (k, m)::ms -> List.append
-                      (infer_intermediate_levels pos m sk name intermediate_levels (Some k))
+                      (infer_intermediate_levels m sk name intermediate_levels (Some k))
                       (aux ms)
        in
       let subtrees = Map.to_alist map |> List.filter_map ~f:extract_maps in
@@ -502,7 +507,7 @@ module RuleTree = struct
       | [] -> []
       | _ -> aux subtrees
   
-  let rec find_rules_in_tree pos label =
+  let rec find_rules_in_tree (pos: LexingInfo.t) (label: t) : level_tree -> int list OrErrors.t =
     let open OrErrors in
     function
   | Intermediate map ->
@@ -517,11 +522,11 @@ module RuleTree = struct
     | LRule _ -> assert false
     | LSection (sk, n) ->
       let sub_maps = begin match sk with
-      | Law i when i > 0 -> infer_intermediate_levels pos map sk n [] None
+      | Law i when i > 0 -> infer_intermediate_levels map sk n [] None
       | Title _
       | Chapter _
       | Section _
-      | Article 0 -> infer_intermediate_levels pos map sk n [] None
+      | Article 0 -> infer_intermediate_levels map sk n [] None
       | _ -> [(map, [])]
       end in
       let* map', inferred_levels = match sub_maps with
@@ -599,7 +604,6 @@ module RuleTree = struct
     let rule_idxs = List.concat rules_in_tree in
     if List.is_empty rule_idxs then Errors.warn ("No rules found for scope " ^ string_of_rule_idx s idx) None;
     ok { s with scopes = List.fold rule_idxs ~init:s.scopes ~f:(fun m r_idx -> Map.add_multi m ~key:r_idx ~data:idx) }
-
 
   let rules_with_shared_variable_scopes (s: s) =
     let rec fixpoint (m: (int, (int, 'a) Set.t, 'a) Map.t) =

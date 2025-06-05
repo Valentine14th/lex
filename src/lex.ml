@@ -119,7 +119,7 @@ type stmt =
   | SFunction  of LexingInfo.t * ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | SNote      of LexingInfo.t * string
 
-let is_rule = function
+let is_rule : stmt -> bool = function
   | SRule _ -> true
   | _       -> false
 
