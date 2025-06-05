@@ -2,7 +2,7 @@ open Core
 open Lexing
 open Rex
 
-let debug_modules = ref true
+let debug_modules = ref false
 let debug msg = if !debug_modules then Errors.debug_print ~f_name:(Some "modules.ml") msg
 
 type t =
@@ -198,7 +198,7 @@ let rec load_modules imports lexpath b seq' prefixes : (string * t) list Errors.
 and do_type_lex lexpath b fullname seq' prefixes : (Typing.t * Elex.eprog) Errors.OrErrors.t =
   debug (Printf.sprintf "do_type_lex: %s" fullname);
   let open Errors.OrErrors in
-  Errors.print_mem_stat ();
+  (*Errors.print_mem_stat ();*)
   let* sprog    = load_lex_with_includes fullname seq' prefixes in
   let  prog     = Slex.to_prog sprog in
   let  imports  = list_imports prog in

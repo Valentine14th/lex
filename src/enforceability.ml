@@ -17,7 +17,7 @@ open Elex
 module Interval = MFOTL_lib.Interval
 module Enftype = MFOTL_lib.Enftype
 
-let debug_enforceability = ref true
+let debug_enforceability = ref false
 let debug msg = if !debug_enforceability then Errors.debug_print ~f_name:(Some "enforceability.ml") msg
 
 (* Generators *)
@@ -1611,7 +1611,7 @@ let ecrule_from_tcrule (pg_map: pg_map) itl_srp (pols: (string, Enftype.t, 'stri
   in ecrule
 
 let ecrules_from_tcrules (pg_map: pg_map) itl_srp pols rules :
-    (int, ecrule, Base.Int.comparator_witness) Base.Map.t Err.OrErrors.t =
+    (int, ecrule, Int.comparator_witness) Base.Map.t Err.OrErrors.t =
   let open Err.OrErrors in
   debug (Printf.sprintf
           "ecrules_from_tcrules: pols: %s"
@@ -1652,7 +1652,7 @@ let pos_from_infos infos =
 
 let combine_str_info_maps m1 m2 =
   Map.merge m1 m2 ~f:(fun ~key:_ -> function
-      | `Both (v1, v2) -> Some (v1 @ v2)
+      | `Both (v1, v2) -> Some (List.dedup_and_sort (v1 @ v2) ~compare:compare_tinfo_type)
       | `Left v -> Some v
       | `Right v -> Some v)
 
@@ -1742,7 +1742,9 @@ let check_mon_constrs (order: int list) tcrules (mon_constrs: ('str_map * 'str_m
       ~init:four_empty_maps
       ~f:(fun init idx -> not_monotone_tcrule ~init (Map.find_exn tcrules idx))
     in
-    if Option.is_some mon_constrs then (Err.print_mem_stat (); debug (Printf.sprintf "mono: %d, anti mono: %d" (Map.length req_mon) (Map.length req_anti_mon)); assert false);
+    if Option.is_some mon_constrs then (
+      debug (Printf.sprintf "mono: %d, anti mono: %d" (Map.length req_mon)
+               (Map.length req_anti_mon)));
     let not_mon = Map.map not_mon ~f:(fun v -> pos_from_infos v) in
     let not_anti_mon = Map.map not_anti_mon ~f:(fun v -> pos_from_infos v) in
     let mon_err = Map.filter_keys not_mon ~f:(fun k -> Map.mem req_mon k) in
