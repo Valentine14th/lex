@@ -28,14 +28,14 @@ let type_estmt erule_map : trtmt -> ertmt = function
 
 let insert_refinement_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
-  let variables  = List.fold_left trefi.trvars_to_add
-                     ~init:tprog.variables
-                     ~f:(fun m (key, data) -> Map.add_exn m ~key ~data) in
+  let rule_ctxts = List.fold_left trefi.trvars_to_add
+                      ~init:tprog.rule_ctxts
+                      ~f:(fun m (key, data) -> Map.add_exn m ~key ~data) in
   let* rule_tree = fold_best_effort trefi.trrules_to_add
                      ~init:tprog.rule_tree
                      ~f:(fun s (pos, ri, label) -> Label.RuleTree.add_rule pos ri label s) in
   let tstmts     = trefi.tprog.tstmts @ trefi.trstmts_to_add in
-  ok { trefi.tprog with variables; rule_tree; tstmts }
+  ok { trefi.tprog with rule_ctxts; rule_tree; tstmts }
   
 let update_types (trefi: trefi) (tprog: tprog) : tprog =
   let f ~key ~data taliases = Map.update taliases key ~f:(fun _ -> data) in
@@ -188,7 +188,6 @@ let do_type (trefi: Trex.trefi) (b: Interval.v) : (Tlex.tprog * Erex.erefi) Erro
   let open Errors.OrErrors in
   (* TODO[FH]: check that the refinement is valid *)
   (* TODO[FH]: check that all events have been mapped *)
-
   let* tprog = hide_and_replace trefi trefi.tprog in
   let* eprog = Enforceability.do_type ~mon_constrs:(trefi.tr_mon, trefi.tr_anti_mon) tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in

@@ -186,16 +186,16 @@ let combine_constitutive_rules rules: tcrule list * 'params_map =
       | TExceptionC _ -> TRTExceptionC
       | _ -> assert false
     in
-    let separate_event_definitions pf ((params_map, m'): 'params_map * (StringVar.t, 'a, 'b) Map.t) (f: Tformula.t) =
+    let separate_event_definitions pf ((params_map, m'): 'params_map * (string, 'a, 'b) Map.t) (f: Tformula.t) =
       match f.form with
       | Tformula.Predicate (name, terms) ->
-         let fvs = Set.union_list (module StringVar)
+         let fvs = Set.union_list (module String)
                      [fv f; Tformula.fvs (exceptions @ scopes); Tlex.Pattern.fv pf] in
          let params_new = match Map.find params_map name with
            | Some params -> params
            | None -> List.map terms
                        ~f:(fun trm -> let p = fresh_param () in
-                                    TTerm.{ trm = (Var p); info = { typ = trm.info.typ; pos = LexingInfo.dummy } });
+                                      TTerm.{ trm = (Var p); info = { typ = trm.info.typ; pos = LexingInfo.dummy } });
          in
          let params_map = Map.update params_map name ~f:(function
                               | Some params -> params
@@ -236,7 +236,7 @@ let combine_constitutive_rules rules: tcrule list * 'params_map =
     in
     let params = Map.find_exn params_map name in
     let pos = Map.find_exn positions name in
-    let eg = make (predicate name params) { pos; event_type_opt = Some Lex.Predicate; t_vars = [] } in
+    let eg = make (predicate name params) { pos; event_type_opt = Some Lex.Predicate } in
     TCDefinitionDis (disjunction, eg)
   in
   Map.to_alist event_def_map |> List.map ~f:to_tr_def_dis, params_map
@@ -611,7 +611,7 @@ let type_scopes itl_srp (pg_map: pg_map) scopes enftype : verdict =
   type_tformulas_conj pg_map itl_srp scopes enftype
 
 type enforce_rule_by = {
-  enf_by_fixed_pols: (string, Enftype.t, StringVar.comparator_witness) Base.Map.t option;
+  enf_by_fixed_pols: (string, Enftype.t, String.comparator_witness) Base.Map.t option;
   enf_by_sup_conditions_by_index: int list option;
   enf_by_sup_conditions_all: bool;
   enf_by_cau_effects_all: bool;
@@ -652,14 +652,14 @@ let update_pols_with_transparency_conditions pols pols_tr =
     | `Both (enftype, (_, tr)) -> Some (enftype, tr)
     )
 
-let is_past_guarded_tformulas ?(pg_map: pg_map=Map.empty (module StringVar)) x p fs =
+let is_past_guarded_tformulas ?(pg_map: pg_map=Map.empty (module String)) x p fs =
   match p with
   | true -> List.exists fs ~f:(is_past_guarded ~ts:pg_map x true)
   | false -> List.for_all fs ~f:(is_past_guarded ~ts:pg_map x false)
 
 let is_past_guarded_tpformula = Tlex.Pattern.is_past_guarded (module Tlex.Sig)
 
-let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module StringVar)) rule var : unit Err.WithErrors.t =
+let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module String)) rule var : unit Err.WithErrors.t =
   let open Err.WithErrors in
   let make_neg f = Tformula.make (Tformula.neg f) { Tformula.Info.dummy with pos = f.info.pos } in
   match rule with
@@ -718,17 +718,17 @@ let is_past_guarded_tcrule_exn ?(pg_map: pg_map=Map.empty (module StringVar)) ru
 
 let fv_of_tcrule = function
   | TCImplication (_, _, _, pf1, _, _, pf2, _, _) ->
-     Set.union_list (module StringVar) Tlex.Pattern.[fv pf1; fv pf2](*; fvs ex; fvs sc]*)
+     Set.union_list (module String) Tlex.Pattern.[fv pf1; fv pf2](*; fvs ex; fvs sc]*)
   | TCDefinitionRef (_, _, _, pf, _, _, _, _) ->
-     Set.union_list (module StringVar) Tlex.Pattern.[fv pf](*; fvs ex; fvs sc]*)
+     Set.union_list (module String) Tlex.Pattern.[fv pf](*; fvs ex; fvs sc]*)
   | TCDefinitionDis (disjuncts, _) ->
-     Set.union_list (module StringVar)
+     Set.union_list (module String)
        (List.concat_map (Map.data disjuncts) ~f:(
             fun disjunct ->
             Tlex.Pattern.[fv disjunct.pf](*; fvs disjunct.exceptions; fvs disjunct.scopes]*)))
 
 
-let vars_are_past_guarded_tcrule_exn ?(pg_map = Map.empty (module StringVar)) vars rule : unit Err.WithErrors.t =
+let vars_are_past_guarded_tcrule_exn ?(pg_map = Map.empty (module String)) vars rule : unit Err.WithErrors.t =
   (* will throw an enforcement error if some variable is not past-guarded *)
   let open Err.WithErrors in
   all (List.map (Set.elements vars) ~f:(is_past_guarded_tcrule_exn ~pg_map rule)) >| (fun _ -> ())
@@ -1110,7 +1110,7 @@ let pg_map_of_tcrule pg_map: tcrule -> pg_map =
      List.fold2_exn arg_names sols_list ~init:pg_map ~f
 
 let pg_map_of_tcrules tcrules: pg_map =
-  List.fold tcrules ~init:(Map.empty (module StringVar)) ~f:pg_map_of_tcrule
+  List.fold tcrules ~init:(Map.empty (module String)) ~f:pg_map_of_tcrule
 
 let type_tcrules (tprog:Tlex.tprog) (tcrules: (int, tcrule, 'a) Map.t) (rule_order: int list) :
       ((string, Enftype.Constraint.t, 'string_comp) Map.t list * 'itl_srp * pg_map) Err.OrErrors.t =
@@ -1814,9 +1814,10 @@ let do_type ?(mon_constrs: ('str_map * 'str_map) option) (tprog: Tlex.tprog) (b:
   ok {
     estmts;
     ealiases          = tprog.taliases;
+    esubtypes         = tprog.tsubtypes;
     eevents           = tprog.tevents;
     efunctions        = tprog.tfunctions;
-    variables         = tprog.variables;
+    rule_ctxts        = tprog.rule_ctxts;
     rule_tree         = tprog.rule_tree;
     ecrules;
     compilation_order = rule_order;

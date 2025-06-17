@@ -10,7 +10,7 @@ let debug msg = if !debug_elex then Errors.debug_print ~f_name:(Some "elex.ml") 
  
 (* Temporal patterns *)
 
-module Pattern = Patt.Make(Eformula.Info)(Formula.StringVar)(Dom)(TTerm)
+module Pattern = Patt.Make(Eformula.Info)(Term.StringVar)(Dom)(TTerm)
 
 let epatt_of_tpatt = function
   | Tlex.Pattern.PPresent -> Pattern.PPresent
@@ -112,19 +112,19 @@ type estmt =
   | ESFunction of ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | ESNote    of string
 
-type var_types = (ident, TypeTerm.t, Base.String.comparator_witness) Map.t
-
 type eprog =
   {
     estmts:            estmt list;
     ealiases:          (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
-                       (* maps type aliases to their underlying type *)
+    (* maps type aliases to their underlying type *)
+    esubtypes:         (ident, TypeTerm.ttt, Base.String.comparator_witness) Map.t;
+    (* maps subtypes to their supertypes *)
     eevents:           (ident, tevent, Base.String.comparator_witness) Map.t;
-                       (* maps event names to their definitions *)
+    (* maps event names to their definitions *)
     efunctions:        (ident, tfunction, Base.String.comparator_witness) Map.t;
-                       (* maps function names to their definitions *)
-    variables:         (int, var_types, Int.comparator_witness) Map.t;
-                       (* maps rule labels to variables used in section *)
+    (* maps function names to their definitions *)
+    rule_ctxts:        (int, ctxt, Int.comparator_witness) Map.t;
+    (* maps rule labels to variables used in section *)
     rule_tree:         Label.RuleTree.s;
     ecrules:           (int, ecrule, Int.comparator_witness) Map.t;
     compilation_order: int list;
@@ -135,9 +135,10 @@ let eempty =
   {
     estmts            = [];
     ealiases          = Map.empty (module String);
+    esubtypes         = Map.empty (module String);
     eevents           = Map.empty (module String);
     efunctions        = Map.empty (module String);
-    variables         = Map.empty (module Int); 
+    rule_ctxts        = Map.empty (module Int); 
     rule_tree         = Label.RuleTree.empty;
     ecrules           = Map.empty (module Int);
     compilation_order = [];
@@ -397,12 +398,12 @@ let string_of_estmt ecrules ?(i=0) =
           | None -> ""
      in
      let f (ident, typ) =
-       Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
+       Printf.sprintf "%s : %s" ident (TypeTerm.to_string typ) in
      Printf.sprintf "%sfunction %s(%s) -> %s%s"
        (Util.tabs i)
        name
        (String.concat ~sep:", " (List.map typed_args ~f))
-       (TypeTerm.value_to_string return_typ)
+       (TypeTerm.to_string return_typ)
        description
   | ESNote text -> "note \"" ^ text ^ "\""
     

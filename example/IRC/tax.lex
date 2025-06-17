@@ -24,11 +24,6 @@ internal functional event amount_excluded_from_gross_income_by_property (
   p: property
   i: individual
 ) -> money USD
-
-# test
-# TODO[JD] Parser error at example/tax code/tax.lex:20:87: invalid character
-# internal functional event amount_excluded_from_gross_income_by_property (p : property, i: individual) -> money USD
-
   """ the amount excluded from gross income of individual {i} due to sale or exchange of property {p} """
 
 internal functional event amount_excluded_from_gross_income (
@@ -39,8 +34,8 @@ internal functional event amount_excluded_from_gross_income (
 internal functional event time_in_principal_residence (
   i: individual
   p: property
-) -> span
-  """ the amount of time that individual {i} used property {p} as their principal residence """
+) -> int
+  """ the number of days that individual {i} used property {p} as their principal residence """
 
 observable event uses_property_as_principal_residence
   """ individual {i} uses property {p} as their principal residence """
@@ -69,8 +64,6 @@ Gross income shall not include gain from the sale or exchange of property if, du
 """
 
 rule "time_in_principal_residence"
-  fix
-    d : int
   whenever
     gain_from_sale_or_exchange_of_property(i, p, gain)
     t <- CNT (d; i, p; ONCE[0, 5y] uses_property_as_principal_residence(i, p) \ 
@@ -78,15 +71,13 @@ rule "time_in_principal_residence"
 	                           AND ts(cur_time) \
 	                           AND (day(cur_time) = d) )
   constitute
-    time_in_principal_residence(i, p) = 1d * t
+    time_in_principal_residence(i, p) = t
 
 rule "amount_excluded_by_property"
-  fix
-    t : span
   whenever
     gain_from_sale_or_exchange_of_property(i, p, gain)
     time_in_principal_residence(i, p) = t
-    t >= 2y
+    t >= 730
   constitute
     amount_excluded_from_gross_income_by_property(p, i) = gain
   
@@ -108,13 +99,11 @@ The amount of gain excluded from gross income under subsection (a) with respect 
 """
 
 rule
-  fix
-    t : span
   whenever
     gain_from_sale_or_exchange_of_property(i, p, gain)
     gain > USD 250000
     time_in_principal_residence(i, p) = t
-    t >= 2y
+    t >= 730
   replace
     paragraph "a" rule "amount_excluded_by_property" 
   constitute

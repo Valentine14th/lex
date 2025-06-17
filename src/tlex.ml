@@ -6,6 +6,10 @@ open Lex
 
 module Zinterval = MFOTL_lib.Zinterval
 
+(* Typing context *)
+
+type ctxt = TypeTerm.ctxt
+
 (* Imports *)
 
 type 'a tannot =
@@ -48,7 +52,7 @@ end
 
 (* Temporal patterns *)
 
-module Pattern = Patt.Make(Tformula.Info)(Formula.StringVar)(Dom)(TTerm)
+module Pattern = Patt.Make(Tformula.Info)(Term.StringVar)(Dom)(TTerm)
 
 (* Rule declarations *)
 
@@ -106,11 +110,13 @@ type tprog =
     tstmts:               tstmt list;
     taliases:             (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
     (* maps type aliases to their underlying type *)
+    tsubtypes:            (ident, TypeTerm.t, Base.String.comparator_witness) Map.t;
+    (* maps subtypes to their supertypes *)
     tevents:              (ident, tevent, Base.String.comparator_witness) Map.t;
     (* maps event names to their definitions *)
     tfunctions:           (ident, tfunction, Base.String.comparator_witness) Map.t;
     (* maps function names to their definitions *)
-    variables:            (int, var_types, Int.comparator_witness) Map.t;
+    rule_ctxts:           (int, ctxt, Int.comparator_witness) Map.t;
     (* maps rule labels to variables used in section *)
     rule_tree:            Label.RuleTree.s;
     exception_predicates: (int, Tformula.t, Int.comparator_witness) Map.t;
@@ -121,9 +127,10 @@ let tempty =
   {
     tstmts               = [];
     taliases             = Map.empty (module String);
+    tsubtypes            = Map.empty (module String);
     tevents              = Builtin.events_map;
     tfunctions           = Builtin.functions_map;
-    variables            = Map.empty (module Int); 
+    rule_ctxts           = Map.empty (module Int); 
     rule_tree            = Label.RuleTree.empty;
     exception_predicates = Map.empty (module Int);
     scope_predicates     = Map.empty (module Int);
@@ -178,9 +185,9 @@ let set_labels pos label tprog =
 let label_of_rule tprog id = Map.find_exn tprog.rule_tree.label_of_rule id
 
 let add_vars id vs tprog =
-  let variables = try Map.add_exn tprog.variables ~key:id ~data:vs
-    with _ -> assert false
-  in { tprog with variables = variables }
+  let rule_ctxts = try Map.add_exn tprog.rule_ctxts ~key:id ~data:vs
+                   with _ -> assert false
+  in { tprog with rule_ctxts }
 
 let add_rule pos rule_num label tprog =
   let open Errors.OrErrors in
@@ -362,7 +369,7 @@ let string_of_tstmt ?(i=0) =
           | None -> "" in
       let typ_string =
        match typ with
-       | Some tt -> " is " ^ TypeTerm.value_to_string tt
+       | Some tt -> " is " ^ TypeTerm.to_string tt
        | None -> "" in
      Printf.sprintf "%stype %s%s%s"
        (Util.tabs i) name typ_string description
@@ -373,12 +380,12 @@ let string_of_tstmt ?(i=0) =
           | None -> ""
      in
      let f (ident, typ) =
-       Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
+       Printf.sprintf "%s : %s" ident (TypeTerm.to_string typ) in
      Printf.sprintf "%sfunction %s(%s) -> %s%s"
        (Util.tabs i)
        name
        (String.concat ~sep:", " (List.map typed_args ~f))
-       (TypeTerm.value_to_string return_typ)
+       (TypeTerm.to_string return_typ)
        description
   | TSNote text -> "note \"" ^ text ^ "\""
 
@@ -391,10 +398,6 @@ let string_of_signature signature =
     
 let string_of_tprog tprog =
   String.concat ~sep:"\n" (List.map tprog.tstmts ~f:string_of_tstmt)
-
-let string_of_var_types var_types =
-  let f (k, v) = k ^ " : " ^ TypeTerm.to_string v in
-  "[" ^ String.concat ~sep:", " (List.map (Map.to_alist var_types) ~f) ^ "]"
 
 let print_tprog tprog =
   Stdio.printf "%s\n" (string_of_tprog tprog)

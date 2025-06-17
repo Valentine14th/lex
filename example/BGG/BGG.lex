@@ -96,9 +96,6 @@ paragraph "1"
 point "a"
 
 rule
-  fix
-    b : beschwerde
-    a : akt
   whenever
     anfechtungsObjekt(b, a)
     oeffentlichesRecht(a)

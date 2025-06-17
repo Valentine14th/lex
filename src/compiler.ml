@@ -193,16 +193,17 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) vars (enftype: Enftype.t) 
   | _ -> assert false
 
 let rec compile_typeterm = function
-  | TypeTerm.TypeConst d -> ["", d]
-  | TypeVar v -> raise (Invalid_argument ("Cannot compile abstract TypeVar " ^ v))
-  | TypeSum kvs -> let f (k, v) =
-                     List.map (compile_typeterm v) ~f:(Util.concat k) in
-                   List.concat (List.map kvs ~f)
+  | TypeTerm.TConst d   -> ["", d]
+  | TNamed          tn  -> raise (Invalid_argument ("Cannot compile TName " ^ tn))
+  | TVar            tv  -> raise (Invalid_argument ("Cannot compile TVar " ^ tv))
+  | TSum            kvs -> let f (k, v) =
+                             List.map (compile_typeterm v) ~f:(Util.concat k) in
+                           List.concat (List.map kvs ~f)
 
 let compile_eval_default aliases typeterm =
   List.map ~f:(fun (name, typ_alias) -> (name, compile_tt typ_alias))
-    (compile_typeterm (TypeTerm.eval_default aliases
-                         (TypeTerm.TypeConst TInt) (TypeTerm.unalias aliases typeterm)))
+    (compile_typeterm (TypeTerm.eval_aliases_default aliases
+                         (TypeTerm.TConst TInt) (TypeTerm.unalias aliases typeterm)))
 
 
 let compile_let_binding aliases (f: Eformula.t) (pred: Eformula.t) : string * (ident * Dom.tt option) list * Eformula.t =
@@ -217,7 +218,7 @@ let compile_let_binding aliases (f: Eformula.t) (pred: Eformula.t) : string * (i
          let v = ETerm.{ trm = var w;
                          info = { P.dummy with typ = t.info.typ } } in
          let eq = ETerm.{ trm = binop v Term.Bop.BEq t;
-                          info = { P.dummy with typ = TypeTerm.TypeConst Dom.TBool } } in
+                          info = { P.dummy with typ = TypeTerm.TConst Dom.TBool } } in
          let ef = Eformula.{ form = eqconst eq (Dom.Bool true);
                              info = { I.dummy with enftype = Enftype.obs } } in
          ef :: fs, (w, compile_eval_default aliases t.info.typ)
@@ -438,5 +439,5 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
                   { I.dummy with enftype = Enftype.cau } 
               ) ~init:(tbigcauconj formulae) in
   let signature = compile_signature eprog.pols eprog.eevents eprog.efunctions eprog.ealiases
-                    eprog.variables let_rules in
+                    eprog.rule_ctxts let_rules in
   { signature; phi }

@@ -22,6 +22,12 @@ type tt =
   | TSpan
   | TMoney of string [@@deriving compare, sexp_of, hash, equal]
 
+let equal_tt tt tt' =
+  match tt, tt' with
+  | TMoney "*", TMoney _ -> true
+  | TMoney _, TMoney "*" -> true
+  | _, _ -> equal_tt tt tt'
+
 type t =
   | Int of Int.t
   | Str of String.t

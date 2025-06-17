@@ -193,7 +193,7 @@ let string_of_stmt ?(i=0) =
           | Some s -> "\n" ^ make_doc_string s i
           | None -> ""
      in
-     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.to_string typ) in
      Printf.sprintf "%sfunction %s(%s) -> %s%s"
        (Util.tabs i)
        name

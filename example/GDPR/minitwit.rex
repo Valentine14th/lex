@@ -26,8 +26,8 @@ observable event input
     func    : string
     param   : string
     value   : string
-    caller  : string
-    purpose : string
+    caller  : user_id
+    purpose : purpose
 
 refine type data_subject is user_id
 refine type entity       is string

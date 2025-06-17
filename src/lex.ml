@@ -231,7 +231,7 @@ let string_of_rule i rule =
 
 let string_of_args args i = 
     let string_of_arg (name, typ_alias) = 
-      Printf.sprintf "%s%s : %s" (Util.tabs (i+1)) name (TypeTerm.value_to_string typ_alias)
+      Printf.sprintf "%s%s : %s" (Util.tabs (i+1)) name (TypeTerm.to_string typ_alias)
     in
     String.concat ~sep:"\n" (List.map args ~f:string_of_arg)
 
@@ -258,7 +258,7 @@ let string_of_event_type = function
 let string_of_type_fixes i = function
   | [] -> ""
   | type_fixes ->
-     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.to_string typ) in
      Printf.sprintf "%sfix\n%s%s\n"
        (Util.tabs i)
        (Util.tabs (i+1))
@@ -318,7 +318,7 @@ let string_of_stmt ?(i=0) =
           | Some s -> "\n" ^ make_doc_string s i
           | None -> ""
      in
-     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.value_to_string typ) in
+     let f (ident, typ) = Printf.sprintf "%s : %s" ident (TypeTerm.to_string typ) in
      Printf.sprintf "%sfunction %s(%s) -> %s%s"
        (Util.tabs i)
        name

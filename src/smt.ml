@@ -13,8 +13,8 @@ let debug msg = if !debug_smt then Errors.debug_print ~f_name:(Some "smt.ml") ms
 
 (* Embedding in FOL *)
 
-let tint = TypeTerm.TypeConst Dom.TInt
-let tbool = TypeTerm.TypeConst Dom.TBool
+let tint = TypeTerm.TConst Dom.TInt
+let tbool = TypeTerm.TConst Dom.TBool
 
 let info_int  = { PosTypeInfo.dummy with typ = tint }
 let info_bool = { PosTypeInfo.dummy with typ = tbool }
@@ -45,91 +45,87 @@ module FOL_State = struct
 
 end
 
-let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u * 'a list option =
+let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u =
   let open FOL_State in
   let lb itv u u' =
     if Time.Span.is_zero (Interval.left itv) then
       []
     else
-      [Tformula.make (
+      [Tformula.make_dummy (
            EqConst (TTerm.make (
                         TTerm.Binop
                           (TTerm.make (TTerm.Binop (ts u, Term.Bop.BSub, ts u')) info_int,
                            Term.Bop.BGeq,
                            TTerm.dummy_int (Time.Span.min_seconds (Interval.left itv))))
                       info_bool,
-                    Dom.bool_tt))
-         { Tformula.Info.dummy with t_vars = [(var_tp u, tint); (var_tp u', tint)] }] in
+                    Dom.bool_tt))] in
   let ub itv u u' =
     match Interval.right itv with
     | Some r ->
-       [Tformula.make (
+       [Tformula.make_dummy (
            EqConst (TTerm.make (
                         TTerm.Binop
                           (TTerm.make (TTerm.Binop (ts u, Term.Bop.BSub, ts u')) info_int,
                            Term.Bop.BLeq,
                            TTerm.dummy_int (Time.Span.min_seconds r)))
                       info_bool,
-                    Dom.bool_tt))
-          { Tformula.Info.dummy with t_vars = [(var_tp u, tint); (var_tp u', tint)] }]
+                    Dom.bool_tt))]
     | None -> [] in
   let lt u u' =
-    Tformula.make (
-        EqConst (TTerm.make (TTerm.Binop (tp u, Term.Bop.BLt, tp u')) info_bool, Dom.bool_tt))
-      { Tformula.Info.dummy with t_vars = [(var_tp u, tint); (var_tp u', tint)] } in
+    Tformula.make_dummy (
+        EqConst (TTerm.make (TTerm.Binop (tp u, Term.Bop.BLt, tp u')) info_bool, Dom.bool_tt)) in
   let leq u u' =
-    Tformula.make (
-        EqConst (TTerm.make (TTerm.Binop (tp u, Term.Bop.BLeq, tp u')) info_bool, Dom.bool_tt))
-      { Tformula.Info.dummy with t_vars = [(var_tp u, tint); (var_tp u', tint)] } in
+    Tformula.make_dummy (
+        EqConst (TTerm.make (TTerm.Binop (tp u, Term.Bop.BLeq, tp u')) info_bool, Dom.bool_tt)) in
   let old v = { v with tp = u.tp } in
   match f.form with 
   | TT ->
-     TT, u, None
+     TT, u
   | FF ->
-     FF, u, None
+     FF, u
   | EqConst (x, v) ->
-     EqConst (x, v), u, None
+     EqConst (x, v), u
   | Predicate (e, t) ->
-     Predicate (e, tp u :: t), u, Some (f.info.t_vars @ [(var_tp u, tint)])
+     Predicate (e, tp u :: t), u
   | Predicate' (_, _, f) ->
      let f, u = to_fol_ (f, u) in
-     f.form, u, None
+     f.form, u
   | Let _ -> assert false
   | Let' (_, _, _, _, g) ->
      let g, u = to_fol_ (g, u) in
-     g.form, u, None
+     g.form, u
   | Agg (s, _, _, y, _) ->
      let e, u = new_event u in
-     Predicate (e, (tpts u) @ (List.map ~f:TTerm.dummy_var (s :: y))), u, None
+     Predicate (e, (tpts u) @ (List.map ~f:TTerm.dummy_var (s :: y))), u
   | Top (s, _, _, y, _) ->
      let e, u = new_event u in
-     Predicate (e, (tpts u) @ (List.map ~f:TTerm.dummy_var (s @ y))), u, None
+     Predicate (e, (tpts u) @ (List.map ~f:TTerm.dummy_var (s @ y))), u
   | Neg f ->
      let f, u = to_fol_ (f, u) in
-     Neg f, u, None
+     Neg f, u
   | And (s, fs) ->
      let f g (fs, u) = let f, u = to_fol_ (g, u) in (f :: fs, old u) in
      let fs, u = List.fold_right fs ~init:([], u) ~f in
-     And (s, fs), u, None
+     And (s, fs), u
   | Or (s, fs) ->
      let f g (fs, u) = let f, u = to_fol_ (g, u) in (f :: fs, old u) in
      let fs, u = List.fold_right fs ~init:([], u) ~f in
-     Or (s, fs), u, None
+     Or (s, fs), u
   | Imp (s, f, g) ->
      let f, u = to_fol_ (f, u) in
      let g, u = to_fol_ (g, old u) in
-     Imp (s, f, g), old u, None
+     Imp (s, f, g), old u
   | Exists (x, f) ->
      let f, u = to_fol_ (f, u) in
-     Exists (x, f), old u, None
+     Exists (x, f), old u
   | Forall (x, f) ->
      let f, u = to_fol_ (f, u) in
-     Forall (x, f), old u, None
+     Forall (x, f), old u
   | Prev (itv, f) ->
      (* TODO: Check the use of min_seconds, max_seconds here *)
      let u' = inc_tp u in
      let f, u'' = to_fol_ (f, u') in
-     let c = Tformula.make (
+     let c = Tformula.make_dummy (
                  EqConst (
                      TTerm.make
                        (TTerm.Binop
@@ -141,22 +137,18 @@ let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u * 'a l
                                  Term.Bop.BSub,
                                  TTerm.make
                                    (TTerm.Const (Dom.Int 1))
-                                   { PosTypeInfo.dummy with typ = TypeTerm.TypeConst Dom.TInt } ))
-                             { PosTypeInfo.dummy with typ = TypeTerm.TypeConst Dom.TInt }))
-                       { PosTypeInfo.dummy with typ = TypeTerm.TypeConst Dom.TBool },
-                     Dom.bool_tt) )
-               { Tformula.Info.dummy with t_vars = [(var_tp u, tint); (var_tp u', tint)] } in
+                                   { PosTypeInfo.dummy with typ = TypeTerm.TConst Dom.TInt } ))
+                             { PosTypeInfo.dummy with typ = TypeTerm.TConst Dom.TInt }))
+                       { PosTypeInfo.dummy with typ = TypeTerm.TConst Dom.TBool },
+                     Dom.bool_tt) ) in
      let d = lb itv u u' in
      let e = ub itv u u' in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint)] in
-     Exists (var_tp u', Tformula.make (And (Side.N, [f; c] @ d @ e))
-                          { f.info with t_vars }),
-     u'',
-     Some t_vars
+     Exists (var_tp u', Tformula.make_dummy (And (Side.N, [f; c] @ d @ e))),
+     u''
   | Next (itv, f) ->
      let u' = inc_tp u in
      let f, u'' = to_fol_ (f, u') in
-     let c = Tformula.make (
+     let c = Tformula.make_dummy (
                  EqConst (
                      TTerm.make
                        (TTerm.Binop
@@ -168,66 +160,50 @@ let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u * 'a l
                                  Term.Bop.BAdd,
                                  TTerm.make
                                    (TTerm.Const (Dom.Int 1))
-                                   { PosTypeInfo.dummy with typ = TypeTerm.TypeConst Dom.TInt } ))
-                             { PosTypeInfo.dummy with typ = TypeTerm.TypeConst Dom.TInt }))
-                       { PosTypeInfo.dummy with typ = TypeTerm.TypeConst Dom.TBool },
-                     Dom.bool_tt) )
-               { Tformula.Info.dummy with t_vars = [(var_tp u, tint); (var_tp u', tint)] } in
+                                   { PosTypeInfo.dummy with typ = TypeTerm.TConst Dom.TInt } ))
+                             { PosTypeInfo.dummy with typ = TypeTerm.TConst Dom.TInt }))
+                       { PosTypeInfo.dummy with typ = TypeTerm.TConst Dom.TBool },
+                     Dom.bool_tt) ) in
      let d = lb itv u' u in
      let e = ub itv u' u in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint)] in
-     Exists (var_tp u', Tformula.make (And (Side.N, [f; c] @ d @ e))
-                          { f.info with t_vars }),
-     u'',
-     Some t_vars
+     Exists (var_tp u', Tformula.make_dummy (And (Side.N, [f; c] @ d @ e))),
+     u''
   | Once (itv, f) ->
      let u' = inc_tp u in
      let f, u'' = to_fol_ (f, u') in
      let d = lb itv u u' in
      let e = ub itv u u' in
      let h = leq    u' u in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint)] in
-     Exists (var_tp u', Tformula.make (And (Side.N, f :: h :: d @ e))
-                          { f.info with t_vars }),
-     u'',
-     Some t_vars
+     Exists (var_tp u', Tformula.make_dummy (And (Side.N, f :: h :: d @ e))),
+     u''
   | Eventually (itv, f) ->
      let u' = inc_tp u in
      let f, u'' = to_fol_ (f, u') in
      let d = lb itv u' u in
      let e = ub itv u' u in
      let h = leq    u u' in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint)] in
-     Exists (var_tp u', Tformula.make (And (Side.N, f :: h :: d @ e))
-                          { f.info with t_vars }),
-     u'',
-     Some t_vars
+     Exists (var_tp u', Tformula.make_dummy (And (Side.N, f :: h :: d @ e))),
+     u''
   | Historically (itv, f) ->
      let u' = inc_tp u in
      let f, u'' = to_fol_ (f, u') in
      let d = lb itv u u' in
      let e = ub itv u u' in
      let h = leq    u' u in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint)] in
      Forall (var_tp u',
-             Tformula.make
-               (Imp (Side.N, Tformula.make (And (Side.N, h :: d @ e)) { f.info with t_vars }, f))
-               { f.info with t_vars }),
-     u'',
-     Some t_vars
+             Tformula.make_dummy
+               (Imp (Side.N, Tformula.make_dummy (And (Side.N, h :: d @ e)), f))),
+     u''
   | Always (itv, f) ->
      let u' = inc_tp u in
      let f, u'' = to_fol_ (f, u') in
      let d = lb itv u' u in
      let e = ub itv u' u in
      let h = leq    u u' in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint)] in
      Forall (var_tp u',
-             Tformula.make
-               (Imp (Side.N, Tformula.make (And (Side.N, h :: d @ e)) { f.info with t_vars }, f))
-               { f.info with t_vars }),
-     u'',
-     Some t_vars
+             Tformula.make_dummy
+               (Imp (Side.N, Tformula.make_dummy (And (Side.N, h :: d @ e)), f))),
+     u''
   | Since (_, itv, f, g) ->
      let u' = inc_tp u in
      let u'' = inc_tp u' in
@@ -238,17 +214,12 @@ let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u * 'a l
      let h  = leq    u' u in
      let h' = leq    u'' u in
      let i  = lt     u' u'' in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint); (var_tp u'', tint)] in
-     let phi = Tformula.make
+     let phi = Tformula.make_dummy
                  (Forall (var_tp u'',
-                          Tformula.make
-                            (Imp (Side.N, Tformula.make_dummy (And (Side.N, [h'; i])), f))
-                            { f.info with t_vars }))
-                 { f.info with t_vars } in
-     Exists (var_tp u', Tformula.make (And (Side.N, g :: h :: d @ e @ [phi]))
-                          { f.info with t_vars }),
-     u''',
-     Some [var_tp u', TypeTerm.TypeConst Dom.TInt]
+                          Tformula.make_dummy
+                            (Imp (Side.N, Tformula.make_dummy (And (Side.N, [h'; i])), f)))) in
+     Exists (var_tp u', Tformula.make_dummy (And (Side.N, g :: h :: d @ e @ [phi]))),
+     u'''
   | Until (_, itv, f, g) ->
      let u' = inc_tp u in
      let u'' = inc_tp u' in
@@ -259,27 +230,19 @@ let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u * 'a l
      let h  = leq    u u' in
      let h' = leq    u u'' in
      let i  = lt     u'' u' in
-     let t_vars = f.info.t_vars @ [(var_tp u, tint); (var_tp u', tint); (var_tp u'', tint)] in
-     let phi = Tformula.make
+     let phi = Tformula.make_dummy
                  (Forall (var_tp u'',
-                          Tformula.make
-                            (Imp (Side.N, Tformula.make_dummy (And (Side.N, [h'; i])), f))
-                            { f.info with t_vars }))
-                 { f.info with t_vars } in
-     Exists (var_tp u', Tformula.make (And (Side.N, g :: h :: d @ e @ [phi]))
-                          { f.info with t_vars }),
-     u''',
-     Some [var_tp u', TypeTerm.TypeConst Dom.TInt]
+                          Tformula.make_dummy
+                            (Imp (Side.N, Tformula.make_dummy (And (Side.N, [h'; i])), f)))) in
+     Exists (var_tp u', Tformula.make_dummy (And (Side.N, g :: h :: d @ e @ [phi]))),
+     u'''
   | Type _ ->
-     TT, u, None
+     TT, u
 
 and to_fol_ (f, u) =
   let f = Tformula.unroll_let f in
-  let form, u, t_vars_opt = to_fol_core_ (f, u) in
-  let info = match t_vars_opt with
-    | Some t_vars -> { f.info with t_vars }
-    | None -> f.info in
-  Tformula.{ form; info }, u
+  let form, u = to_fol_core_ (f, u) in
+  Tformula.{ f with form }, u
 
 let to_fol (f : Tformula.t) : Tformula.t  = fst (to_fol_ (f, FOL_State.empty))
 
@@ -295,9 +258,10 @@ let tt_to_sort ctx =
 
 let ttt_to_sort ctx =
   function
-  | TypeTerm.TypeConst tt -> tt_to_sort ctx tt
-  | TypeVar            v  -> Sort.mk_uninterpreted_s ctx v
-  | TypeSum            _  -> assert false 
+  | TypeTerm.TConst tt -> tt_to_sort ctx tt
+  | TNamed tn
+    | TVar tn -> Sort.mk_uninterpreted_s ctx tn
+  | _ -> assert false
 
 let dom_to_expr ctx =
   function
@@ -315,15 +279,14 @@ let make_func_decl aliases ctx s arg_terms ret_term =
   let arg_sorts = List.map ~f:(ttt_to_sort ctx) arg_ttts in
   let ret_ttt = TypeTerm.unalias aliases ret_term.info.typ in
   let ret_sort = ttt_to_sort ctx ret_ttt in
-  let suffix = String.concat ~sep:"_" (List.map ~f:TypeTerm.value_to_string (arg_ttts @ [ret_ttt])) in
+  let suffix = String.concat ~sep:"_" (List.map ~f:TypeTerm.to_string (arg_ttts @ [ret_ttt])) in
   FuncDecl.mk_func_decl_s ctx (s ^ "_" ^ suffix) arg_sorts ret_sort
 
 let rec term_to_expr
           aliases
           (bruijn : (string * Z3.Sort.sort) list)
-          t_vars
           ctx (trm : TTerm.t) : Z3.Expr.expr =
-  let aux = term_to_expr aliases bruijn t_vars ctx in
+  let aux = term_to_expr aliases bruijn ctx in
   let open Z3 in
   match trm.trm with
   | Var x ->
@@ -333,9 +296,7 @@ let rec term_to_expr
       | None -> (*debug ("Free variable: " ^ x);
                 debug ("term: " ^ TTerm.to_string trm);
                 debug ("t_vars: " ^ String.concat ~sep:", " (List.map ~f:(fun (y, ttt) -> y ^ " -> " ^ TypeTerm.to_string ttt) t_vars));*)
-                let ttt = snd (List.find_exn ~f:(fun (y, _) -> String.equal x y) t_vars) in
-                let ttt = TypeTerm.unalias aliases ttt in
-                let sort = ttt_to_sort ctx ttt in
+                let sort = ttt_to_sort ctx trm.info.typ in
                 Expr.mk_const_s ctx x sort)
   | Const d ->
      dom_to_expr ctx d
@@ -363,6 +324,15 @@ let rec term_to_expr
      )
   | _ -> (*TODO: Record types*) assert false
 
+let find_ident_type (x: string) (form: Tformula.t) =
+  let terms = Tformula.terms form in
+  let is_same_ident trm = match trm.trm with
+    | Var v -> String.equal v x
+    | _ -> false in
+  match Core.Set.find terms ~f:is_same_ident with
+  | Some trm -> trm.info.typ
+  | _ -> TConst Dom.TInt
+
 let rec to_expr_ aliases bruijn ctx (form : Tformula.t) : Z3.Expr.expr =
   let aux = to_expr_ aliases bruijn ctx in
   let open Z3 in
@@ -373,12 +343,12 @@ let rec to_expr_ aliases bruijn ctx (form : Tformula.t) : Z3.Expr.expr =
   | FF ->
      Boolean.mk_false ctx
   | EqConst (x, Dom.Bool true) ->
-     term_to_expr aliases bruijn form.info.t_vars ctx x
+     term_to_expr aliases bruijn ctx x
   | EqConst (x, c) ->
-     Boolean.mk_eq ctx (term_to_expr aliases bruijn form.info.t_vars ctx x) (dom_to_expr ctx c)
+     Boolean.mk_eq ctx (term_to_expr aliases bruijn ctx x) (dom_to_expr ctx c)
   | Predicate (e, ts) ->
      let func_decl = make_func_decl aliases ctx e ts (make (Const (Dom.Bool true)) info_bool) in
-     Expr.mk_app ctx func_decl (List.map ~f:(term_to_expr aliases bruijn form.info.t_vars ctx) ts)
+     Expr.mk_app ctx func_decl (List.map ~f:(term_to_expr aliases bruijn ctx) ts)
   | Neg f ->
      Boolean.mk_not ctx (aux f)
   | And (_, fs) ->
@@ -388,14 +358,15 @@ let rec to_expr_ aliases bruijn ctx (form : Tformula.t) : Z3.Expr.expr =
   | Imp (_, f, g) ->
      Boolean.mk_implies ctx (aux f) (aux g)
   | Exists (x, f) ->
-     let ttt = snd (List.find_exn ~f:(fun (y, _) -> String.equal x y) form.info.t_vars) in
+     let ttt = find_ident_type x f in
      let quant_type = TypeTerm.unalias aliases ttt in
      let quant_sort = ttt_to_sort ctx quant_type in
      let f = to_expr_ aliases ((x, quant_sort) :: bruijn) ctx f in
      let q = Quantifier.mk_exists ctx [quant_sort] [Symbol.mk_string ctx x] f None [] [] None None in
      Quantifier.expr_of_quantifier q
   | Forall (x, f) ->
-     let ttt = snd (List.find_exn ~f:(fun (y, _) -> String.equal x y) form.info.t_vars) in
+     let ttt = find_ident_type x f in
+     (*Stdio.print_endline (String.concat ~sep:", " (List.map ~f:(fun (k, v) -> k ^ " -> " ^ TypeTerm.ttt_to_string v) form.info.t_vars));*)
      let quant_type = TypeTerm.unalias aliases ttt in
      let quant_sort = ttt_to_sort ctx quant_type in
      let f = to_expr_ aliases ((x, quant_sort) :: bruijn) ctx f in
@@ -414,40 +385,28 @@ let is_tautology tprog ?(assume=None) f =
   (*let tp_0 = Tformula.make (
                  Tformula.EqConst (make_dummy (Var "tp.0"), Dom.Int 0))
                { Tformula.Info.dummy with t_vars = [("tp.0", tint)] } in*)
-  let ts_mono_info = { Tformula.Info.dummy with t_vars = [("tp.1", tint); ("tp.2", tint)] } in
-  let ts_mono = Tformula.make (
+  let ts_mono = Tformula.make_dummy (
                     Tformula.forall "tp.1" (
-                        Tformula.make (
+                        Tformula.make_dummy (
                             Tformula.forall "tp.2" (
-                                Tformula.make (
+                                Tformula.make_dummy (
                                     Tformula.imp N 
-                                      (Tformula.make (EqConst (make (Binop (make (Var "tp.1") info_int,
+                                      (Tformula.make_dummy (EqConst (make (Binop (make (Var "tp.1") info_int,
                                                                             Term.Bop.BLeq,
                                                                             make (Var "tp.2") info_int))
                                                                   info_bool,
-                                                       Dom.bool_tt))
-                                         ts_mono_info)
-                                      ((Tformula.make (
+                                                       Dom.bool_tt)))
+                                      ((Tformula.make_dummy (
                                             EqConst ((make (Binop (make (App ("~ts", [make (Var "tp.1") info_int])) info_int,
                                                                    Term.Bop.BLeq,
                                                                    make (App ("~ts", [make (Var "tp.2") info_int])) info_int))
                                                         info_bool),
-                                                     Dom.bool_tt))
-                                          ts_mono_info)) )
-                                  ts_mono_info ))
-                          ts_mono_info ))
-                  ts_mono_info  in
-  let f = Tformula.make (
-              (*Tformula.forall "tp.0" (
-                  Tformula.make ( *)
-              Tformula.imp N
-              ts_mono
-              (*(Tformula.make (
-                             Tformula.conj N tp_0 ts_mono )
-                           { f.info with t_vars = [("tp.0", tint); ("tp.1", tint); ("tp.2", tint)] } )*)
-              f )
-            { f.info with t_vars = f.info.t_vars @ [("tp.0", tint); ("tp.1", tint); ("tp.2", tint)] } (* )) *)
-(*{ f.info with t_vars = f.info.t_vars @ [("tp.0", tint)] }*) in
+                                                     Dom.bool_tt)))))
+                              )
+                          )
+                      )
+                  ) in
+  let f = Tformula.make_dummy (Tformula.imp N ts_mono f) in
   debug ("MFOTL formula: " ^ Tformula.to_string f);
   let ctx = Z3.mk_context [] in
   let solver = Solver.mk_solver ctx None in

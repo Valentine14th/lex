@@ -30,20 +30,21 @@ let add_trtmt tstmt trtmt rs =
   ok { s; trefi = { rs.trefi with trtmts = trtmt :: rs.trefi.trtmts } }
 
 let add_tralias name (typ: TypeTerm.t option) doc_string (rs: rt) (pos: LexingInfo.t) : rt Errors.OrErrors.t =
-  (* TODO[FH]: check that the type exists in the underlying lex code / that we can overwrite it
-     -[JD] implemented *)
   let open Errors.OrErrors in
   let* traliases =
     try ok (Map.add_exn rs.trefi.traliases ~key:name ~data:(typ, doc_string))
     with _ -> error (Errors.type_error (Printf.sprintf "type alias %s already exists" name) pos) in
+  let* tsubtypes = ok (Map.add_exn rs.s.tprog.tsubtypes ~key:name ~data:(Option.value_exn typ)) in
   let trefi =
     { rs.trefi with trtmts = TRType (pos, name, typ, doc_string) :: rs.trefi.trtmts;
                     traliases } in
   let  s = rs.s in
   let* s = if Map.mem s.tprog.taliases name then 
-      ok { s with tprog = { s.tprog with taliases = Map.remove s.tprog.taliases name } }
+      ok { s with tprog = { s.tprog with taliases = Map.remove s.tprog.taliases name; tsubtypes } }
     else
-      error (Errors.type_error (Printf.sprintf "type %s does not exist in %s and thus cannot be refined" name (List.hd_exn rs.trefi.lex_file)) pos) in
+      error (Errors.type_error
+               (Printf.sprintf "type %s does not exist in %s and thus cannot be refined"
+                  name (List.hd_exn rs.trefi.lex_file)) pos) in
       (* TODO[JD] get the full or relative path to the lex file being refined, currently it is only a string without even a file extension *)
   let* s = add_talias name typ doc_string s pos in
   ok { s; trefi }
@@ -65,30 +66,28 @@ let add_trhidden name b label doc_string (rs: rt) (pos: LexingInfo.t) : rt Error
     ok (map rs f)
   else
     error (Errors.type_error (Printf.sprintf "event %s does not exist in %s and thus cannot be hidden" name (List.hd_exn rs.trefi.lex_file)) pos)
-    (* TODO[JD] get the full or relative path to the lex file being refined, currently it is only a string without even a file extension *)
+(* TODO[JD] get the full or relative path to the lex file being refined, currently it is only a string without even a file extension *)
 
-let merge_t_vars m (tf: Tformula.t) : (string, TypeTerm.t, String.comparator_witness) Map.t =
-  Map.merge ~f:(fun ~key:_ -> function
-      | `Left a -> Some a
-      | `Right a -> Some a
-      | `Both (a, _) -> Some a)
-    m (Map.of_alist_exn (module String) tf.info.t_vars)
+let add_tautology (rs: rt) (pos: LexingInfo.t) (pos': LexingInfo.t) ?(assume: Tformula.t option=None) (f: Tformula.t) =
+  { rs with trefi = { rs.trefi with tr_tautology = (pos, pos', assume, f) :: rs.trefi.tr_tautology } }
+
+let update_mon (rs: rt) (f: mon_map -> Tformula.t list -> LexingInfo.t -> mon_map) (tfs: Tformula.t list) (pos: LexingInfo.t) =
+  { rs with trefi = { rs.trefi with tr_mon = f rs.trefi.tr_mon tfs pos } }
+
+let update_anti_mon (rs: rt) (f: mon_map -> Tformula.t list -> LexingInfo.t -> mon_map) (tfs: Tformula.t list) (pos: LexingInfo.t) =
+  { rs with trefi = { rs.trefi with tr_anti_mon = f rs.trefi.tr_anti_mon tfs pos } }
 
 let tpf_to_tformula (tpf: Tlex.Pattern.t) : Tformula.t =
   let module I = Eformula.Info in
-  let t_vars' = List.fold tpf.fs ~init:(Map.empty (module String)) ~f:merge_t_vars in
-  let t_vars = Map.to_alist t_vars' in
-  let f = Tformula.make (Tformula.conjs N tpf.fs) { Tformula.Info.dummy with t_vars } in
+  let f = Tformula.make_dummy (Tformula.conjs N tpf.fs) in
   match tpf.patt with
   | Pattern.PPresent -> f
   | PEventually i -> Tformula.make (Tformula.eventually i f) f.info
   | PAlways i -> Tformula.make (Tformula.always i f) f.info
-  | PUntil (i, g) -> Tformula.make (Tformula.until N i g f)
-                       { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
+  | PUntil (i, g) -> Tformula.make_dummy (Tformula.until N i g f)
   | POnce i -> Tformula.make (Tformula.once i f) f.info
   | PHistorically i -> Tformula.make (Tformula.historically i f) f.info
-  | PSince (i, g) -> Tformula.make (Tformula.since N i f g)
-                       { Tformula.Info.dummy with t_vars = Map.to_alist (merge_t_vars t_vars' g) }
+  | PSince (i, g) -> Tformula.make_dummy (Tformula.since N i f g)
 
 let make_always_imp ~(close: bool) (lhs: Tformula.t) (rhs: Tformula.t) : Tformula.t =
   (** - [fv(f) = [x1; ... ; xn]]
@@ -101,28 +100,22 @@ let make_always_imp ~(close: bool) (lhs: Tformula.t) (rhs: Tformula.t) : Tformul
   *)
   let fvs_f = Tformula.fv lhs in
   let fvs_g = Set.diff (Tformula.fv rhs) fvs_f in
-  let t_vars' = List.fold [lhs; rhs] ~init:(Map.empty (module String)) ~f:merge_t_vars in
-  let t_vars = Map.to_alist t_vars' in
   let f_imp_g =
-    Tformula.make (
+    Tformula.make_dummy (
       Tformula.imp N lhs
         (List.fold_right (Base.Set.elements fvs_g)
-            ~f:(fun x f -> Tformula.make (Tformula.exists x f)
-                            { Tformula.Info.dummy with t_vars = f.info.t_vars } )
-            ~init:rhs))
-    { Tformula.Info.dummy with t_vars } in
+            ~f:(fun x f -> Tformula.make_dummy (Tformula.exists x f))
+            ~init:rhs)) in
   let f_imp_g =
     if close then
       let f_imp_g = List.fold_right (Base.Set.elements fvs_f)
-                      ~f:(fun x f -> Tformula.make (Tformula.forall x f)
-                                        { Tformula.Info.dummy with t_vars = f.info.t_vars })
+                      ~f:(fun x f -> Tformula.make_dummy (Tformula.forall x f))
                       ~init:f_imp_g in
-      Tformula.make (Tformula.forall "tp.0" f_imp_g)
-        { Tformula.Info.dummy with t_vars = t_vars @ [("tp.0", TypeTerm.TypeConst Dom.TInt)] }
+      Tformula.make_dummy (Tformula.forall "tp.0" f_imp_g)
     else f_imp_g in
   f_imp_g
 
-let add_preds_to_mon_map (m: 'str_info_map) (gs: Tformula.t list) (pos: LexingInfo.t) : 'str_info_map =
+let add_preds_to_mon_map (m: mon_map) (gs: Tformula.t list) (pos: LexingInfo.t) : mon_map =
   List.fold gs ~init:m
         ~f:(fun m x -> match x.form with
           | Predicate (p, _) ->
@@ -205,15 +198,8 @@ let collect_new_obligations trules =
       | _ -> None) trules
 
 let make_obligations_conj obligations : Tformula.t =
-  let get_and_add_tp_vars t_vars (tpf, tpg) = 
-    merge_t_vars (merge_t_vars t_vars (tpf_to_tformula tpf)) (tpf_to_tformula tpg) in
-  let t_vars = List.fold obligations
-                ~init:(Map.empty (module String)) ~f:get_and_add_tp_vars
-                |> Map.to_alist in
   let tps_to_imp (tpf, tpg) = make_always_imp ~close:true (tpf_to_tformula tpf) (tpf_to_tformula tpg) in
-  Tformula.make
-    (Tformula.conjs N (List.map ~f:tps_to_imp obligations))
-    { Tformula.Info.dummy with t_vars }
+  Tformula.make_dummy (Tformula.conjs N (List.map ~f:tps_to_imp obligations))
     
 let make_implication_error pos pos' =
   let open Errors.OrErrors in
@@ -223,202 +209,151 @@ let make_implication_error pos pos' =
               (LexingInfo.to_string pos'))
           pos)
 
-let check_regulative_replacement_implication old_obligation new_obligations (rs:rt) : bool =
-  let t_vars' = List.fold [new_obligations; old_obligation]
-                ~init:(Map.empty (module String)) ~f:merge_t_vars in
-  let t_vars = Map.to_alist t_vars' in
+let check_regulative_replacement_implication old_obligation new_obligations pos pos' (rs:rt) : rt =
   let always_imp = make_always_imp ~close:true new_obligations old_obligation in
-  let imp = Tformula.make
-              (Tformula.imp N
-                new_obligations always_imp)
-              { Tformula.Info.dummy with t_vars } in
-  Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations) imp
+  let imp = Tformula.make_dummy (Tformula.imp N new_obligations always_imp) in
+  add_tautology rs pos pos' ~assume:(Some new_obligations) imp
 
-let check_regulative_replacement rs new_trules pos : trule -> unit Errors.OrErrors.t = function
+let check_regulative_replacement rs new_trules pos : trule -> rt = function
   | TObligation (pos', lhs, rhs, _, _) ->
-    let open Errors.OrErrors in
     let new_obligations = collect_new_obligations new_trules in
     let new_obligations_conj = make_obligations_conj new_obligations in
     let old_obligation_imp = make_always_imp ~close:true (tpf_to_tformula lhs) (tpf_to_tformula rhs) in
-    let b = check_regulative_replacement_implication old_obligation_imp new_obligations_conj rs in
-    if b then ok ()
-    else make_implication_error pos pos'
+    check_regulative_replacement_implication old_obligation_imp new_obligations_conj pos pos' rs
   | _ -> assert false
 
-let check_constitutive_replacement_implication ~(weaken:bool) potential_replacements new_obligations_conj tf (rs:rt) : bool =
-  let f tpf' = 
+let check_constitutive_replacement_implication ~(weaken:bool) potential_replacements new_obligations_conj tf pos pos' (rs: rt) : rt =
+  let f rs tpf' = 
     let tf' = tpf_to_tformula tpf' in
-    let t_vars = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars
-                 |> Map.to_alist in
     let always_imp = if weaken then make_always_imp ~close:true tf' tf
                      else make_always_imp ~close:true tf tf' in
-    let imp = Tformula.make
-                (Tformula.imp N
-                  new_obligations_conj always_imp)
-                { Tformula.Info.dummy with t_vars } in
-    Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp in
-  List.exists potential_replacements ~f
+    let imp = Tformula.make_dummy (Tformula.imp N new_obligations_conj always_imp) in
+    add_tautology rs pos pos' ~assume:(Some new_obligations_conj) imp in
+  List.fold ~init:rs potential_replacements ~f
 
-let check_constitutive_replacement ~(weaken:bool) (new_trules: trule list) (rs: rt) mono pos : trule -> ('str_info_map * 'str_info_map) Errors.OrErrors.t = function
+let check_constitutive_replacement ~(weaken: bool) (new_trules: trule list) (rs: rt) (pos: LexingInfo.t) : trule -> rt Errors.OrErrors.t = function
   | TExceptionC (pos', lhs, _, _, preds)
   | TConstitutive (pos', lhs, preds) ->
     let open Errors.OrErrors in
-    let check_single pos' tpf g : unit Errors.OrErrors.t =
+    let check_single pos' tpf rs g : rt =
       let potential_replacements = collect_potential_constitutive_replacements g new_trules in
       let new_obligations = collect_new_obligations new_trules in
       let new_obligations_conj = make_obligations_conj new_obligations in
       let tf = tpf_to_tformula tpf in
-      let b = check_constitutive_replacement_implication ~weaken potential_replacements new_obligations_conj tf rs in
-      if b then ok ()
-      else make_implication_error pos pos' in
-    let* _ = all (List.map ~f:(check_single pos' lhs) preds) in
+      check_constitutive_replacement_implication ~weaken potential_replacements new_obligations_conj tf pos pos' rs in
+    let rs = List.fold ~init:rs ~f:(check_single pos' lhs) preds in
     if weaken then
-      let anti_mon = add_preds_to_mon_map (snd mono) preds pos in
-      ok (fst mono, anti_mon)
+      ok (update_anti_mon rs add_preds_to_mon_map preds pos)
     else
-      let mon = add_preds_to_mon_map (fst mono) preds pos in
-      ok (mon, snd mono)
+      ok (update_mon rs add_preds_to_mon_map preds pos)
   | _ -> assert false
 
-let check_exception_replacement_implication ~(weaken:bool) potential_replacements new_obligations_conj tf (rs:rt) : bool =
+let check_exception_replacement_implication ~(weaken:bool) potential_replacements new_obligations_conj (tf: Tformula.t) (pos: LexingInfo.t) (pos': LexingInfo.t) (rs: rt) : rt =
   let tpfs, _, _  = List.unzip3 potential_replacements in
-  let f tpf' = 
+  let f rs tpf' = 
     let tf' = tpf_to_tformula tpf' in
-    let t_vars = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars
-                 |> Map.to_alist in
     let always_imp = if weaken then make_always_imp ~close:true tf' tf
                      else make_always_imp ~close:true tf tf' in
-    let imp = Tformula.make
-                (Tformula.imp N
-                  new_obligations_conj always_imp)
-                { Tformula.Info.dummy with t_vars } in
-    Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp in
-  List.exists tpfs ~f
+    let imp = Tformula.make_dummy (Tformula.imp N new_obligations_conj always_imp) in
+    add_tautology rs pos pos' ~assume:(Some new_obligations_conj) imp in
+  List.fold ~init:rs tpfs ~f
 
-let check_scope_replacement_implication ~(weaken:bool) potential_replacements new_obligations_conj tf (rs:rt) : bool =
+let check_scope_replacement_implication ~(weaken:bool) potential_replacements new_obligations_conj (tf: Tformula.t) (pos: LexingInfo.t) (pos': LexingInfo.t) (rs: rt) : rt =
   let tpfs, _, _  = List.unzip3 potential_replacements in
-  let f tpf' = 
+  let f rs tpf' = 
     let tf' = tpf_to_tformula tpf' in
-    let t_vars = List.fold [tf; tf'] ~init:(Map.empty (module String)) ~f:merge_t_vars
-                 |> Map.to_alist in
     let always_imp = if weaken then make_always_imp ~close:true tf tf'
                      else make_always_imp ~close:true tf' tf in
-    let imp = Tformula.make
-                (Tformula.imp N
-                  new_obligations_conj always_imp)
-                { Tformula.Info.dummy with t_vars } in
-    Smt.is_tautology rs.s.tprog ~assume:(Some new_obligations_conj) imp in
-  List.exists tpfs ~f
+    let imp = Tformula.make_dummy (Tformula.imp N new_obligations_conj always_imp) in
+    add_tautology rs pos pos' ~assume:(Some new_obligations_conj) imp in
+  List.fold ~init:rs tpfs ~f
 
-let check_exception_replacement ~(weaken:bool) (new_trules: (trule * int) list) (rs: rt) mono pos (old_idx: int) : trule -> ('str_info_map * 'str_info_map) Errors.OrErrors.t = function
+let check_exception_replacement ~(weaken:bool) (new_trules: (trule * int) list) (rs: rt) pos (old_idx: int) : trule -> rt Errors.OrErrors.t = function
   | TExceptionC (pos', lhs, _, pred, _)
   | TException (pos', lhs, _, pred) ->
     let open Errors.OrErrors in
-    let check_single pos' tpf g : unit Errors.OrErrors.t =
+    let check_single pos' tpf g : rt =
       let _ = g in
       let potential_replacements = collect_potential_exceptions rs old_idx new_trules in
       let new_obligations = collect_new_obligations (List.map ~f:fst new_trules) in
       let new_obligations_conj = make_obligations_conj new_obligations in
       let tf = tpf_to_tformula tpf in
-      let b = check_exception_replacement_implication ~weaken potential_replacements new_obligations_conj tf rs in
-      if b then ok ()
-      else make_implication_error pos pos' in
-    let* _ = check_single pos' lhs pred in
+      check_exception_replacement_implication ~weaken potential_replacements new_obligations_conj tf pos pos' rs in
+    let rs = check_single pos' lhs pred in
     if weaken then
-      let anti_mon = add_preds_to_mon_map (snd mono) [pred] pos in
-      ok (fst mono, anti_mon)
+      ok (update_anti_mon rs add_preds_to_mon_map [pred] pos)
     else
-      let mon = add_preds_to_mon_map (fst mono) [pred] pos in
-      ok (mon, snd mono)
+      ok (update_mon rs add_preds_to_mon_map [pred] pos)
   | _ -> assert false
 
-let check_scope_replacement ~(weaken:bool) (new_trules: (trule * int) list) (rs: rt) mono pos (old_idx: int) : trule -> ('str_info_map * 'str_info_map) Errors.OrErrors.t = function
+let check_scope_replacement ~(weaken:bool) (new_trules: (trule * int) list) (rs: rt) pos (old_idx: int) : trule -> rt Errors.OrErrors.t = function
   | TScope (pos', lhs, _, pred) ->
     let open Errors.OrErrors in
-    let check_single pos' tpf g : unit Errors.OrErrors.t =
+    let check_single pos' tpf g : rt =
       let _ = g in
       let potential_replacements = collect_potential_scopes rs old_idx new_trules in
       let new_obligations = collect_new_obligations (List.map ~f:fst new_trules) in
       let new_obligations_conj = make_obligations_conj new_obligations in
       let tf = tpf_to_tformula tpf in
-      let b = check_scope_replacement_implication ~weaken potential_replacements new_obligations_conj tf rs in
-      if b then ok ()
-      else make_implication_error pos pos' in
-    let* _ = check_single pos' lhs pred in
+      check_scope_replacement_implication ~weaken potential_replacements new_obligations_conj tf pos pos' rs in
+    let rs = check_single pos' lhs pred in
     if weaken then
-      let anti_mon = add_preds_to_mon_map (snd mono) [pred] pos in
-      ok (fst mono, anti_mon)
+      ok (update_anti_mon rs add_preds_to_mon_map [pred] pos)
     else
-      let mon = add_preds_to_mon_map (fst mono) [pred] pos in
-      ok (mon, snd mono)
+      ok (update_mon rs add_preds_to_mon_map [pred] pos)
   | _ -> assert false
-
-let combine_mono_maps (m1: 'str_info_map) (m2: 'str_info_map) : 'str_info_map =
-  Map.merge ~f:(fun ~key:_ -> function
-      | `Left (a: LexingInfo.t) -> Some a
-      | `Right (a: LexingInfo.t) -> Some a
-      | `Both (a, b) -> Some (LexingInfo.union_all [a; b]))
-    m1 m2
-
-let combine_monos (m11, m12) (m21, m22) : ('str_info_map * 'str_info_map) =
-  let m1 = combine_mono_maps m11 m21 in
-  let m2 = combine_mono_maps m12 m22 in
-  m1, m2
 
 (* Replacement checks *)
 
-let check_trreplacement (mono: 'str_info_map * 'str_info_map)
-                        (kind: replace_kind)
+let check_trreplacement (kind: replace_kind)
                         (old_trule : trule * int)
                         (new_trules: (trule * int) list)
                         (rs: rt)
                         (pos: LexingInfo.t)
-                        : ('str_info_map * 'str_info_map) Errors.OrErrors.t =
+                        : rt Errors.OrErrors.t =
   let open Errors.OrErrors in
   match kind, old_trule with
   | Strengthen, ((TObligation _ as obl), _) -> (* Imp-R *)
-    let* _ = check_regulative_replacement rs (List.map ~f:fst new_trules) pos obl in
-    ok mono (* does not introduce any monotonicity constraints *)
+     ok (check_regulative_replacement rs (List.map ~f:fst new_trules) pos obl)
+  (* does not introduce any monotonicity constraints *)
   | Strengthen, ((TConstitutive _ as old_con), _) -> (* Imp-C+ *)
-    check_constitutive_replacement ~weaken:false (List.map ~f:fst new_trules) rs mono pos old_con
+     check_constitutive_replacement ~weaken:false (List.map ~f:fst new_trules) rs pos old_con
   | Weaken, ((TConstitutive _ as old_con), _) -> (* Imp-C- *)
-    check_constitutive_replacement ~weaken:true (List.map ~f:fst new_trules) rs mono pos old_con
+     check_constitutive_replacement ~weaken:true (List.map ~f:fst new_trules) rs pos old_con
   | Strengthen, ((TException _ as old_ex), old_idx) -> (* Imp-E+ *)
-    check_exception_replacement ~weaken:false new_trules rs mono pos old_idx old_ex
+     check_exception_replacement ~weaken:false new_trules rs pos old_idx old_ex
   | Weaken, ((TException _ as old_ex), old_idx) -> (* Imp-E- *)
-    check_exception_replacement ~weaken:true new_trules rs mono pos old_idx old_ex
+     check_exception_replacement ~weaken:true new_trules rs pos old_idx old_ex
   | Strengthen, ((TScope _ as old_sc), old_idx) -> (* Imp-E-*)
-    check_scope_replacement ~weaken:false new_trules rs mono pos old_idx old_sc
+     check_scope_replacement ~weaken:false new_trules rs pos old_idx old_sc
   | Weaken, ((TScope _ as old_sc), old_idx) -> (* Imp-E+ *)
-    check_scope_replacement ~weaken:true new_trules rs mono pos old_idx old_sc
+     check_scope_replacement ~weaken:true new_trules rs pos old_idx old_sc
   | Strengthen, ((TExceptionC _ as old_exc), old_idx) -> (* combination of Imp-E+ & Imp-C+ *)
-    let* ex_mono = check_exception_replacement ~weaken:false new_trules rs mono pos old_idx old_exc in
-    let* con_mono = check_constitutive_replacement ~weaken:false (List.map ~f:fst new_trules) rs mono pos old_exc in
-    ok (combine_monos ex_mono con_mono)
+     let* rs = check_exception_replacement ~weaken:false new_trules rs pos old_idx old_exc in
+     check_constitutive_replacement ~weaken:false (List.map ~f:fst new_trules) rs pos old_exc
   | Weaken, ((TExceptionC _ as old_exc), old_idx) -> (* combination of Imp-E- & Imp-C- *)
-    let* ex_mono = check_exception_replacement ~weaken:true new_trules rs mono pos old_idx old_exc in
-    let* con_mono = check_constitutive_replacement ~weaken:true (List.map ~f:fst new_trules) rs mono pos old_exc in
-    ok (combine_monos ex_mono con_mono)
+     let* rs = check_exception_replacement ~weaken:true new_trules rs pos old_idx old_exc in
+     check_constitutive_replacement ~weaken:true (List.map ~f:fst new_trules) rs pos old_exc 
   | Weaken, (TPermission _, _) ->
-    (* TODO[JD]: Imp-R? merge with strengthen obligation as much as possible *)
-    (* [JD] thoughts on permission rules as a concept:
-    permissions have never been properly introduced and may
-    not be fully compatible with obligations - these might be 
-    2 different models:
-    1. whenever something is not explicitly forbidden, it is permitted
-    2. whenever something is not explicitly permitted, it is forbidden
-    
-    the necessity of permission for something can be expressed
-    with an obligation, but it is unclear what it would mean that
-    a rule expresses that A permits B, when everything (including B)
-    was already permitted as long as no obligation forbids it *)
-    assert false
+     (* TODO[JD]: Imp-R? merge with strengthen obligation as much as possible *)
+     (* [JD] thoughts on permission rules as a concept:
+        permissions have never been properly introduced and may
+        not be fully compatible with obligations - these might be 
+        2 different models:
+        1. whenever something is not explicitly forbidden, it is permitted
+        2. whenever something is not explicitly permitted, it is forbidden
+        
+        the necessity of permission for something can be expressed
+        with an obligation, but it is unclear what it would mean that
+        a rule expresses that A permits B, when everything (including B)
+        was already permitted as long as no obligation forbids it *)
+     assert false
   | Strengthen, (TPermission _, _) ->
-    (* impossible *)
-    (* same caveat as with strengthening permissions *)
-    assert false
+     (* impossible *)
+     (* same caveat as with strengthening permissions *)
+     assert false
   | Weaken, (TObligation _, _) ->
-    (* impossible cases *)
+     (* impossible cases *)
     assert false
 
 let check_trreplacement_types (pos: LexingInfo.t) (old_trules: trule list) : unit Errors.OrErrors.t =
@@ -468,15 +403,12 @@ let add_trreplacements (kind: replace_kind) (old_refs: Tlex.Ref.t list) (new_ref
   let* new_trules = trules_and_ids_from_refs new_refs in
   let* _ = check_new_trule_types rs.s.tprog pos new_trules in
   let* _ = check_trreplacement_types pos (List.map ~f:fst old_trules) in
-  let* (tr_mon, tr_anti_mon) =
-    let f mono old_rule = check_trreplacement mono kind old_rule new_trules rs pos in
-    let init = Map.empty (module String), Map.empty (module String) in
-    fold_best_effort ~init ~f old_trules in
+  let* rs =
+    let f rs old_rule = check_trreplacement kind old_rule new_trules rs pos in
+    fold_best_effort ~init:rs ~f old_trules in
   let f trefi =
     { trefi with trtmts = TRReplace (pos, kind, old_refs, new_refs, doc_string) :: trefi.trtmts;
-                 trreplacements = (pos, kind, old_refs, new_refs) :: rs.trefi.trreplacements;
-                 tr_mon;
-                 tr_anti_mon } in
+                 trreplacements = (pos, kind, old_refs, new_refs) :: rs.trefi.trreplacements } in
   ok (map rs f)
 
 (* Visitors *)
@@ -487,18 +419,18 @@ let type_rrule (rs: rt) pos : rtmt -> rt Errors.OrErrors.t =
   | RRule (_, rule_id, type_fixes, rrule, doc_string) -> begin
       let label' = Label.set_rule_id_force rule_id rs.s.label  in
       let _ = Label.valid_rule_label pos label' in
-      let t_vars = Map.of_alist_exn (module String) type_fixes in
+      let c = TypeTerm.of_alist_ctxt ~subtypes:rs.s.tprog.tsubtypes type_fixes in
       let rule_num = fresh () in
-      let* t_vars, names, trule, rrule = 
-        let process_rule s t_vars = function
+      let* t_vars, names, trule, rrule =
+        let process_rule s ctxt = function
           | Refine (pos, pf1, f2) ->
              let names = List.map ~f:(fun f ->
                              match f.form with Formula.Predicate (event_name, _) -> event_name
                                              | _ -> assert false) f2 in
-             combine2 t_vars pf1 f2 (type_pformula' s.tprog) (type_formulas s.tprog)
-               (fun t_vars tpf1 tf2 ->
-                 ok (t_vars, names, TConstitutive (pos, tpf1, tf2), TRefine (pos, tpf1, tf2)))
-        in process_rule rs.s t_vars rrule
+             combine2 ctxt pf1 f2 (collect_pformula' s.tprog) (collect_formulas s.tprog)
+               (fun ctxt tpf1 tf2 ->
+                 ok (ctxt, names, TConstitutive (pos, tpf1, tf2), TRefine (pos, tpf1, tf2)))
+        in process_rule rs.s c rrule
       in
       let var_to_add = (rule_num, t_vars) in
       let rule_to_add = (pos, rule_num, label') in
@@ -514,21 +446,21 @@ let type_rrule (rs: rt) pos : rtmt -> rt Errors.OrErrors.t =
     end
   | _ -> assert false
 
-let type_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
+let collect_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
   let open Errors.OrErrors in
   let we = witherror ~default:rs in
   function
   | RStmt stmt ->
      Errors.WithErrors.(
-      let* s = type_stmt rs.s stmt in
+      let* s = collect_stmt rs.s stmt in
       let  tstmts = List.tl_exn s.tprog.tstmts @ [List.hd_exn s.tprog.tstmts] in
       let  s = { s with tprog = { s.tprog with tstmts } } in
       ok { s; trefi = { rs.trefi with
                         trtmts = TRStmt (List.hd_exn s.tprog.tstmts) :: rs.trefi.trtmts } }
      )
-  | RRule (pos,  _, _, _, _) as rrule -> 
+  | RRule (pos,  _, _, _, _) as rrule ->
      we (type_rrule rs pos rrule)
-  | RType (pos, name, typ, doc_string) -> 
+  | RType (pos, name, typ, doc_string) ->
      we (add_tralias name typ doc_string rs pos)
   | RReplace (pos, kind, old_refs, new_refs, doc_string) ->
      let rs = 
@@ -540,19 +472,41 @@ let type_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
      let label = Label.set_rule_id_force (Some ("assume_" ^ name)) rs.s.label in
      we (add_trhidden name b label doc_string rs pos)
 
+(* Checking of tautologies *)
+
+let check_tautology tprog (pos, pos', (assume: Tformula.t option), (f: Tformula.t)) =
+  let open Errors.OrErrors in
+  let ctxt = TypeTerm.empty_ctxt in
+  let* ctxt, assume = match assume with
+    | None -> ok (ctxt, None)
+    | Some assume ->
+       let* ctxt, assume = collect_formula tprog ctxt (Tformula.to_formula assume) in
+       let assume = type_formula ctxt assume in
+       ok (ctxt, Some assume) in
+  let* ctxt, f = collect_formula tprog ctxt (Tformula.to_formula f) in
+  let f = type_formula ctxt f in
+  if (Smt.is_tautology tprog ~assume f)
+  then ok ()
+  else make_implication_error pos pos'
+
 (* Main typing function *)
 
 let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t =
   let open Errors.WithErrors in
-  (*Map.iter_keys ~f:print_endline s.tprog.tevents;*)
   let label = Label.set_rule_id_force None s.label in
   let s = { s with tprog = { s.tprog with tstmts = s.tprog.tstmts @ [Tlex.TSSection (Article 0, label, "refinement", None)] } } in
   let init = { s; trefi = { trempty with lex_file = refi.lex_file; base_file_type = refi.base_file_type } } in
   (* First pass: type statements *)
-  let* rs: rt = fold refi.rtmts ~init ~f:type_rtmt in
+  let* rs: rt = fold refi.rtmts ~init ~f:collect_rtmt in
   (* TODO[FH]: Implement typing of additional exceptions or generate errors *)
-  (* TODO[JD]: new except (and scope) rules require inserting additional constraints in other rules (for which they are exceptions of) *)
-  let* variables = check_var_types rs.s.tprog in
-  ok (rs.s, { rs.trefi with tprog = { rs.s.tprog with variables };
-                            trtmts = List.rev rs.trefi.trtmts })
+  (* Second pass: compute rule contexts *)
+  let* rule_ctxts = rule_ctxts rs.s.tprog in
+  print_endline (String.concat ~sep:", " (List.map (Map.to_alist rs.s.tprog.tsubtypes) ~f:(fun (a, b) -> a ^ " < " ^ (TypeTerm.ttt_to_string b))));
+  let tprog = { rs.s.tprog with rule_ctxts } in
+  (* Third pass: re-type statements *)
+  let tprog = do_retype tprog in
+  (* Fourth pass: check tautologies *)
+  let* _  = all (List.map ~f:(Errors.OrErrors.witherror ~default:())
+                   (List.map ~f:(check_tautology tprog) rs.trefi.tr_tautology)) in
+  ok (rs.s, { rs.trefi with tprog; trtmts = List.rev rs.trefi.trtmts })
 

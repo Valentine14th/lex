@@ -37,7 +37,7 @@
 
 /* Tokens: symbols */
 
-%token <LexingInfo.t> COM COL SEMICOLON DOT
+%token <LexingInfo.t> COM COL SEMICOLON DOT QUOTE
 %token <LexingInfo.t> LPA RPA LBR RBR
 
 /* Tokens: program keywords  */
@@ -392,11 +392,13 @@ label_level:
 
 type_term:
   | typ
-    { fst $1,   TypeTerm.TypeConst (snd $1) }
+    { fst $1, TypeTerm.TConst (snd $1) }
   | IDENT
-    { fst $1,   TypeTerm.TypeVar   (snd $1) }
+    { fst $1, TypeTerm.TNamed (snd $1) }
+  | QUOTE IDENT
+    { $1 +> fst $2, TypeTerm.TVar (snd $2) }
   | LBR separated_nonempty_list(COM, type_fix) RBR
-    { $1 +> $3, TypeTerm.TypeSum   $2 }
+    { $1 +> $3, TypeTerm.TSum   $2 }
 
 typ:
   | TSTRING

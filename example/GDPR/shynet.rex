@@ -26,8 +26,8 @@ observable event input
     func    : string
     param   : string
     value   : string
-    caller  : string
-    purpose : string
+    caller  : session_id
+    purpose : purpose
 
 refine type data_subject is session_id
 refine type entity       is string
@@ -62,7 +62,7 @@ rule "refine_giveconsent"
         input("ConsentView", "statistics", "true", caller, "service")
         input("ConsentView", "session", owner, caller, "service")
     refine
-        GiveConsent(owner, "analytics", "MyCompany")
+        GiveConsent(caller, "analytics", "MyCompany")
 
 assume false IsNecessaryForLegitimateInterest
 assume false IsOverridenByDataSubjectInterests

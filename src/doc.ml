@@ -265,23 +265,23 @@ let html_of_doc_string s =
 
 let html_of_arg (id, ty) =
   div "lex-event-arg" (
-      ident id ^ ": " ^ typ (TypeTerm.value_to_string ty)
+      ident id ^ ": " ^ typ (TypeTerm.to_string ty)
     )
 
 let html_of_arg2 (id, ty) =
   span "lex-event-arg" (
-      ident id ^ ": " ^ typ (TypeTerm.value_to_string ty)
+      ident id ^ ": " ^ typ (TypeTerm.to_string ty)
     )
 
 let html_of_function_arg (id, ty) =
   div "lex-function-arg" (
-      ident id ^ ": " ^ typ (TypeTerm.value_to_string ty)
+      ident id ^ ": " ^ typ (TypeTerm.to_string ty)
     )
 
 let html_of_type_fix rule_id i (ident_, ty) =
   let id = Some (Printf.sprintf "%s-fix-%d" rule_id i) in
   div "lex-type-fix-outer" (
-      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ (TypeTerm.value_to_string ty))
+      span ~id "lex-type-fix" (ident ident_ ^ ": " ^ typ (TypeTerm.to_string ty))
     )
 
 let html_of_args args =
@@ -382,14 +382,14 @@ let html_of_estmt eprog =
           ^ html_of_args2 (List.drop_last_exn typed_args)
           ^ ") -> "
           ^ (match List.last_exn typed_args with
-               (_, ty) -> typ (TypeTerm.value_to_string ty))
+               (_, ty) -> typ (TypeTerm.to_string ty))
        | Event (_, Variable) ->
           html_of_enftype enftype
           ^ kw (Lex.string_of_event_type event_type)
           ^ ident name
           ^ " : "
           ^ (match List.last_exn typed_args with
-               (_, ty) -> typ (TypeTerm.value_to_string ty))
+               (_, ty) -> typ (TypeTerm.to_string ty))
        | _ ->
           html_of_enftype enftype
           ^ kw (Lex.string_of_event_type event_type)
@@ -404,7 +404,7 @@ let html_of_estmt eprog =
      let html_of_type =
        kw "type"
        ^ typ name
-       ^ (match ty with Some tt -> kw "is" ^ typ (TypeTerm.value_to_string tt) | None -> "") in
+       ^ (match ty with Some tt -> kw "is" ^ typ (TypeTerm.to_string tt) | None -> "") in
      div "lex-stmt-type"
        (match doc_string with
         | Some s -> two_column html_of_type (html_of_doc_string s)
@@ -414,7 +414,7 @@ let html_of_estmt eprog =
        ident name
        ^ html_of_function_args typed_args
        ^ " -> "
-       ^ typ (TypeTerm.value_to_string return_type)
+       ^ typ (TypeTerm.to_string return_type)
      in
      div "lex-stmt-function"
        (match doc_string with

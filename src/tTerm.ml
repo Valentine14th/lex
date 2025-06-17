@@ -13,13 +13,11 @@ module PosTypeInfo : Modules.I with type t = tpos_info_type = struct
   type t = tpos_info_type [@@deriving compare, sexp_of, hash, equal]
 
   let to_string _ s _ = s
-  let dummy = { pos = LexingInfo.dummy; typ = TypeTerm.TypeConst (Dom.TBool) }
+  let dummy = { pos = LexingInfo.dummy; typ = TypeTerm.TConst (Dom.TBool) }
 
 end
 
-module StringVar = Term.StringVar
-
-include MFOTL_lib.Term.Make(StringVar)(Dom)(Term.Uop)(Term.Bop)(PosTypeInfo)
+include MFOTL_lib.Term.Make(Term.StringVar)(Dom)(Term.Uop)(Term.Bop)(PosTypeInfo)
 
 let rec to_term_core = function
   | Var v -> Term.Var v
@@ -33,4 +31,4 @@ let rec to_term_core = function
 and to_term t = { trm = to_term_core t.trm; info = Term.{ pos = t.info.pos } }
 
 let dummy_int i = { trm = Const (Dom.Int i);
-                    info = { PosTypeInfo.dummy with typ = TypeTerm.TypeConst (Dom.TInt) } }
+                    info = { PosTypeInfo.dummy with typ = TypeTerm.TConst (Dom.TInt) } }

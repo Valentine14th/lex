@@ -15,6 +15,8 @@ type trtmt =
   | TRReplace of LexingInfo.t * replace_kind * Ref.t list * Ref.t list * string option
   | TRAssume  of LexingInfo.t * ident * bool * string option
 
+type mon_map = (string, LexingInfo.t, String.comparator_witness) Map.t 
+
 type trefi =
   {
     tprog:          tprog;
@@ -23,13 +25,14 @@ type trefi =
     base_file_type: rfnmt_ext option;
     traliases:      (ident, TypeTerm.t option * string option, Base.String.comparator_witness) Map.t;
     trassumed:      (LexingInfo.t * ident * bool * Label.t) list;
-    trvars_to_add:  (int * var_types) list;
+    trvars_to_add:  (int * ctxt) list;
     trrules_to_add: (LexingInfo.t * int * Label.t) list;
     trstmts_to_add: tstmt list;
     trrefined:      (ident, Base.String.comparator_witness) Set.t;
     trreplacements: (LexingInfo.t * replace_kind * Ref.t list * Ref.t list) list;
-    tr_mon:         (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
-    tr_anti_mon:    (ident, LexingInfo.t, Base.String.comparator_witness) Map.t;
+    tr_mon:         mon_map;
+    tr_anti_mon:    mon_map;
+    tr_tautology:   (LexingInfo.t * LexingInfo.t * Tformula.t option * Tformula.t) list;
   }
 
 let trempty =
@@ -47,6 +50,7 @@ let trempty =
     trreplacements = [];
     tr_mon         = Map.empty (module String);
     tr_anti_mon    = Map.empty (module String);
+    tr_tautology   = [];
   }
 
 

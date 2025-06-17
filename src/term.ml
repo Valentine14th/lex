@@ -15,7 +15,7 @@ module PosInfo : Modules.I with type t = pos_info_type = struct
 
 end
 
-module StringVar : Modules.V with type t = string and type comparator_witness = String.comparator_witness = struct
+module StringVar : Modules.V with type t = string and type comparator_witness = Base.String.comparator_witness = struct
 
   module T = struct
 
@@ -32,7 +32,6 @@ module StringVar : Modules.V with type t = string and type comparator_witness = 
   end
 
   include T
-  
   let comparator = String.comparator
   type comparator_witness = String.comparator_witness
   

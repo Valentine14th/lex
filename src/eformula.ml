@@ -155,7 +155,7 @@ let rec core_of_tformula ?id:(id=1) d =
      else
        EqConst (ETerm.make
                   (ETerm.Binop (x, Term.Bop.BEq, ETerm.make_dummy (ETerm.const y)))
-                  { pos = x.info.pos; typ = TypeTerm.TypeConst (Dom.TBool)}, Dom.Bool true)), None
+                  { pos = x.info.pos; typ = TypeTerm.TConst (Dom.TBool)}, Dom.Bool true)), None
   | Predicate (e, t) -> Predicate (e, t), None
   | Predicate' (s, trms, f) -> Predicate' (s, trms, lof_formula f), None
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, lof_formula f, rof_formula g), None
@@ -198,7 +198,7 @@ let rec core_of_typed_tformula ?id:(id=1) d =
      else
        EqConst (ETerm.make
                   (ETerm.Binop (x, Term.Bop.BEq, ETerm.make_dummy (ETerm.const y)))
-                  { pos = x.info.pos; typ = TypeTerm.TypeConst (Dom.TBool)}, Dom.Bool true)), None
+                  { pos = x.info.pos; typ = TypeTerm.TConst (Dom.TBool)}, Dom.Bool true)), None
   | Predicate (e, t) -> Predicate (e, t), None
   | Predicate' (s, trms, f) -> Predicate' (s, trms, lof_formula f), None
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, lof_formula f, rof_formula g), None
@@ -240,7 +240,8 @@ let fix_side s f g =
 let rec to_formula (f: t): Formula.t =
   Formula.make (to_formula_core f.form) { pos = f.info.pos }
 
-and to_formula_core: core_t -> Formula.core_t = function
+and to_formula_core: core_t -> Formula.core_t =
+  function
   | TT -> TT
   | FF -> FF
   | EqConst (trm, c) -> EqConst (ETerm.to_term trm, c)

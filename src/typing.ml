@@ -8,6 +8,7 @@ open Tlex
 let debug_typing = ref false
 let debug msg = if !debug_typing then Errors.debug_print ~f_name:(Some "typing.ml") msg
 
+
 (* Typing state *)
 
 type t =
@@ -87,289 +88,170 @@ let set_labels pos section_kind label s =
   let* label = Label.set pos section_kind label s.label in
   ok { s with label; tprog = Tlex.set_labels pos label s.tprog; articles }
 
-(* Visitors *)
+(* Visitors: collecting constraints *)
 
 let c = ref (-1) 
 let fresh () = incr c; !c
 
-let type_unot taliases tt =
-  match TypeTerm.unalias taliases tt with
-  | TypeConst Dom.TBool
-    | TypeConst Dom.TInt -> Some tt
-  | _ -> None
+let constrain_base_type_ctxt' c pos ttt tts =
+  match ttt with
+  | TConst tt when List.mem tts tt ~equal:Dom.equal_tt -> c
+  | TConst _ ->
+     raise (CtxtError (
+                Printf.sprintf "type clash: found %s, expected base type in [%s]"
+                  (ttt_to_string ttt) (String.concat ~sep:", " (List.map ~f:Dom.tt_to_string tts))))
+  | _ -> constrain_base_type_ctxt c pos (List.map ~f:(fun tt -> [ttt, tt]) tts)
 
-let type_usub taliases tt =
-  match TypeTerm.unalias taliases tt with
-  | TypeConst Dom.TInt
-    | TypeConst Dom.TFloat
-    | TypeConst Dom.TSpan
-    | TypeConst (Dom.TMoney _) -> Some tt
-  | _ -> None
+let collect_unot c pos ttt =
+  constrain_base_type_ctxt' c pos ttt [Dom.TBool; Dom.TInt], ttt
 
-let type_badd taliases (tt, tt') =
-  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
-  | TypeConst Dom.TInt, TypeConst Dom.TInt 
-    | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-    | TypeConst Dom.TFloat, TypeConst Dom.TInt
-    | TypeConst Dom.TStr, TypeConst Dom.TStr
-    | TypeConst Dom.TTime, TypeConst Dom.TSpan
-    | TypeConst Dom.TSpan, TypeConst Dom.TSpan
-    -> Some tt
-  | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c')
-       when String.equal c c'
-    -> Some tt
-  | TypeConst Dom.TInt, TypeConst Dom.TFloat
-    | TypeConst Dom.TSpan, TypeConst Dom.TTime
-    -> Some tt'
-  | _ -> None
+let collect_usub c pos ttt =
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan; Dom.TMoney "*"], ttt
 
-let type_bsub taliases (tt, tt') =
-  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
-  | TypeConst Dom.TInt, TypeConst Dom.TInt 
-    | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-    | TypeConst Dom.TFloat, TypeConst Dom.TInt
-    | TypeConst Dom.TTime, TypeConst Dom.TSpan
-    | TypeConst Dom.TSpan, TypeConst Dom.TSpan
-    -> Some tt
-  | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c')
-       when String.equal c c'
-    -> Some tt
-  | TypeConst Dom.TInt, TypeConst Dom.TFloat
-    -> Some tt'
-  | _ -> None
+let collect_badd c pos (ttt, ttt') =
+  let c, ttt = unify_ctxt ttt ttt' c in
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan; Dom.TStr; Dom.TMoney "*"], ttt
 
-let type_bmul taliases (tt, tt') =
-  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
-  | TypeConst Dom.TInt, TypeConst Dom.TInt
-    | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-    | TypeConst Dom.TInt, TypeConst Dom.TFloat
-    | TypeConst Dom.TInt, TypeConst Dom.TSpan
-    | TypeConst Dom.TFloat, TypeConst Dom.TSpan
-    | TypeConst Dom.TInt, TypeConst (Dom.TMoney _)
-    | TypeConst Dom.TFloat, TypeConst (Dom.TMoney _)
-    -> Some tt'
-  | TypeConst (Dom.TMoney _), TypeConst Dom.TInt
-    | TypeConst (Dom.TMoney _), TypeConst Dom.TFloat
-    | TypeConst Dom.TFloat, TypeConst Dom.TInt
-    | TypeConst Dom.TSpan, TypeConst Dom.TInt
-    | TypeConst Dom.TSpan, TypeConst Dom.TFloat
-    -> Some tt
-  | _ -> None
+let collect_bsub c pos (ttt, ttt') =
+  let c, ttt = unify_ctxt ttt ttt' c in
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan], ttt
 
-let type_bdiv taliases (tt, tt') =
-  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
-  | TypeConst Dom.TInt, TypeConst Dom.TFloat
-    -> Some tt'
-  | TypeConst Dom.TInt, TypeConst Dom.TInt 
-    | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-    | TypeConst Dom.TFloat, TypeConst Dom.TInt
-    | TypeConst Dom.TSpan, TypeConst Dom.TInt
-    | TypeConst Dom.TSpan, TypeConst Dom.TFloat
-    | TypeConst (Dom.TMoney _), TypeConst Dom.TInt
-    | TypeConst (Dom.TMoney _), TypeConst Dom.TFloat
-    -> Some tt
-  | _ -> None
+let collect_bmul c pos (ttt, ttt') =
+  let c, ttt = unify_ctxt ttt ttt' c in
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat], ttt
 
-let type_bpow taliases (tt, tt') =
-  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
-  | TypeConst Dom.TInt, TypeConst Dom.TInt
-  | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-    -> Some tt
-  | _ -> None
+let collect_band c pos (ttt, ttt') =
+  let c, ttt = unify_ctxt ttt ttt' c in
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TBool], ttt
 
-let type_band taliases (tt, tt') =
-  match TypeTerm.unalias taliases tt, TypeTerm.unalias taliases tt' with
-  | TypeConst Dom.TInt, TypeConst Dom.TInt
-  | TypeConst Dom.TBool, TypeConst Dom.TBool
-    -> Some tt
-  | _ -> None
+let collect_beq c _ (ttt, ttt') =
+  let c, _ = unify_ctxt ttt ttt' c in
+  c, TConst Dom.TBool
 
-let type_beq taliases (ty, ty') =
-  match TypeTerm.lub ty ty' taliases with
-  | Some _ -> Some (TypeConst Dom.TBool)
-  | None -> match TypeTerm.lub ty' ty taliases with
-            | Some _ -> Some (TypeConst Dom.TBool)
-            | None -> None
+let collect_blt c pos (ttt, ttt') =
+  let c, ttt = unify_ctxt ttt ttt' c in
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TTime; Dom.TSpan; Dom.TMoney "*"],
+  TConst Dom.TBool
 
-let type_blt taliases (tt, tt') =
-  let aux (ty, ty') =
-    match TypeTerm.unalias taliases ty, TypeTerm.unalias taliases ty' with
-    | TypeConst Dom.TInt, TypeConst Dom.TInt
-      | TypeConst Dom.TFloat, TypeConst Dom.TFloat
-      | TypeConst Dom.TInt, TypeConst Dom.TFloat
-      | TypeConst Dom.TFloat, TypeConst Dom.TInt
-      | TypeConst Dom.TTime, TypeConst Dom.TTime
-      | TypeConst Dom.TSpan, TypeConst Dom.TSpan
-      -> Some (TypeConst Dom.TBool)
-    | TypeConst (Dom.TMoney c), TypeConst (Dom.TMoney c') when String.equal c c'
-      -> Some (TypeConst Dom.TBool)
-    | _ -> None in
-  match TypeTerm.lub tt tt' taliases with
-  | Some ty' -> aux (tt, ty')
-  | None -> match TypeTerm.lub tt' tt taliases with
-            | Some ty -> aux (ty, tt')
-            | None -> None
-
-
-let rec type_term tevents tfunctions taliases typed_vars (v: Term.t) t_alias: ('typed_vars * TTerm.t) Errors.OrErrors.t =
+let rec collect_term (s: tprog) (c: ctxt) (v: Term.t):
+          (ctxt * TTerm.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  match v.trm with
-  | Var x ->
-     begin match Map.find typed_vars x, t_alias with
-     | Some a', _ -> ok (typed_vars, TTerm.make (TTerm.var x) { pos = v.info.pos; typ = a' })
-     | None, Some typ -> ok (Map.add_exn typed_vars ~key:x ~data:typ, TTerm.make (TTerm.var x) { pos = v.info.pos; typ })
-     | _, _ -> let err_msg = Printf.sprintf "Cannot infer the type of variable %s" x in
-               error  (Errors.type_error err_msg v.info.pos)
-     end
-  | Const c -> ok (typed_vars, TTerm.make (TTerm.const c) { pos = v.info.pos; typ = TypeConst (Dom.tt_of_domain c) })
-  | App (f_name, trms) ->
-     begin
-       let f (typed_vars, trms) trm (arg_name, arg_type) =
-         let* typed_vars, trm = type_term tevents tfunctions taliases typed_vars trm (Some arg_type) in
-         if TypeTerm.equal trm.info.typ arg_type then
-           ok (typed_vars, trm :: trms)
+  let* c, ttrm = 
+    match v.trm with
+    | Var x ->
+       let* ctxt, typ =
+         if TypeTerm.mem c.ctxt x then
+           ok (c.ctxt, TypeTerm.get_ttt_exn x c.ctxt)
          else
-           let err_msg =
-             Printf.sprintf
-               "Type mismatch for argument %s of function %s: expected '%s', found '%s'"
-               arg_name f_name (TypeTerm.value_to_string trm.info.typ)
-               (TypeTerm.value_to_string arg_type) in
-           error (Errors.type_error err_msg v.info.pos)
+           let ctxt, ttt = TypeTerm.fresh_ttt c.ctxt in
+           ok (TypeTerm.type_var x ttt ctxt)
        in
-       let aux arg_types typ =
-         let* folded = fold2 trms arg_types ~init:(typed_vars, []) ~f in
-          begin match folded with
-          | Base.List.Or_unequal_lengths.Ok (typed_vars, trms) ->
-            ok (typed_vars, TTerm.make (TTerm.app f_name (List.rev trms)) { pos = v.info.pos; typ })
-          | Base.List.Or_unequal_lengths.Unequal_lengths ->
-             let err_msg = Printf.sprintf "Function %s expects %d arguments, found %d"
-                             f_name (List.length arg_types) (List.length trms) in
-             error (Errors.type_error err_msg v.info.pos)
-          end in
-       match Map.find tfunctions f_name with
-       | Some (arg_types, typ, _) -> aux arg_types typ
-       | None ->
-          (*(
-            match Map.find tevents f_name with
-            | Some (Event (_, Functional), arg_ret_types, _, _) ->
-               let arg_types = List.drop_last_exn arg_ret_types in
-               let (_, typ)  = List.last_exn arg_ret_types in
-               aux arg_types typ
-            | Some (Event (_, Variable), arg_ret_types, _, _) ->
-               let (_, typ)  = List.last_exn arg_ret_types in
-               aux [] typ
-            | _ ->*)
-          let err_msg = Printf.sprintf "Function '%s' is undefined" f_name in
-          error (Errors.type_error err_msg v.info.pos)
-                (* ) *)
-     end
-  | Unop (op, trm) ->
-     begin
-       let f_op = match op with
-         | UNot -> type_unot
-         | USub -> type_usub in
-       let t_alias = Option.find_map t_alias ~f:(f_op taliases) in
-       let* typed_vars, trm = type_term tevents tfunctions taliases typed_vars trm t_alias in
-       match f_op taliases trm.info.typ with
-       | Some typ -> ok (typed_vars, TTerm.make (TTerm.unop UNot trm) { pos = v.info.pos; typ })
-       | None ->
-         let err_msg = Printf.sprintf "Unary (!) expects type TBool, found '%s'"
-                         (TypeTerm.value_to_string trm.info.typ) in
-         error (Errors.type_error err_msg v.info.pos)
-     end
-  | Binop (trm, op, trm') ->
-     begin
-       let* typed_vars, trm  = type_term tevents tfunctions taliases typed_vars trm  None in
-       let* typed_vars, trm' = type_term tevents tfunctions taliases typed_vars trm' None in
-       let f_op = match op with
-         | BAdd -> type_badd
-         | BSub -> type_bsub
-         | BMul -> type_bmul
-         | BDiv -> type_bdiv
-         | BPow -> type_bpow
-         | BAnd | BOr | BXor -> type_band
-         | BEq | BNeq -> type_beq
-         | BLt | BLeq | BGt | BGeq -> type_blt
-       in
-       match f_op taliases (trm.info.typ, trm'.info.typ) with
-       | Some typ -> ok (typed_vars, TTerm.make (TTerm.binop trm op trm') { pos = v.info.pos; typ })
-       | None ->
-          let err_msg = Printf.sprintf "The types '%s' and '%s' are not applicable to binary %s"
-                          (TypeTerm.value_to_string trm.info.typ)
-                          (TypeTerm.value_to_string trm'.info.typ)
-                          (Bop.to_string op) in
-          error (Errors.type_error err_msg v.info.pos)
-     end
-  | Proj (trm, p) ->
-     let check_sum typed_vars trm kvs =
-       match List.find kvs ~f:(fun (k, _) -> String.equal k p) with
-       | Some (_, typ) -> ok (typed_vars, TTerm.make (TTerm.proj trm p) { typ; pos = v.info.pos } )
-       | None -> let err_msg = 
-                   Printf.sprintf "The type '%s' does not have a '%s' field"
-                     (TypeTerm.value_to_string trm.info.typ) p in
-                 error (Errors.type_error err_msg v.info.pos) in
-     let not_sum_type trm =
-       let err_msg =
-         Printf.sprintf "The type '%s' could not be recognized as a sum type, it does not have a '%s' field"
-           (TypeTerm.value_to_string TTerm.(trm.info.typ)) p in
-       Errors.type_error err_msg v.info.pos in
-     let* typed_vars, trm = type_term tevents tfunctions taliases typed_vars trm None in
-     begin
-       match TypeTerm.eval taliases trm.info.typ with
-       | Some (TypeTerm.TypeSum kvs) -> check_sum typed_vars trm kvs
-       | _ -> error (not_sum_type trm)
-     end
-  | Record kvs ->
-     let dups = List.find_all_dups (List.map kvs ~f:fst) ~compare:String.compare in
-     if List.length dups > 0 then
-       let err_msg =
-         Printf.sprintf "The following fields are repeated in sum type: '%s'"
-           (String.concat ~sep:", " dups) in
-       error (Errors.type_error err_msg v.info.pos)
-     else
-       let f typed_vars (k, v) =
-         let* typed_vars, trm = type_term tevents tfunctions taliases typed_vars v None in
-         ok (typed_vars, (k, trm)) in
-       let* typed_vars, ktrms = fold_map kvs ~init:typed_vars ~f in
-       let trm = TTerm.Record ktrms in
-       let typ =
-         TypeTerm.TypeSum (List.map ktrms ~f:(fun (k, v) -> (k, v.info.typ))) in
-       ok (typed_vars, TTerm.make trm { typ; pos = v.info.pos })
-       
-let type_terms event_name trms t_vars pos tevents tfunctions taliases
-    : ((ident, TypeTerm.t, String.comparator_witness) Map.t * TTerm.t list) Errors.OrErrors.t =
+       (*print_endline ("collect_term " ^ String.concat ~sep:", " (TypeTerm.vars c.ctxt));*)
+       ok ({ c with ctxt }, TTerm.make (TTerm.var x) { pos = v.info.pos; typ })
+    | Const d ->
+       let ctxt, typ = TypeTerm.fresh_ttt c.ctxt in
+       let c = constrain_base_type_ctxt { c with ctxt } v.info.pos [[typ, Dom.tt_of_domain d]] in
+       ok (c, TTerm.make (TTerm.const d) { pos = v.info.pos; typ  })
+    | App (f_name, trms) ->
+       begin
+         let f (c, trms) trm (_, arg_type) =
+           let* c, trm = collect_term s c trm in
+           let c, typ = unify_ctxt trm.info.typ arg_type c in
+           ok (c, { trm with info = { trm.info with typ } } :: trms)
+         in
+         let aux c arg_types typ =
+           let* folded = fold2 trms arg_types ~init:(c, []) ~f in
+           begin match folded with
+           | Base.List.Or_unequal_lengths.Ok (c, trms) ->
+              ok (c, TTerm.make (TTerm.app f_name (List.rev trms)) { pos = v.info.pos; typ })
+           | Base.List.Or_unequal_lengths.Unequal_lengths ->
+              let err_msg = Printf.sprintf "Function %s expects %d arguments, found %d"
+                              f_name (List.length arg_types) (List.length trms) in
+              error (Errors.type_error err_msg v.info.pos)
+           end in
+         match Map.find s.tfunctions f_name with
+         | Some (arg_types, typ, _) ->
+            let arg_names, arg_types = List.unzip arg_types in
+            let ctxt, typ_arg_types = convert_with_fresh_ttts c.ctxt (typ :: arg_types) in
+            let typ, arg_types = List.hd_exn typ_arg_types, List.tl_exn typ_arg_types in
+            aux { c with ctxt } (List.zip_exn arg_names arg_types) typ
+         | None ->
+            let err_msg = Printf.sprintf "Function %s is undefined" f_name in
+            error (Errors.type_error err_msg v.info.pos)
+       end
+    | Unop (op, trm) ->
+       begin
+         let f_op = match op with
+           | UNot -> collect_unot
+           | USub -> collect_usub in
+         let* c, trm = collect_term s c trm in
+         let* c, typ =
+           try ok (f_op c trm.info.pos trm.info.typ)
+           with CtxtError err_msg -> error (Errors.type_error err_msg v.info.pos) in
+         ok (c, TTerm.make (TTerm.unop op trm) { pos = v.info.pos; typ })
+       end
+    | Binop (trm, op, trm') ->
+       begin
+         let f_op = match op with
+           | BAdd -> collect_badd
+           | BSub -> collect_bsub
+           | BMul | BDiv | BPow -> collect_bmul
+           | BAnd | BOr | BXor -> collect_band
+           | BEq | BNeq -> collect_beq
+           | BLt | BLeq | BGt | BGeq -> collect_blt
+         in
+         let* c, trm  = collect_term s c trm  in
+         let* c, trm' = collect_term s c trm' in
+         let* c, typ =
+           try ok (f_op c trm.info.pos (trm.info.typ, trm'.info.typ))
+           with CtxtError err_msg -> error (Errors.type_error err_msg v.info.pos) in
+         ok (c, TTerm.make (TTerm.binop trm op trm') { pos = v.info.pos; typ })
+       end
+    | Proj (trm, p) ->
+       let ctxt, typ = TypeTerm.fresh_ttt c.ctxt in
+       let* c, trm = collect_term s { c with ctxt } trm in
+       let c = constrain_fields_type_ctxt c trm.info.pos (trm.info.typ, false, [p, typ]) in
+       ok (c, TTerm.make (TTerm.proj trm p) { pos = v.info.pos; typ })
+    | Record kvs ->
+       let ctxt, typ = TypeTerm.fresh_ttt c.ctxt in
+       let* c, kvs = fold_best_effort kvs ~init:({ c with ctxt }, []) ~f:(fun (c, kvs) (k, v) ->
+                         let* c, trm = collect_term s c v in
+                         ok (c, (k, trm) :: kvs)) in
+       let kvs = List.rev kvs in
+       let fields = List.map kvs ~f:(fun (k, v) -> (k, v.info.typ)) in
+       let c = constrain_fields_type_ctxt c v.info.pos (typ, true, fields) in
+       ok (c, TTerm.make (TTerm.record kvs) { pos = v.info.pos; typ }) in
+  debug (Printf.sprintf "collect_term.c(%s) = %s" (Term.value_to_string v) (to_string_ctxt c));
+  ok (c, ttrm)
+
+let collect_terms event_name trms c pos s : (ctxt * TTerm.t list) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  let* args = match Map.find tevents event_name with
+  let* args = match Map.find s.tevents event_name with
     | Some (_, args, _, _) -> ok args
-    | None -> let err_msg = Printf.sprintf
-                              "Event '%s' is undefined"
-                              event_name
+    | None -> let err_msg = Printf.sprintf "Event '%s' is undefined" event_name
               in error (Errors.type_error err_msg pos)
   in
-  let acc_function t_vars ((arg_name, type_alias), trm) =
-    let* t_vars, trm = type_term tevents tfunctions taliases t_vars trm (Some type_alias) in
-    let ty = TTerm.(trm.info.typ) in
-    match TypeTerm.lub ty type_alias taliases with
-    | Some typ -> let trm = { trm with info = { trm.info with typ } } in ok (t_vars, trm)
-    | None ->
-       let err_msg = Printf.sprintf
-                       "Type mismatch for argument %s of event %s: expected '%s', found '%s'"
-                       arg_name event_name
-                       (TypeTerm.value_to_string type_alias)
-                       (TypeTerm.value_to_string ty) in
-       error (Errors.type_error err_msg pos)
+  let f c ((_, arg_type), trm) =
+    let* c, trm = collect_term s c trm in
+    debug (Printf.sprintf "collect_terms.c(arg_type=%s, trm=%s)..."
+             (ttt_to_string arg_type) (TTerm.value_to_string trm));
+    let* c, typ =
+      try ok (unify_ctxt trm.info.typ arg_type c)
+      with CtxtError err_msg -> error (Errors.type_error err_msg pos) in
+    debug (Printf.sprintf "collect_terms.c(arg_type=%s, trm=%s) = %s"
+             (ttt_to_string arg_type) (TTerm.value_to_string trm) (to_string_ctxt c));
+    ok (c, { trm with info = { trm.info with typ } })
   in
   match List.zip args trms with
   | Base.List.Or_unequal_lengths.Ok args_trms ->
-     let t_vars, trms' = fold_map_best_effort ~init:t_vars ~f:acc_function args_trms in
-     let trms' = (all trms') in (*>| List.rev in*)
-     trms' >| (fun trms' -> (t_vars, trms'))
+     let c, trms' = fold_map_best_effort ~init:c ~f args_trms in
+     let trms' = (all trms') in
+     trms' >| (fun trms' -> (c, trms'))
   | Base.List.Or_unequal_lengths.Unequal_lengths ->
      let err_msg = Printf.sprintf
                      "Number of arguments doesn't match for event '%s'"
                      event_name  in
      error (Errors.type_error err_msg pos)
-
 
 let unpack_functional tevents (trm': Term.t) (trm: Term.t) : (ident * Term.t list * event_type) option =
   match trm.trm with
@@ -397,159 +279,136 @@ let unpack_special_eq tevents trm trm' : (ident * Term.t list * event_type) opti
      unpack_variable tevents trm' trm]
     ~f:(fun x -> x)
 
-let rec type_formula (s: tprog) ?(event_type=Event (false, Standard)) t_vars (f: Formula.t): ('t_vars * Tformula.t) Errors.OrErrors.t =
+let collect_asum c pos ttt =
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan; Dom.TMoney "*"],
+  ttt
+
+let collect_amed c pos ttt =
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan; Dom.TTime; Dom.TMoney "*"],
+  ttt
+
+let collect_acnt c pos ttt =
+  constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan; Dom.TTime; Dom.TStr; Dom.TMoney "*"],
+  ttt
+
+let rec collect_formula (s: tprog) ?(event_type=Event (false, Standard)) (c: ctxt) (f: Formula.t): (ctxt * Tformula.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  let* t_vars, form, event_type_opt = match f.form with
-  | Formula.TT -> ok (t_vars, Tformula.tt, None)
-  | FF -> ok (t_vars, Tformula.ff, None)
-  | EqConst ({ trm = Binop (x, BEq, y); info }, Dom.Bool true) -> begin
+  debug (Printf.sprintf "collect_formula(%s)..." (Formula.to_string f));
+  let* c, form, event_type_opt = match f.form with
+  | Formula.TT -> ok (c, Tformula.tt, None)
+  | FF -> ok (c, Tformula.ff, None)
+  | EqConst (({ trm = Binop (x, BEq, y); _ } as trm), ((Dom.Bool true) as d)) -> begin
     match unpack_special_eq s.tevents x y with
     | Some (event_name, trms, event_type) ->
-       let* t_vars, f = type_formula s ~event_type t_vars (Formula.make (Formula.predicate event_name trms) f.info) in
-       ok (t_vars, f.form, Some event_type)
-    | None -> begin
-      let* t_vars, x' = type_term s.tevents s.tfunctions s.taliases t_vars x None in
-      let* t_vars, y' = type_term s.tevents s.tfunctions s.taliases t_vars y (Some x'.info.typ) in
-      match (TypeTerm.lub x'.info.typ y'.info.typ s.taliases,
-             TypeTerm.lub y'.info.typ x'.info.typ s.taliases) with
-      | Some _, _
-      | _, Some _ ->
-        ok (t_vars,
-            Tformula.EqConst (TTerm.{ trm = TTerm.binop x' BEq y';
-                                      info = { pos = info.pos; typ = TypeTerm.TypeConst (Dom.TBool) } },
-                              Dom.Bool true), None)
-      | _ ->
-        let err_msg = Printf.sprintf "Ill-typed argument types in equality: '%s' vs '%s'"
-                        (TypeTerm.to_string x'.info.typ) (TypeTerm.to_string y'.info.typ) in
-        error (Errors.type_error err_msg f.info.pos)
-      end
+       let* c, f = collect_formula s ~event_type c (Formula.make (Formula.predicate event_name trms) f.info) in
+       ok (c, f.form, Some event_type)
+    | None ->
+       let* c, trm = collect_term s c trm in
+       let c = constrain_base_type_ctxt' c trm.info.pos trm.info.typ [Dom.tt_of_domain d] in
+       ok (c, Tformula.EqConst (trm, d), None)
     end
-  | EqConst (t, d) ->
-     let* t_vars, t' = type_term s.tevents s.tfunctions s.taliases t_vars t None in
-     begin match t'.info.typ with
-       | TypeTerm.TypeConst Dom.TBool ->
-          let c = TTerm.{ trm = TTerm.Const d;
-                          info = { pos = t'.info.pos; typ = TypeTerm.TypeConst Dom.TBool } } in
-          ok (t_vars,
-              (if (Dom.equal d (Dom.Bool true)) then
-                Tformula.EqConst (t', d)
-              else
-                Tformula.EqConst
-                  (TTerm.{ trm = TTerm.binop t' BEq c;
-                           info = { pos = f.info.pos; typ = TypeTerm.TypeConst (Dom.TBool) } },
-                   Dom.Bool true)),
-              None)
-       | _ -> let err_msg = Printf.sprintf "Ill-typed term type: '%s'" (TypeTerm.to_string t'.info.typ) in
-              error (Errors.type_error err_msg f.info.pos)
-     end
+  | EqConst (trm, d) ->
+     let* c, trm = collect_term s c trm in
+     let c = constrain_base_type_ctxt' c trm.info.pos trm.info.typ [Dom.tt_of_domain d] in
+     ok (c, Tformula.EqConst (trm, d), None)
   | Predicate (event_name, trms) ->
-     let* t_vars, trms = type_terms event_name trms t_vars f.info.pos s.tevents s.tfunctions s.taliases in
-     ok (t_vars, Tformula.predicate event_name trms, Some event_type)
+     let* c, trms = collect_terms event_name trms c f.info.pos s in
+     ok (c, Tformula.predicate event_name trms, Some event_type)
   | Agg (u, op, x, y, f) ->
-     combine2 t_vars f x
-       (type_formula s)
-       (fun t_vars x -> type_term s.tevents s.tfunctions s.taliases t_vars x None)
-       (fun t_vars f x -> 
-         let* t_vars = match x.info.typ with
-           | TypeConst x_tt ->
-              begin
-                match Aggregation.ret_tt op x_tt with
-                | None ->
-                   let err_msg =
-                     Printf.sprintf "Aggregation operator '%s' and term type '%s' are incompatible"
-                       (MFOTL_lib.Aggregation.op_to_string op) (Dom.tt_to_string x_tt) in
-                   error (Errors.type_error err_msg f.info.pos)
-                | Some u_tt -> ok (Map.add_exn t_vars ~key:u ~data:(TypeTerm.TypeConst u_tt))
-              end
-           | _ ->
-              let err_msg =
-                Printf.sprintf "Aggregation is only possible on base types, not '%s'"
-                  (TypeTerm.to_string x.info.typ) in
-              error (Errors.type_error err_msg f.info.pos)
-         in
-         ok (t_vars, Tformula.agg u op x y f, None))
+     let f_op = match op with
+       | ASum | AAvg | AStd -> collect_asum
+       | AMed | AMin | AMax -> collect_amed
+       | ACnt | AAssign -> collect_acnt
+     in
+     let* c, tf = collect_formula s c f in
+     let* c, tx = collect_term s c x in
+     let* c, ttt =
+       try ok (f_op c tx.info.pos tx.info.typ)
+       with CtxtError err_msg -> error (Errors.type_error err_msg tx.info.pos) in
+     let c = { c with ctxt = fst (TypeTerm.type_var u ttt c.ctxt) } in
+     ok (c, Tformula.agg u op tx y tf, None)
   | Neg f ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.neg f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.neg f, None)
   | And (side, fs) ->
-     let t_vars, fs = fold_map_best_effort fs ~init:t_vars ~f:(type_formula s) in
+     let c, fs = fold_map_best_effort fs ~init:c ~f:(collect_formula s) in
      let* fs = all fs in
-     ok (t_vars, Tformula.conjs side fs, None)
+     ok (c, Tformula.conjs side fs, None)
   | Or (side, fs) ->
-     let t_vars, fs = fold_map_best_effort fs ~init:t_vars ~f:(type_formula s) in
+     let c, fs = fold_map_best_effort fs ~init:c ~f:(collect_formula s) in
      let* fs = all fs in
-     ok (t_vars, Tformula.disjs side fs, None)
+     ok (c, Tformula.disjs side fs, None)
   | Imp (side, f, g) ->
-     combine2 t_vars f g (type_formula s) (type_formula s)
-       (fun t_vars f g -> ok (t_vars, Tformula.imp side f g, None))
+     combine2 c f g (collect_formula s) (collect_formula s)
+       (fun c f g -> ok (c, Tformula.imp side f g, None))
   | Exists (x, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.exists x f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.exists x f, None)
   | Forall (x, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.forall x f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.forall x f, None)
   | Prev (i, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.prev i f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.prev i f, None)
   | Next (i, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.next i f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.next i f, None)
   | Once (i, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.once i f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.once i f, None)
   | Eventually (i, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.eventually i f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.eventually i f, None)
   | Historically (i, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.historically i f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.historically i f, None)
   | Always (i, f) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.always i f, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.always i f, None)
   | Since (side, i, f, g) ->
-     combine2 t_vars f g (type_formula s) (type_formula s)
-       (fun t_vars f g -> ok (t_vars, Tformula.since side i f g, None))
+     combine2 c f g (collect_formula s) (collect_formula s)
+       (fun c f g -> ok (c, Tformula.since side i f g, None))
   | Until (side, i, f, g) ->
-     combine2 t_vars f g (type_formula s) (type_formula s)
-       (fun t_vars f g -> ok (t_vars, Tformula.until side i f g, None))
+     combine2 c f g (collect_formula s) (collect_formula s)
+       (fun c f g -> ok (c, Tformula.until side i f g, None))
   | Type (f, ty) ->
-     let* t_vars, f = type_formula s t_vars f in
-     ok (t_vars, Tformula.ftype f ty, None)
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.ftype f ty, None)
   | Predicate' _ | Let _ | Let' _  | Top _ ->
      raise (Invalid_argument (Printf.sprintf "typing not implemented for %s" (Formula.to_string f)))
   in
-  (*debug ("type_formula " ^ Formula.to_string f);
-  debug ("t_vars: " ^ String.concat ~sep:", " (List.map ~f:(fun (k, v) -> k ^ " -> " ^ TypeTerm.to_string v) (Map.to_alist t_vars)));*)
-  ok (t_vars, Tformula.{ form; info = Tformula.{ pos = f.info.pos; event_type_opt;
-                                                 t_vars = Map.to_alist t_vars } })
+  debug (Printf.sprintf "collect_formula.c(%s) = %s"
+           (Formula.to_string f) (to_string_ctxt c));
+  ok (c, Tformula.{ form; info = Tformula.{ pos = f.info.pos; event_type_opt } })
 
-let type_patt s t_vars (pf: Lex.Pattern.patt) : ('t_vars * Pattern.patt) Errors.OrErrors.t =
+let collect_patt s c (pf: Lex.Pattern.patt) : (ctxt * Pattern.patt) Errors.OrErrors.t =
   let open Errors.OrErrors in
   match pf with
-  | PPresent -> ok (t_vars, Pattern.PPresent)
-  | PEventually i -> ok (t_vars, Pattern.PEventually i)
-  | PAlways i -> ok (t_vars, Pattern.PAlways i)
-  | PUntil (i, f) -> let* t_vars, f = type_formula s t_vars f in ok (t_vars, Pattern.PUntil (i, f))
-  | POnce i -> ok (t_vars, Pattern.POnce i)
-  | PHistorically i -> ok (t_vars, Pattern.PHistorically i)
-  | PSince (i, f) -> let* t_vars, f = type_formula s t_vars f in ok (t_vars, Pattern.PSince (i, f))
+  | PPresent -> ok (c, Pattern.PPresent)
+  | PEventually i -> ok (c, Pattern.PEventually i)
+  | PAlways i -> ok (c, Pattern.PAlways i)
+  | PUntil (i, f) -> let* c, f = collect_formula s c f in ok (c, Pattern.PUntil (i, f))
+  | POnce i -> ok (c, Pattern.POnce i)
+  | PHistorically i -> ok (c, Pattern.PHistorically i)
+  | PSince (i, f) -> let* c, f = collect_formula s c f in ok (c, Pattern.PSince (i, f))
 
-let type_formulas s t_vars (fs: Formula.t list): ('t_vars * Tformula.t list) Errors.OrErrors.t =
+let collect_formulas s c (fs: Formula.t list): (ctxt * Tformula.t list) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  let t_vars, fs = fold_map_best_effort fs ~init:t_vars ~f:(type_formula s) in
-  (all fs) >| (fun fs -> t_vars, fs)
+  let c, fs = fold_map_best_effort fs ~init:c ~f:(collect_formula s) in
+  (all fs) >| (fun fs -> c, fs)
 
-let type_pformula tprog t_vars (pf: Lex.Pattern.t): ('free_vars * 't_vars * Pattern.t) Errors.OrErrors.t =
+let collect_pformula tprog c (pf: Lex.Pattern.t):
+      ('free_vars * ctxt * Pattern.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  combine2 t_vars pf.fs pf.patt (type_formulas tprog) (type_patt tprog)
-    (fun t_vars fs patt ->
+  combine2 c pf.fs pf.patt (collect_formulas tprog) (collect_patt tprog)
+    (fun c fs patt ->
       let tpf = Pattern.make patt fs in
       let vars = Pattern.fv tpf in
-      ok (vars, t_vars, tpf))
+      ok (vars, c, tpf))
 
-let type_pformula' tprog t_vars pf : ('t_vars * Pattern.t) Errors.OrErrors.t =
+let collect_pformula' tprog c pf : (ctxt * Pattern.t) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  (type_pformula tprog t_vars pf) >| (fun (_, t_vars, pf) -> (t_vars, pf))
+  (collect_pformula tprog c pf) >| (fun (_, c, pf) -> (c, pf))
 
 let merge_reference_with_label pos (l: Label.t) (ref_expr: Lex.Ref.t) : Tlex.Ref.t Errors.OrErrors.t =
   let open Errors.OrErrors in
@@ -569,14 +428,15 @@ let merge_reference_with_label pos (l: Label.t) (ref_expr: Lex.Ref.t) : Tlex.Ref
      ok (Ref.from_lex_ref ref_expr label)
   end
 
-let type_rule (s: t) pos : stmt -> t Errors.OrErrors.t =
+let collect_rule (s: t) : stmt -> t Errors.OrErrors.t =
   let open Errors.OrErrors in
   function
-  | SRule (_, rule_id, type_fixes, rule, doc_string) -> begin
+  | SRule (pos, rule_id, type_fixes, rule, doc_string) -> begin
       let label' = Label.set_rule_id_force rule_id s.label  in
       let _ = Label.valid_rule_label pos label' in
-      let t_vars = Map.of_alist_exn (module String) type_fixes in
+      let c = TypeTerm.of_alist_ctxt ~subtypes:s.tprog.tsubtypes type_fixes in
       let rule_num = fresh () in
+      debug (Printf.sprintf "collect_rule(%d)" rule_num);
       let section_kinds_are_in_order (k1, s1) (k2, s2) = match compare_section_kind k1 k2 with
         | i when i = 0 -> 
           let err_msg = Printf.sprintf "Section kind %s is defined more than once: '%s' and '%s'" (string_of_section_kind k1) s1 s2 in
@@ -593,68 +453,71 @@ let type_rule (s: t) pos : stmt -> t Errors.OrErrors.t =
         | {sks=r::rs; _} -> ok ((fold ~init:r ~f:section_kinds_are_in_order rs) |> ignore)
         | {sks=[]; rule=Some _; _} -> ok ()
       in
-      let* (s, t_vars), rule = 
-
-        let var_term_of_ident_and_positions t_vars x =
-          TTerm.{ trm = TTerm.var x; info = { pos = LexingInfo.dummy; typ = Map.find_exn t_vars x } } in
-        let arg_of_ident_and_positions t_vars x = (x, Map.find_exn t_vars x) in
-        let rec process_rule s t_vars = function
+      let* (s, c), rule = 
+        let var_term_of_ident_and_positions c x =
+          TTerm.{ trm = TTerm.var x;
+                  info = { pos = LexingInfo.dummy;
+                           typ = TypeTerm.get_ttt_exn_ctxt x  c } } in
+        let arg_of_ident_and_positions c x =
+          (x, TypeTerm.get_ttt_exn_ctxt x c) in
+        let rec process_rule s c = function
           | Exception (pos, pf, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
-             debug (String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string));
+             (*debug (String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string));*)
              let reference_labels = List.map ~f:(merge_reference_with_label pos s.label) refs in
              let* reference_labels = all reference_labels in
-             debug (String.concat ~sep:"\n" (List.map reference_labels ~f:(fun r -> Label.string_of_label r.label)));
+             (*debug (String.concat ~sep:"\n" (List.map reference_labels ~f:(fun r -> Label.string_of_label r.label)));*)
              let p_name = "Exception" ^ string_of_int rule_num in (* TODO: mark 'Exception' as an internal name and prevent user-defined events to start with that *)
-             let* vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
-             let terms = List.map (Set.elements vars) ~f:(var_term_of_ident_and_positions t_vars) in
-             let args = List.map (Set.elements vars) ~f:(arg_of_ident_and_positions t_vars) in
+             let* vars, c, tpf = collect_pformula s.tprog c pf in
+             let terms = List.map (Set.elements vars) ~f:(var_term_of_ident_and_positions c) in
+             let args = List.map (Set.elements vars) ~f:(arg_of_ident_and_positions c) in
              let pred = Tformula.make (Tformula.predicate p_name terms)
                           { Tformula.Info.dummy with event_type_opt = Some (Event (false, Standard)) } in
              let* s' = add_exception_first_pass rule_num pred reference_labels s in
              let* s' = add_tevent Lex.Exception p_name args Enftype.itl None s' LexingInfo.dummy in 
-             ok ((s', t_vars), TException (pos, tpf, reference_labels, pred))
+             ok ((s', c), TException (pos, tpf, reference_labels, pred))
           | Scope (pos, pf, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
              let reference_labels = List.map ~f:(fun tref -> merge_reference_with_label pos s.label tref) refs in
              let* reference_labels = all reference_labels in
              let p_name = "Scope" ^ string_of_int rule_num in (* TODO: mark 'Scope' as an internal name and prevent user-defined events to start with that *)
-             let* vars, t_vars, tpf = type_pformula s.tprog t_vars pf in
-             let terms = List.map (Set.elements vars) ~f:(var_term_of_ident_and_positions t_vars) in
-             let args = List.map (Set.elements vars) ~f:(arg_of_ident_and_positions t_vars) in
+             let* vars, c, tpf = collect_pformula s.tprog c pf in
+             let terms = List.map (Set.elements vars) ~f:(var_term_of_ident_and_positions c) in
+             let args = List.map (Set.elements vars) ~f:(arg_of_ident_and_positions c) in
              let pred = Tformula.make (Tformula.predicate p_name terms)
                           { Tformula.Info.dummy with event_type_opt = Some (Event (false, Standard)) } in
              let* s' = add_scope_first_pass rule_num pred reference_labels s in
              let* s' = add_tevent Lex.Exception p_name args Enftype.itl None s' LexingInfo.dummy in 
-             ok ((s', t_vars), TScope (pos, tpf, reference_labels, pred))
+             ok ((s', c), TScope (pos, tpf, reference_labels, pred))
           | Obligation (pos, pf1, pf2, rt, rcs) ->
-             combine2 t_vars pf1 pf2 (type_pformula' s.tprog) (type_pformula' s.tprog)
-               (fun t_vars tpf1 tpf2 -> ok ((s, t_vars), TObligation (pos, tpf1, tpf2, rt, rcs)))
+             combine2 c pf1 pf2 (collect_pformula' s.tprog) (collect_pformula' s.tprog)
+               (fun c tpf1 tpf2 -> ok ((s, c), TObligation (pos, tpf1, tpf2, rt, rcs)))
           | Permission (pos, pf1, pf2, rt, rcs) ->
-             combine2 t_vars pf1 pf2 (type_pformula' s.tprog) (type_pformula' s.tprog)
-               (fun t_vars tpf1 tpf2 -> ok ((s, t_vars), TPermission (pos, tpf1, tpf2, rt, rcs)))
+             combine2 c pf1 pf2 (collect_pformula' s.tprog) (collect_pformula' s.tprog)
+               (fun c tpf1 tpf2 -> ok ((s, c), TPermission (pos, tpf1, tpf2, rt, rcs)))
           | Constitutive (pos, pf1, f2) ->
-             combine2 t_vars pf1 f2 (type_pformula' s.tprog) (type_formulas s.tprog)
-               (fun t_vars tpf1 tf2 -> ok ((s, t_vars), TConstitutive (pos, tpf1, tf2)))
+             combine2 c pf1 f2 (collect_pformula' s.tprog) (collect_formulas s.tprog)
+               (fun c tpf1 tf2 -> ok ((s, c), TConstitutive (pos, tpf1, tf2)))
           | ExceptionC (pos, pf1, refs, f2) ->
-             combine2 (s, t_vars) pf1 f2
-               (fun (s, t_vars) pf1 -> process_rule s t_vars (Exception (pos, pf1, refs)))
-               (fun (s, t_vars) f2 -> process_rule s t_vars (Constitutive (pos, pf1, f2)))
-               (fun (s, t_vars) tf tg ->
+             combine2 (s, c) pf1 f2
+               (fun (s, c) pf1 -> process_rule s c (Exception (pos, pf1, refs)))
+               (fun (s, c) f2 -> process_rule s c (Constitutive (pos, pf1, f2)))
+               (fun (s, c) tf tg ->
                  match tf, tg with
                  | TException (pos, tpf1, reference_labels, pref), TConstitutive (_, _, tf2)
-                   -> ok ((s, t_vars), TExceptionC (pos, tpf1, reference_labels, pref, tf2))
+                   -> ok ((s, c), TExceptionC (pos, tpf1, reference_labels, pref, tf2))
                  | _, _ -> assert false)
-        in process_rule s t_vars rule
+        in process_rule s c rule
       in
-      let* s' = add_vars rule_num t_vars s in
+      let* s' = add_vars rule_num c s in
       let* s'' = add_rule pos rule_num label' s' in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
+      debug (Printf.sprintf "ctxt(%d) = %s" rule_num (to_string_ctxt c));
       add_tstmt (TSRule (pos, rule_num, label', type_fixes, rule, doc_string')) s''
     end
   | _ -> assert false
 
-let type_stmt (s: t) : stmt -> t Errors.WithErrors.t =
+let collect_stmt (s: t) : stmt -> t Errors.WithErrors.t =
   let open Errors.OrErrors in
   let we = witherror ~default:s in
   function
@@ -665,8 +528,8 @@ let type_stmt (s: t) : stmt -> t Errors.WithErrors.t =
               add_section pos s.label s in
      let title' = Option.map title ~f:(fun x -> TALex x) in
      we (s' >>= (fun s' -> add_tstmt (TSSection (section_kind, s.label, label_description, title')) s'))
-  | SRule (pos, _, _, _, _) as rule ->
-     we (type_rule s pos rule)
+  | SRule _ as rule ->
+     we (collect_rule s rule)
   | SEvent (pos, event_type, name, args, pol, ds) ->
      we (add_tevent event_type name args pol ds s pos)
   | SType (pos, name, typ, doc_string) ->
@@ -676,39 +539,137 @@ let type_stmt (s: t) : stmt -> t Errors.WithErrors.t =
   | SNote (_, text) ->
      we (add_tstmt (TSNote text) s)
 
+(* Visitors: typing *)
+
+let rec type_term ctxt (v: TTerm.t) : TTerm.t =
+  let trm = match v.trm with
+  | TTerm.Var x -> TTerm.Var x
+  | Const c -> Const c
+  | App (f_name, trms) -> App (f_name, List.map ~f:(type_term ctxt) trms)
+  | Unop (op, trm) -> Unop (op, type_term ctxt trm)
+  | Binop (trm, op, trm') -> Binop (type_term ctxt trm, op, type_term ctxt trm')
+  | Proj (trm, p) -> Proj (type_term ctxt trm, p)
+  | Record kvs -> Record (List.map ~f:(fun (k, v) -> (k, type_term ctxt v)) kvs)
+  in let term = TTerm.{ trm; info = { v.info with typ = TypeTerm.eval_ctxt v.info.typ ctxt } } in
+     debug (Printf.sprintf "type_term(%s, %s) = %s" (TypeTerm.to_string_ctxt ctxt) (TTerm.value_to_string term) (ttt_to_string term.info.typ));
+     term
+       
+let type_terms ctxt (vs: TTerm.t list) : TTerm.t list =
+  List.map ~f:(type_term ctxt) vs
+
+let rec type_formula ctxt (f : Tformula.t) : Tformula.t =
+  let form = match f.form with
+    | Tformula.TT -> Tformula.TT
+    | FF -> FF
+    | EqConst (t, d) -> EqConst (type_term ctxt t, d)
+    | Predicate (event_name, trms) -> Predicate (event_name, type_terms ctxt trms)
+    | Agg (u, op, x, y, f) -> Agg (u, op, type_term ctxt x, y, type_formula ctxt f)
+    | Neg f -> Neg (type_formula ctxt f)
+    | And (side, fs) -> And (side, List.map ~f:(type_formula ctxt) fs)
+    | Or (side, fs) -> Or (side, List.map ~f:(type_formula ctxt) fs)
+    | Imp (side, f, g) -> Imp (side, type_formula ctxt f, type_formula ctxt g)
+    | Exists (x, f) -> Exists (x, type_formula ctxt f)
+    | Forall (x, f) -> Forall (x, type_formula ctxt f)
+    | Prev (i, f) -> Prev (i, type_formula ctxt f)
+    | Next (i, f) -> Next (i, type_formula ctxt f)
+    | Once (i, f) -> Once (i, type_formula ctxt f)
+    | Eventually (i, f) -> Eventually (i, type_formula ctxt f)
+    | Historically (i, f) -> Historically (i, type_formula ctxt f)
+    | Always (i, f) -> Always (i, type_formula ctxt f)
+    | Since (side, i, f, g) -> Since (side, i, type_formula ctxt f, type_formula ctxt g)
+    | Until (side, i, f, g) -> Until (side, i, type_formula ctxt f, type_formula ctxt g)
+    | Type (f, ty) -> Type (type_formula ctxt f, ty)
+    | Predicate' _ | Let _ | Let' _  | Top _ ->
+       raise (Invalid_argument
+                (Printf.sprintf "typing not implemented for %s" (Tformula.to_string f)))
+  in
+  debug (Printf.sprintf "type_formula(%s, %s)" (Tformula.to_string f) (TypeTerm.to_string_ctxt ctxt));
+  { f with form }
+
+let type_patt ctxt (tpf: Tlex.Pattern.patt) : Tlex.Pattern.patt =
+  match tpf with
+  | PPresent -> Pattern.PPresent
+  | PEventually i -> Pattern.PEventually i
+  | PAlways i -> Pattern.PAlways i
+  | PUntil (i, f) -> Pattern.PUntil (i, type_formula ctxt f)
+  | POnce i -> Pattern.POnce i
+  | PHistorically i -> Pattern.PHistorically i
+  | PSince (i, f) -> Pattern.PSince (i, type_formula ctxt f)
+
+let type_formulas ctxt (tfs: Tformula.t list): Tformula.t list =
+  List.map ~f:(type_formula ctxt) tfs
+
+let type_pformula ctxt (tpf: Pattern.t): Pattern.t =
+  Pattern.make (type_patt ctxt tpf.patt) (type_formulas ctxt tpf.fs)
+
+let type_rule (tprog: tprog) : tstmt -> tstmt =
+  function
+  | TSRule (pos, rule_id, label, type_fixes, rule, doc_string) -> begin
+      let rc = Map.find_exn tprog.rule_ctxts rule_id in
+      debug (Printf.sprintf "type_rule.rc(%d) = %s" rule_id (to_string_ctxt rc));
+      let rule = match rule with
+        | TException (pos, tpf, reference_labels, pred) ->
+           TException (pos, type_pformula rc tpf, reference_labels, type_formula rc pred)
+        | TScope (pos, tpf, reference_labels, pred) ->
+           TScope (pos, type_pformula rc tpf, reference_labels, type_formula rc pred)
+        | TObligation (pos, tpf1, tpf2, rt, rcs) ->
+           TObligation (pos, type_pformula rc tpf1, type_pformula rc tpf2, rt, rcs)
+        | TPermission (pos, tpf1, tpf2, rt, rcs) ->
+           TPermission (pos, type_pformula rc tpf1, type_pformula rc tpf2, rt, rcs)
+        | TConstitutive (pos, tpf1, tf2) ->
+           TConstitutive (pos, type_pformula rc tpf1, type_formulas rc tf2)
+        | TExceptionC (pos, tpf1, reference_labels, pref, tf2) ->
+           TExceptionC (pos, type_pformula rc tpf1, reference_labels,
+                        type_formula rc pref, type_formulas rc tf2) in
+      TSRule (pos, rule_id, label, type_fixes, rule, doc_string)
+    end
+  | _ -> assert false
+
+let type_stmt (tprog: tprog) : tstmt -> tstmt =
+  function
+  | TSRule _ as rule -> type_rule tprog rule
+  | tstmt -> tstmt
+
 (* Checking of variable types *)
     
-let merge_type_maps pos m1 m2 (label: ident) : (ident, TypeTerm.t, String.comparator_witness) Map.t Errors.OrErrors.t =
+let merge_ctxt tprog pos (m1: ctxt) (m2: ctxt) (label: ident) : ctxt Errors.OrErrors.t = 
   let open Errors.OrErrors in
-  let exception Exc of Errors.error in
   try
-    ok (Map.merge m1 m2 ~f:(fun ~key:k -> function
-            | `Both (a1, a2) when TypeTerm.equal a1 a2 -> Some a1
-            | `Both (a1, a2) ->
-               let err_msg = Printf.sprintf
-                               "Variable '%s' has type '%s' in rule '%s', but was expected to have type '%s'"
-                               k (TypeTerm.value_to_string a2) label (TypeTerm.value_to_string a1)
-               in raise (Exc (Errors.type_error err_msg pos))
-            | `Left t
-              | `Right t -> Some t))
-  with Exc err -> error err
+    let m2 = concrete_ctxt tprog.taliases m2 in
+    ok (TypeTerm.merge_ctxt m1 m2)
+  with CtxtError err_msg ->
+    error (Errors.type_error (Printf.sprintf "Error in rule '%s': %s" label err_msg) pos)
 
-let check_var_types tprog : (int, var_types, Int.comparator_witness) Map.t Errors.WithErrors.t =
+let rule_ctxts tprog : (int, ctxt, Int.comparator_witness) Map.t Errors.WithErrors.t =
   let open Errors.WithErrors in
-  let var_equivalence_classes = Label.RuleTree.rules_with_shared_variable_scopes tprog.rule_tree in
-  let f0 acc' key =
-    let var_types = Map.find_exn tprog.variables key in
-    let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree key in
-    let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree key in
-    Errors.OrErrors.witherror ~default:(Map.empty (module String)) (merge_type_maps pos var_types acc' label)
-  in
-  let f1 keys = fold (Set.elements keys) ~init:(Map.empty (module String)) ~f:f0 in
-  let updated_vars = List.map var_equivalence_classes ~f:f1 in
-  let* updated_vars = all updated_vars in
-  let f2 v m rule_id = Map.update m rule_id ~f:(fun _ -> v) in
-  let f3 m v rule_ids = Set.fold rule_ids ~init:m ~f:(f2 v) in
-  let vars = List.fold2_exn ~init:(Map.empty (module Int)) ~f:f3 updated_vars var_equivalence_classes in
-  ok vars
+  let var_equivalence_classes =
+    Label.RuleTree.rules_with_shared_variable_scopes tprog.rule_tree in
+  debug (Printf.sprintf "var_equivalence_classes = [%s]"
+           (String.concat ~sep:", "
+              (List.map var_equivalence_classes
+                 ~f:(fun rs -> Printf.sprintf "{%s}"
+                                 (String.concat ~sep:", "
+                                    (List.map ~f:Int.to_string (Set.elements rs)))))));
+  let merge_rule_ctxt ctxt rule_key =
+    let ctxt' = Map.find_exn tprog.rule_ctxts rule_key in
+    debug (Printf.sprintf "merge %s (rule %d) into %s..."
+             (to_string_ctxt ctxt') rule_key (to_string_ctxt ctxt));
+    let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree rule_key in
+    let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree rule_key in
+    debug "reach here";
+    let ctxt = merge_ctxt tprog pos ctxt ctxt' label in
+    Errors.OrErrors.witherror ~default:(TypeTerm.of_subtypes_ctxt tprog.tsubtypes) ctxt in
+  let merge_rule_ctxts rule_keys =
+    fold (Set.elements rule_keys) ~init:(TypeTerm.of_subtypes_ctxt tprog.tsubtypes) ~f:merge_rule_ctxt in
+  let var_equivalence_ctxts = List.map var_equivalence_classes ~f:merge_rule_ctxts in
+  let* var_equivalence_ctxts = all var_equivalence_ctxts in
+  let set_rule_ctxts v m rule_id =
+    debug (Printf.sprintf "set_rule_ctxts(rule_id=%d, v=%s)" rule_id (to_string_ctxt v));
+    Map.update m rule_id ~f:(fun _ -> v) in
+  let set_class_ctxts m v rule_ids = Set.fold rule_ids ~init:m ~f:(set_rule_ctxts v) in
+  let rule_ctxts = List.fold2_exn ~init:(Map.empty (module Int))
+                    ~f:set_class_ctxts var_equivalence_ctxts var_equivalence_classes in
+  ok rule_ctxts
 
 (* Main typing function *)
 
@@ -719,14 +680,20 @@ let do_type_exceptions (s: t) : tprog Errors.WithErrors.t =
                  ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_exception i f refs acc)) in
   let* tprog = fold s.scopes_first_pass ~init:tprog
                  ~f:(fun acc (i,f,refs) -> we ~default:acc (Tlex.add_scope i f refs acc)) in
-  let* variables = check_var_types tprog in
-  ok { tprog with tstmts = List.rev tprog.tstmts; variables }
+  let* rule_ctxts = rule_ctxts tprog in
+  ok { tprog with tstmts = List.rev tprog.tstmts; rule_ctxts }
+
+let do_retype (tprog: tprog) : tprog =
+  let tstmts = List.map ~f:(type_stmt tprog) tprog.tstmts in
+  { tprog with tstmts }
 
 let do_type (tprog: tprog) (prog: prog) : (t * tprog) Errors.WithErrors.t =
   let open Errors.WithErrors in
   let init = { empty with tprog } in
-  (* First pass: type statements *)
-  let* s = fold prog.stmts ~init ~f:type_stmt in
-  (* Second pass: exceptions *)
+  (* First pass: type statements, collect contraints *)
+  let* s = fold prog.stmts ~init ~f:collect_stmt in
+  (* Second pass: exceptions, constraint resolution *)
   let* tprog = do_type_exceptions s in
+  (* Third pass: re-type statements *)
+  let tprog = do_retype tprog in
   ok ({ s with tprog }, tprog)

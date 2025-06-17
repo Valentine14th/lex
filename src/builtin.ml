@@ -3,7 +3,7 @@ open Core
 open TypeTerm
 
 let events =
-  [("ts", (Lex.Event (false, Variable), ["t", TypeConst Dom.TTime], MFOTL_lib.Enftype.obs, Some "the current time"))]
+  [("ts", (Lex.Event (false, Variable), ["t", TConst Dom.TTime], MFOTL_lib.Enftype.obs, Some "the current time"))]
 
 let events_map = Map.of_alist_exn (module String) events
 
