@@ -81,7 +81,7 @@ let meet_of_subtypes subtypes x y =
     | _ -> None
   in
   let r = Option.merge (try1 x y) (try1 y x) ~f:(fun a _ -> a) in
-  print_endline (Printf.sprintf "meet %s %s = %s" (ttt_to_string x) (ttt_to_string y) (Option.fold r ~f:(fun _ -> ttt_to_string) ~init:"None"));
+  (*print_endline (Printf.sprintf "meet %s %s = %s" (ttt_to_string x) (ttt_to_string y) (Option.fold r ~f:(fun _ -> ttt_to_string) ~init:"None"));*)
   r
   
 let of_subtypes_ctxt subtypes =
