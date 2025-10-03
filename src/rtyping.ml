@@ -498,10 +498,8 @@ let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t 
   let init = { s; trefi = { trempty with lex_file = refi.lex_file; base_file_type = refi.base_file_type } } in
   (* First pass: type statements *)
   let* rs: rt = fold refi.rtmts ~init ~f:collect_rtmt in
-  (* TODO[FH]: Implement typing of additional exceptions or generate errors *)
   (* Second pass: compute rule contexts *)
   let* rule_ctxts = rule_ctxts rs.s.tprog in
-  debug (String.concat ~sep:", " (List.map (Map.to_alist rs.s.tprog.tsubtypes) ~f:(fun (a, b) -> a ^ " < " ^ (TypeTerm.ttt_to_string b))));
   let tprog = { rs.s.tprog with rule_ctxts } in
   (* Third pass: re-type statements *)
   let tprog = do_retype tprog in

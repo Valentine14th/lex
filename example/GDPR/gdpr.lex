@@ -1,5 +1,10 @@
 law "GDPR"
 
+note "This is a draft formalization of GDPR Articles 5-10, 12-22, 30, 45(1), 46(1), 49"
+note "Author: François Hublet"
+note "Date: 3 Oct 2025"
+note "Status: Untested"
+
 import formex GDPR
 
 type activity
@@ -406,7 +411,7 @@ rule
     except
         paragraph[1] "1" point "f"
 
-note "Skipped: opening clause in (2)-(3)."
+note "Skipped: OPENING CLAUSE in (2)-(3)."
 note "Paragraph (4) provides condition to assess the compatibility of purposes. This is integrated in the docstring of CompatibleWithPurpose."
 
 article "7" "Conditions for consent"
@@ -480,7 +485,7 @@ rule
 
 point "2"
 
-note "Skipped: Any part of such a declaration which constitutes an infringement of this Regulation shall not be binding."
+note "Skipped: Any part of such a declaration which constitutes an infringement of this Regulation shall not be binding (NO VIOLATIONS)."
 
 paragraph "3"
 
@@ -556,7 +561,7 @@ rule "minor_consent_valid"
     constitute
         IsLawful(a, "8(1)")
 
-note "Skipped: opening clause in subparagraph (2)."
+note "Skipped: OPENING CLAUSE in subparagraph (2)."
 
 paragraph "2"
 
@@ -573,7 +578,7 @@ rule
         CheckNotChild(c, ds)
     transparently enforceable suppressing GiveConsent
 
-note "Skipped: opening clause in (3)."
+note "Skipped: OPENING CLAUSE in (3)."
 
 article "9" "Processing of special categories of personal data"
 
@@ -728,7 +733,7 @@ rule "special_data_consent_valid"
     constitute
         IsLawful(a, "9(2)(a)")
 
-rule "Skipped: except where Union or Member State law provide that the prohibition referred to in paragraph 1 may not be lifted by the data subject"
+rule "Skipped: except where Union or Member State law provide that the prohibition referred to in paragraph 1 may not be lifted by the data subject (OPENING CLAUSE)"
 
 point "b"
 
@@ -824,7 +829,7 @@ rule
     scope
         paragraph "2" point "h"
 
-note "Skipped: opening clause in (4)."
+note "Skipped: OPENING CLAUSE in (4)."
 
 article "10" "Processing of personal data relating to criminal convictions and offences"
 
@@ -961,11 +966,11 @@ rule
         IsEasilyAccessible(de)
         IsClearAndPlainLanguage(de)
 
-note "Skip: When requested by the data subject, the information may be provided orally, provided that..."
+note "Skipped: When requested by the data subject, the information may be provided orally, provided that... (MODEL)"
 
 paragraph "2"
 
-note "Skipped"
+note "Skipped: facilitate the exercise of the rights, integrated in the MODEL's design"
 
 paragraph "3"
 
@@ -1048,9 +1053,9 @@ rule "charge_reasonable_fee"
     transparently enforceable suppressing ChargeForRequest
 
 note "Skipped: (b) and second subparagraph integrated in the docstring of RefuseRequest."
-note "Skipped: (6) as the model assumes that ds is identified."
-note "Skipped: The information to be provided to data subjects... may [use] standardised icons"
-note "Skipped: opening clause in (8)."
+note "Skipped: (6) as the MODEL assumes that ds is identified."
+note "Skipped: The information to be provided to data subjects... may [use] standardised icons (PERMISSION)"
+note "Skipped: OPENING CLAUSE in (8)."
 
 article "13" "Information to be provided where personal data are collected from the data subject"
 
@@ -1749,7 +1754,7 @@ rule
         paragraph "3"   
         paragraph "4"
 
-note "Skipped: opening clauses in (c)-(d)."
+note "Skipped: OPENING CLAUSE in (c)-(d)."
 
 article "15" "Right of access by the data subject"
 
@@ -2054,11 +2059,11 @@ rule
 
 point "d"
 
-note "Skipped: personal data is never unlawfully processed in this model."
+note "Skipped: personal data is never unlawfully processed (NO VIOLATION)."
 
 point "e"
 
-note "Skipped: opening clause."
+note "Skipped: OPENING CLAUSE."
 
 point "f"
 
@@ -2190,7 +2195,7 @@ rule
 
 point "b"
 
-note "Skipped: data is never unlawfully processed in this model."
+note "Skipped: data is never unlawfully processed in this model (NO VIOLATION)."
 
 point "c"
 
@@ -2351,8 +2356,8 @@ rule
         EXISTS f. ContainsData(rs, f) AND PersonalDataCopy(f, ds) AND IsStructuredFormat(f) AND IsCommonlyUsedFormat(f) AND IsMachineReadableFormat(f)
     transparently enforceable causing consequences
 
-note "Skip: the data subjects have the right to transmit those data to another controller (next §)."
-note "Skip: the processing is carried out by automated means."
+note "Skip: the data subjects have the right to transmit those data to another controller (formalized in next paragraph)."
+note "Skip: the processing is carried out by automated means (MODEL)."
 
 paragraph "2"
 
@@ -2375,11 +2380,11 @@ rule
     except
         paragraph "1"
 
-note "Skip: without prejudice to Article 17 (taken into account in interpretation)."
+note "Skipped: without prejudice to Article 17 (taken into account in interpretation)."
 
 paragraph "4"
 
-note "Skip: integrated in the docstring of PersonalDataCopy."
+note "Skipped: integrated in the docstring of PersonalDataCopy."
 
 article "21" "Right to object"
 
@@ -2452,7 +2457,7 @@ rule "object_dm_definition"
 paragraph "4"
 
 note "Skipped: integrated in the docstring of IsRights."
-note "Skipped the permission in (5)"
+note "Skipped: PERMISSION in (5)"
 
 paragraph "6"
 
@@ -2514,7 +2519,7 @@ rule
     except
         paragraph "1"
 
-note "Skip: opening clause in (b)"
+note "Skipped: OPENING CLAUSE in (b)"
 
 point "c"
 
