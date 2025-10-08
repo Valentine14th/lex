@@ -62,12 +62,10 @@ Refer to the [usage](#usage) chapter for further instructions on using Lex
 - [Ocaml](https://ocaml.org/docs/installing-ocaml)
 - MFOTL library
 
-To setup the MFOTL library (which is currently part of the WhyEnf project) a symlink is required:
+To setup the MFOTL library, update the submodules:
 ```bash
 git clone git@github.com:runtime-enforcement/whyenf.git
-cd whyenf
-git checkout lifeboat
-ln -s <path/to/whyenf>/whyenf/MFOTL <path/to/lex>/lex/MFOTL_lib
+git submodule update --init
 ```
 
 Set the Ocaml version:
