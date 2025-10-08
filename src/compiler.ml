@@ -422,7 +422,7 @@ let is_vanilla = function
   | ECImplication (_, _, _, _, _, _, _, Assumed, _, _) -> true
   | _ -> false
 
-let compile (eprog:Elex.eprog) : Clex.cprog =
+let compile (eprog:Elex.eprog) (unroll: bool) : Clex.cprog =
   let sorted_c_rules_opt = List.map eprog.compilation_order ~f:(Map.find eprog.ecrules) in
   let sorted_c_rules     = List.filter_map ~f:(fun x -> x) sorted_c_rules_opt in
   let let_rules          = List.filter sorted_c_rules ~f:is_let_rule in
@@ -438,6 +438,7 @@ let compile (eprog:Elex.eprog) : Clex.cprog =
                 Eformula.make (Eformula.flet p_name (Some enftype) vars rhs phi)
                   { I.dummy with enftype = Enftype.cau } 
               ) ~init:(tbigcauconj formulae) in
+  let phi = if unroll then Eformula.unprime (Eformula.unroll_let phi) else phi in
   let signature = compile_signature eprog.pols eprog.eevents eprog.efunctions eprog.ealiases
                     eprog.rule_ctxts let_rules in
   { signature; phi }

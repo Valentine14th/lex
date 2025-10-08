@@ -9,7 +9,7 @@ let debug msg = if !debug_main then Errors.debug_print ~f_name:(Some "main.ml") 
 let modes = "mfotl (default), doc, template"
 let input_formats = "formex (default), akomaNtoso"
 
-let loop filename mode f o b to_ () =
+let loop filename mode f o b to_ unroll () =
   let open Errors.OrErrors in
   let lexpath = Filename.dirname (Sys.get_argv()).(0) in
   let filepath = Filename.dirname filename
@@ -22,7 +22,7 @@ let loop filename mode f o b to_ () =
   | None | Some "mfotl" -> begin
       match Modules.do_type [lexpath] b filepath basename with
       | Ok (_, eprog) ->
-         let cprog = Compiler.compile eprog in
+         let cprog = Compiler.compile eprog unroll in
          begin match o with
          | None -> print_endline (Clex.to_string cprog)
          | Some out_fn -> let sig_fn = out_fn ^ ".sig" in
@@ -66,6 +66,7 @@ let () =
                   +> flag "-o" (optional string) ~doc:"output file"
                   +> flag "-b" (optional string) ~doc:"upper bound for the time interval"
                   +> flag "-to" (optional string) ~doc:"Z3 timeout"
+                  +> flag "-unroll" no_arg ~doc:"unroll let bindings in output"
                   )
     loop
   |> Command_unix.run
