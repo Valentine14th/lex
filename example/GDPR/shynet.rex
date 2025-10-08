@@ -1,68 +1,59 @@
 refine paper
 
 type session_id is string
-type data_class is string
-type data_field is string
-type data_id    is string
+type data_type  is string
+type fun_name   is string
 
-suppressable event read
-    cls     : data_class
-    field   : data_field
-    id      : data_id
-    caller  : session_id
-    owner   : session_id
-    purpose : purpose
+observable event ReceiveConsentOwner
+    u : session_id
+    
+observable event ReceiveConsent
+    s : string
 
-suppressable event write
-    cls     : data_class
-    field   : data_field
-    id      : data_id
-    caller  : session_id
-    value   : string
-    owner   : session_id
-    purpose : purpose
+suppressable event ReadData
+    f : fun_name
+    t : data_type
+    u : session_id
 
-observable event input
-    func    : string
-    param   : string
-    value   : string
-    caller  : session_id
-    purpose : purpose
-
+suppressable event WriteData
+    f : fun_name
+    t : data_type
+    u : session_id
+	
 refine type data_subject is session_id
 refine type entity       is string
-refine type data         is data_id
-refine type activity     is purpose
+refine type data         is data_type
+refine type activity     is fun_name
 
 rule "refine_data_processing"
     whenever
-        read(cls, field, id, caller, owner, purpose) OR (EXISTS value. write(cls, field, id, caller, value, owner, purpose))
+        ReadData(f, t, u) OR WriteData(f, t, u)
     refine
-        DataProcessing("MyCompany", "MyCompany", purpose, id)
+        DataProcessing("MyCompany", "MyCompany", f, t)
 
 rule "refine_personal_data"
     whenever
-        read(cls, field, id, caller, owner, purpose) OR (EXISTS value. write(cls, field, id, caller, value, owner, purpose))
-        field = "ip" OR field = "user_agent"
+        ReadData(f, t, u) OR WriteData(f, t, u)
+        t = "ip" OR t = "user_agent"
     refine
-        PersonalData(id, owner)
+        PersonalData(t, u)
 
 assume true IsFair
 assume true IsTransparent
 
 rule "refine_iscollect"
     whenever
-        read(cls, field, id, caller, owner, purpose) OR (EXISTS value. write(cls, field, id, caller, value, owner, purpose))
-        purpose = "ingress"
+        ReadData(f, t, u) OR WriteData(f, t, u)
+        f = "ingress"
     refine
-        IsCollection(purpose)
+        IsCollection(f)
 
 rule "refine_giveconsent"
     whenever
-        input("ConsentView", "statistics", "true", caller, "service")
-        input("ConsentView", "session", owner, caller, "service")
+        ReceiveConsentOwner(u)
+        ReceiveConsent("statistics")
     refine
-        GiveConsent(caller, "analytics", "MyCompany")
+        GiveConsent(u, "analytics", "MyCompany")
 
 assume false IsNecessaryForLegitimateInterest
 assume false IsOverridenByDataSubjectInterests

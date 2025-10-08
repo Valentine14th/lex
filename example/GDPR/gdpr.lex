@@ -887,7 +887,7 @@ observable predicate IsClearAndPlainLanguage
     de : declaration
 
 observable event Request
-    """Data subject {ds} performs information request {rq} to controller {c}"""
+    """Data subject {ds} performs request {rq} to controller {c}"""
     ds : data_subject
     rq : request
     c : entity
