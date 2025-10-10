@@ -12,7 +12,7 @@ module PosTypeInfo : Modules.I with type t = tpos_info_type = struct
 
   type t = tpos_info_type [@@deriving compare, sexp_of, hash, equal]
 
-  let to_string _ s _ = s
+  let to_string _ s i = s ^ ":" ^ TypeTerm.to_string i.typ
   let dummy = { pos = LexingInfo.dummy; typ = TypeTerm.TConst (Dom.TBool) }
 
 end

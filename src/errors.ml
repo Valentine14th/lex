@@ -198,6 +198,7 @@ module OrErrors = struct
     | Ok _ -> ok a
     | Errors errs -> errors errs
 
+
   let fold2 ~init:(init:'a) ~f:(f:'a -> 'b -> 'c -> 'a t) (l: 'b list) (l': 'c list) =
     match List.fold2 ~init:(Ok init) ~f:(fun (a: 'a t) (b: 'b) (c: 'c) -> a >>= (fun a -> f a b c)) l l' with
     | Base.List.Or_unequal_lengths.Ok l -> l >| (fun x -> Base.List.Or_unequal_lengths.Ok x)
@@ -223,6 +224,17 @@ module OrErrors = struct
     match a with
     | Ok a -> WithErrors.Ok a
     | Errors errs -> WithErrors.Errors (default, errs)
+
+  let rec witherror_list (l: 'a t list) : 'a list WithErrors.t =
+    match l with
+    | [] -> WithErrors.ok []
+    | (Ok a)::t -> (match witherror_list t with
+                    | Ok t -> Ok (a::t)
+                    | Errors (t, errs) -> Errors (a::t, errs))
+    | (Errors errs)::t -> (match witherror_list t with
+                           | Ok t -> Errors (t, errs)
+                           | Errors (t, errs') -> Errors (t, errs @ errs'))
+        
 
   let of_witherror (a:'a WithErrors.t) : 'a t =
     match a with

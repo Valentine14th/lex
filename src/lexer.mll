@@ -115,7 +115,7 @@ let white   = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let comment = '#' [^ '\r' '\n']*
                                 
-let ident   = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let ident   = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* '\''*
 let int     = ['0'-'9']+
 let float1  = ['0'-'9']+ '.' ['0'-'9']*
 let float2  = '.' ['0'-'9']+

@@ -81,12 +81,7 @@ let find_filename seq import prefixes suffix : (string * string) Errors.OrErrors
               (pos_of_import import))
 
 let parse_with_error parse_fun lexbuf : 'a Errors.OrErrors.t =
-  let open Errors.OrErrors in
-  try ok (parse_fun Lexer.read lexbuf) with
-  | Parser.Error ->
-     error (Errors.parser_error "invalid character" (LexingInfo.create1 lexbuf.lex_curr_p))
-  | Sys_error msg ->
-     error (Errors.parser_error msg (LexingInfo.create1 lexbuf.lex_curr_p))
+  Errors.OrErrors.of_witherror (parse_fun Lexer.read lexbuf)
 
 let parse_lex_module filename : Slex.sprog Errors.OrErrors.t =
    let inx = try In_channel.create filename with

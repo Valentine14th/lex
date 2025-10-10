@@ -55,6 +55,7 @@ let to_string (i : t) =
 let dummy = { ranges = [] }
 
 let create start stop = { ranges = [{ start; stop}] }
+let of_loc (start, stop) = { ranges = [{ start; stop}] }
 let create1 start = { ranges = [{ start; stop = start }] }
 
 let (<=) (pos : Lexing.position) (pos' : Lexing.position) =

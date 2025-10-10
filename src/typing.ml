@@ -156,7 +156,9 @@ let rec collect_term (s: tprog) (c: ctxt) (v: Term.t):
        begin
          let f (c, trms) trm (_, arg_type) =
            let* c, trm = collect_term s c trm in
-           let c, typ = unify_ctxt trm.info.typ arg_type c in
+           let* c, typ =
+             try ok (unify_ctxt trm.info.typ arg_type c)
+             with CtxtError err_msg -> error (Errors.type_error err_msg trm.info.pos) in
            ok (c, { trm with info = { trm.info with typ } } :: trms)
          in
          let aux c arg_types typ =
@@ -187,7 +189,7 @@ let rec collect_term (s: tprog) (c: ctxt) (v: Term.t):
          let* c, trm = collect_term s c trm in
          let* c, typ =
            try ok (f_op c trm.info.pos trm.info.typ)
-           with CtxtError err_msg -> error (Errors.type_error err_msg v.info.pos) in
+           with CtxtError err_msg -> error (Errors.type_error err_msg trm.info.pos) in
          ok (c, TTerm.make (TTerm.unop op trm) { pos = v.info.pos; typ })
        end
     | Binop (trm, op, trm') ->
@@ -204,7 +206,7 @@ let rec collect_term (s: tprog) (c: ctxt) (v: Term.t):
          let* c, trm' = collect_term s c trm' in
          let* c, typ =
            try ok (f_op c trm.info.pos (trm.info.typ, trm'.info.typ))
-           with CtxtError err_msg -> error (Errors.type_error err_msg v.info.pos) in
+           with CtxtError err_msg -> error (Errors.type_error err_msg trm.info.pos) in
          ok (c, TTerm.make (TTerm.binop trm op trm') { pos = v.info.pos; typ })
        end
     | Proj (trm, p) ->
@@ -237,7 +239,7 @@ let collect_terms event_name trms c pos s : (ctxt * TTerm.t list) Errors.OrError
              (ttt_to_string arg_type) (TTerm.value_to_string trm));
     let* c, typ =
       try ok (unify_ctxt trm.info.typ arg_type c)
-      with CtxtError err_msg -> error (Errors.type_error err_msg pos) in
+      with CtxtError err_msg -> error (Errors.type_error err_msg trm.info.pos) in
     debug (Printf.sprintf "collect_terms.c(arg_type=%s, trm=%s) = %s"
              (ttt_to_string arg_type) (TTerm.value_to_string trm) (to_string_ctxt c));
     ok (c, { trm with info = { trm.info with typ } })
@@ -512,7 +514,9 @@ let collect_rule (s: t) : stmt -> t Errors.OrErrors.t =
       let* s' = add_vars rule_num c s in
       let* s'' = add_rule pos rule_num label' s' in
       let doc_string' = Option.map doc_string ~f:(fun x -> TALex x) in
+      let rc = Map.find_exn s'.tprog.rule_ctxts rule_num in
       debug (Printf.sprintf "ctxt(%d) = %s" rule_num (to_string_ctxt c));
+      debug (Printf.sprintf "type_rule.rc(%d) = %s" rule_num (to_string_ctxt rc));
       add_tstmt (TSRule (pos, rule_num, label', type_fixes, rule, doc_string')) s''
     end
   | _ -> assert false
@@ -604,8 +608,9 @@ let type_pformula ctxt (tpf: Pattern.t): Pattern.t =
 
 let type_rule (tprog: tprog) : tstmt -> tstmt =
   function
-  | TSRule (pos, rule_id, label, type_fixes, rule, doc_string) -> begin
+  | TSRule (pos, rule_id, label, type_fixes, rule, doc_string) as stmt -> begin
       let rc = Map.find_exn tprog.rule_ctxts rule_id in
+      debug (Printf.sprintf "Now typing the rule:\n %s" (Tlex.string_of_tstmt stmt));
       debug (Printf.sprintf "type_rule.rc(%d) = %s" rule_id (to_string_ctxt rc));
       let rule = match rule with
         | TException (pos, tpf, reference_labels, pred) ->
@@ -632,13 +637,13 @@ let type_stmt (tprog: tprog) : tstmt -> tstmt =
 
 (* Checking of variable types *)
     
-let merge_ctxt tprog pos (m1: ctxt) (m2: ctxt) (label: ident) : ctxt Errors.OrErrors.t = 
+let merge_ctxt tprog pos (m1: ctxt) (m2: ctxt) : ctxt Errors.OrErrors.t = 
   let open Errors.OrErrors in
   try
     let m2 = concrete_ctxt tprog.taliases m2 in
     ok (TypeTerm.merge_ctxt m1 m2)
   with CtxtError err_msg ->
-    error (Errors.type_error (Printf.sprintf "Error in rule '%s': %s" label err_msg) pos)
+    error (Errors.type_error err_msg pos)
 
 let rule_ctxts tprog : (int, ctxt, Int.comparator_witness) Map.t Errors.WithErrors.t =
   let open Errors.WithErrors in
@@ -655,10 +660,12 @@ let rule_ctxts tprog : (int, ctxt, Int.comparator_witness) Map.t Errors.WithErro
     debug (Printf.sprintf "merge %s (rule %d) into %s..."
              (to_string_ctxt ctxt') rule_key (to_string_ctxt ctxt));
     let pos = Label.RuleTree.pos_of_rule_idx tprog.rule_tree rule_key in
-    let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree rule_key in
-    debug "reach here";
-    let ctxt = merge_ctxt tprog pos ctxt ctxt' label in
-    Errors.OrErrors.witherror ~default:(TypeTerm.of_subtypes_ctxt tprog.tsubtypes) ctxt in
+    (*let label = Label.RuleTree.string_of_rule_idx tprog.rule_tree rule_key in*)
+    let merged_ctxt = merge_ctxt tprog pos ctxt ctxt' in
+    (match merged_ctxt with
+       Ok ctxt ->  debug (Printf.sprintf "merge yielded %s" (to_string_ctxt ctxt))
+      | _ -> ());
+    Errors.OrErrors.witherror ~default:ctxt merged_ctxt in
   let merge_rule_ctxts rule_keys =
     fold (Set.elements rule_keys) ~init:(TypeTerm.of_subtypes_ctxt tprog.tsubtypes) ~f:merge_rule_ctxt in
   let var_equivalence_ctxts = List.map var_equivalence_classes ~f:merge_rule_ctxts in
@@ -696,4 +703,5 @@ let do_type (tprog: tprog) (prog: prog) : (t * tprog) Errors.WithErrors.t =
   let* tprog = do_type_exceptions s in
   (* Third pass: re-type statements *)
   let tprog = do_retype tprog in
+  debug (Tlex.string_of_tprog tprog);
   ok ({ s with tprog }, tprog)

@@ -153,6 +153,7 @@ let compile_lhs ?(sup_constr=None) ?(cau_constr=None) vars (enftype: Enftype.t) 
     let enf_sup = Option.value_exn sup_constr in
     begin match enf_sup with
     | ESlhsSPformula enf_pformula_sup ->
+       (*print_endline (Pattern.to_string pf);*)
       begin match enf_pformula_sup with
       | ESpfFormula i ->
         let cpf = compile_epformula ~enftype:Enftype.suppressable ~f:(tbigsupconj i) pf in (* this is used for enforcement *)
@@ -241,7 +242,13 @@ let compile_renaming form renaming =
     if ETerm.is_var y then
       Eformula.subst (Map.of_alist_exn (module String) [ETerm.unvar y, x]) form
     else
-      Eformula.make (Eformula.assign (ETerm.unvar x) y form) form.info in
+      let s =
+        match Enftype.is_causable form.info.enftype,
+              Enftype.is_suppressable form.info.enftype with
+        | false, false -> Side.N
+        | false, true -> L
+        | true, _ -> assert false in
+      Eformula.make (Eformula.conj s form (Eformula.make (Eformula.eqconst x (ETerm.unconst y)) form.info)) form.info in
   List.fold_right renaming ~init:form ~f
 
 let compile_exists f vars =
@@ -326,9 +333,12 @@ let compile_let_rule aliases = function
   | _ -> assert false
 
 let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) =
-  let vars = Set.elements (Set.union (fv f1) (fv f2)) in
+  let vars_forall = Set.elements (fv f2) in
+  let vars_exists = Set.elements (Set.diff (fv f1) (fv f2)) in
   make (always Interval.full
-          (tbigcauforall vars (make (imp s f1 f2) { I.dummy with enftype = Enftype.causable })))
+          (tbigcauforall vars_forall
+             (make (imp s (tbigexists vars_exists f1) f2)
+                { I.dummy with enftype = Enftype.causable })))
     { I.dummy with enftype = Enftype.causable }
 
 let compile_imp_rule = function

@@ -3,7 +3,8 @@
 
 (menhir
  (modules parser)
- (explain true))
+ (explain true)
+ (flags --code-ancient --strategy legacy))
 
 (library
  (name lex_lib)

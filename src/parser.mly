@@ -3,6 +3,8 @@
   open Rex
   open Slex
   open Srex
+  open Errors
+  open OrErrors
   open LexingInfo
   open Sformula
 
@@ -20,6 +22,23 @@
   let fst_opt_of_last l = if List.length l = 0 then None else Some (fst (List.nth l (List.length l - 1)))
   let last            l = List.nth l (List.length l - 1)
   let fst_of_last     l = fst (last l)
+
+  let error_table = Hashtbl.create 10
+
+  let ok_parse key e =
+    Hashtbl.remove error_table key;
+    ok e
+
+  let error_parse key loc =
+    let new_start, new_loc =
+      match Hashtbl.find_opt error_table key with
+      | None -> fst loc, loc
+      | Some start -> start, (start, snd loc) in
+    Hashtbl.replace error_table key new_start;
+    error (Errors.parser_error
+	     ("cannot parse " ^ key)
+	     (LexingInfo.of_loc new_loc))
+
 %}
 
 %token EOF NEWLINE NEWUP NEWDOWN NEWWHITE
@@ -90,31 +109,33 @@
 %left NOT
 %left DOT
 
-%start <Slex.sprog> prog
-%start <Srex.srefi> refi
+%start <Slex.sprog Errors.WithErrors.t> prog
+%start <Srex.srefi Errors.WithErrors.t> refi
 %%
 
 /* Program */
 
 prog:
   | NEWLINE? separated_list(NEWLINE, stmt) EOF
-    { { stmts = $2 } }
+    { WithErrors.(>>=) (witherror_list $2) (fun stmts -> WithErrors.ok { stmts }) }
 
 stmt:
   | import
-    { debug "stmt: import";     $1 }
+    { debug "stmt: import";     ok_parse "statement" $1 }
   | label
-    { debug "stmt: label";      $1 }
+    { debug "stmt: label";      ok_parse "statement" $1 }
   | type_decl
-    { debug "stmt: type_decl";  $1 }
+    { debug "stmt: type_decl";  ok_parse "statement" $1 }
   | fun_decl
-    { debug "stmt: fun_decl";   $1 }
+    { debug "stmt: fun_decl";   ok_parse "statement" $1 }
   | event_decl
-    { debug "stmt: event_decl"; $1 }
+    { debug "stmt: event_decl"; ok_parse "statement" $1 }
   | note
-    { debug "stmt: note";       $1 }
+    { debug "stmt: note";       ok_parse "statement" $1 }
   | rule_decl
-    { debug "stmt: rule";       $1 }
+    { debug "stmt: rule";       ok_parse "statement" $1 }
+  | error
+    { debug "stmt: error";      error_parse "statement" $loc }
 
 /* Imports */
 
@@ -307,11 +328,11 @@ rule:
     { SObligation   (concr_opt $1 (fst $10) (last $9).pos, pf $2 $4, pf $7 $9, fst (snd $10), snd (snd $10)) }
   (*| WHENEVER pattern NEWUP es NEWDOWN PERMIT     pattern NEWUP es rule_type
     { SPermission   (concr_opt $1 (fst $10) (last $9).pos, pf $2 $4, pf $7 $9, fst (snd $10), snd (snd $10)) }*)
-  | WHENEVER pattern NEWUP es NEWDOWN CONSTITUTE         NEWUP es
+  | WHENEVER pattern NEWUP es NEWDOWN CONSTITUTE         NEWUP preds
     { SConstitutive ($1 +> (last $8).pos,                  pf $2 $4, $8) }
   | WHENEVER pattern NEWUP es NEWDOWN EXCEPT             NEWUP ref_exprs
     { SException    ($1 +> fst_of_last $8,                 pf $2 $4, List.map snd $8) }
-  | WHENEVER pattern NEWUP es NEWDOWN REPLACE            NEWUP ref_exprs    NEWDOWN CONSTITUTE NEWUP es
+  | WHENEVER pattern NEWUP es NEWDOWN REPLACE            NEWUP ref_exprs    NEWDOWN CONSTITUTE NEWUP preds
     { SExceptionC   ($1 +> (last $12).pos,                 pf $2 $4, List.map snd $8, $12) }
   | WHENEVER pattern NEWUP es NEWDOWN SCOPE              NEWUP ref_exprs
     { SScope        ($1 +> fst_of_last $8,                 pf $2 $4, List.map snd $8) }
@@ -425,10 +446,8 @@ es:
 e:
   | LPA e RPA
     { make ($1 +> $3) $2.f }
-  | const
+  | atomic
     { $1 }
-  | IDENT
-    { var (fst $1) (snd $1) }
   | IDENT LPA terms RPA
     { app (fst $1 +> $4) (snd $1) $3 }
   | agg
@@ -453,6 +472,20 @@ e:
     { record ($1 +> $3) $2 }
   | e DOT IDENT
     { proj ($1.pos +> fst $3) $1 (snd $3) }
+
+atomic:
+  | const
+    { $1 }
+  | IDENT
+    { var (fst $1) (snd $1) }
+
+preds:
+  | separated_nonempty_list(NEWWHITE, pred)
+    { $1 }
+
+pred:
+  | IDENT LPA pred_terms RPA
+    { app (fst $1 +> $4) (snd $1) $3 }
 
 %inline interval_opt:
   | INTERVAL
@@ -567,6 +600,9 @@ side2:
 terms:
   | separated_list(COM, e) { $1 }
 
+pred_terms:
+  | separated_list(COM, atomic) { $1 }
+
 field:
   | IDENT COL e
     { snd $1, $3 }
@@ -660,25 +696,26 @@ common_interval:
 
 refi:
   | NEWLINE? separated_list(NEWLINE, rtmt) EOF
-    { { rtmts = $2 } }
+    { WithErrors.(>>=) (witherror_list $2) (fun rtmts -> WithErrors.ok { rtmts }) }
 
 rtmt:
-  | stmt
-    { SRStmt $1 }
   | REFINE LEX import_name
-    { SRRefine ($1 +> $2 +> (fst $3), Some RefineLex, snd $3) }
+    { ok (SRRefine ($1 +> $2 +> (fst $3), Some RefineLex, snd $3)) }
   | REFINE REX import_name
-    { SRRefine ($1 +> $2 +> (fst $3), Some RefineRex, snd $3) }
+    { ok (SRRefine ($1 +> $2 +> (fst $3), Some RefineRex, snd $3)) }
   | REFINE import_name
-    { SRRefine ($1 +> (fst $2), None, snd $2) }
+    { ok (SRRefine ($1 +> (fst $2), None, snd $2)) }
   | rrule_decl
-    { $1 }
+    { ok $1 }
   | type_refi_decl
-    { $1 }
+    { ok $1 }
   | replace_decl
-    { $1 }
+    { ok $1 }
   | assume_decl
-    { $1 }
+    { ok $1 }
+  | stmt
+    { let* stmt = $1 in ok (SRStmt stmt) }
+
 
 rrule_decl:
   | RULE NEWUP DOCSTRING NEWWHITE type_fixes rrule
@@ -691,7 +728,7 @@ rrule_decl:
     { SRRule ($1 +> Srex.pos_of_srrule $5, Some (snd $2), $4, $5, None) }
 
 rrule:
-  | WHENEVER pattern NEWUP es NEWDOWN REFINE NEWUP es
+  | WHENEVER pattern NEWUP es NEWDOWN REFINE NEWUP preds
     { SRefine ($1 +> (last $8).pos, pf $2 $4, $8) }
 
 type_refi_decl:

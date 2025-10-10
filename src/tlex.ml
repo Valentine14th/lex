@@ -90,6 +90,11 @@ type tcrule =
   | TCDefinitionRef of int * trule_type * LexingInfo.t * Pattern.t * Tformula.t list * Tformula.t list * Ref.t list * Tformula.t
   | TCDefinitionDis of (int, tdisjunct, Int.comparator_witness) Map.t * Tformula.t
 
+let pos_of_tcrule = function
+  | TCImplication (_, _, pos, _, _, _, _, _, _) -> pos
+  | TCDefinitionRef (_, _, pos, _, _, _, _, _) -> pos
+  | TCDefinitionDis (m, _) -> LexingInfo.union_all (List.map (Map.data m) ~f:(fun disjunct -> disjunct.def_pos))
+
 (* Statements and programs *)
 
 type tstmt =
@@ -149,9 +154,33 @@ let add_talias name typ doc_string tprog pos =
   in
   ok { tprog with taliases = aliases; tstmts = TSType (name, typ, doc_string)::tprog.tstmts }
 
+let rec check_arg_type tprog pos =
+  let open Errors.OrErrors in
+  function
+  | TypeTerm.TConst tt -> ok (TypeTerm.TConst tt)
+  | TNamed tn when Map.mem tprog.taliases tn -> ok (TypeTerm.TNamed tn)
+  | TNamed tn ->
+     error (Errors.type_error
+              (Printf.sprintf "the type %s does not exist" tn) pos)
+  | TVar tv -> ok (TypeTerm.TVar tv)
+  | TSum kvs ->
+     let f (k, v) = let* v = check_arg_type tprog pos v in ok (k, v) in
+     let* kvs = all (List.map ~f kvs) in
+     ok (TypeTerm.TSum kvs)
+
+let check_arg_types tprog pos args =
+  let open Errors.OrErrors in
+  let f (arg, ttt) = let* ttt = check_arg_type tprog pos ttt in ok (arg, ttt) in
+  let names = List.dedup_and_sort (List.map ~f:fst args) ~compare:String.compare in
+  if List.length names = List.length args then
+    all (List.map ~f args)
+  else
+    error (Errors.type_error "duplicate argument names" pos) 
+     
 let add_tevent event_type name (args : (ident * TypeTerm.t) list) enftype ds tprog pos =
   let open Errors.OrErrors in
   let event = (event_type, args, enftype, ds) in
+  let* args = check_arg_types tprog pos args in
   (* TODO: (potentially in the future) allow for overwriting/reusing event names *)
   let* events =
     try ok (Map.add_exn tprog.tevents ~key:name ~data:event)
@@ -163,6 +192,8 @@ let add_tfunction name arg_types return_type ds tprog pos =
   let open Errors.OrErrors in
   let function_ = (arg_types, return_type, ds) in
   (* TODO: allow for overwriting/reusing event names *)
+  let* arg_types = check_arg_types tprog pos arg_types in
+  let* return_type = check_arg_type tprog pos return_type in
   let* functions =
     try ok (Map.add_exn tprog.tfunctions ~key:name ~data:function_)
     with _ -> error (Errors.type_error (Printf.sprintf "function %s already exists" name) pos)
@@ -280,13 +311,14 @@ let verb_of_trule = function
 let string_of_trule i trule =
   let open Pattern in
   let to_string f = Util.tabs (i+1) ^ Tformula.to_string f in
+  let ref_to_string r = Util.tabs (i+1) ^ Lex.Ref.to_string r in
   let string_of_formula_list f =
     String.concat ~sep:"\n" (List.map ~f:to_string f) ^ "\n" in
   (*let string_of_formula_list_list fs =
     String.concat ~sep:("\n" ^ Util.tabs i ^ "or\n") (List.map ~f:string_of_formula_list fs) in*)
   let string_of_imp_rule verb fp1 fp2 rcs rt =
     Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string fp1.patt ^ "\n"
-    ^ string_of_formula_list fp1.fs ^ "\n"
+    ^ string_of_formula_list fp1.fs
     ^ Util.tabs i   ^ verb     ^ Pattern.patt_to_string fp2.patt ^ "\n"
     ^ string_of_formula_list fp2.fs
     ^ Util.tabs i ^ string_of_rule_type rt (* TODO: check that this prints the rule_type correctly *)
@@ -302,15 +334,15 @@ let string_of_trule i trule =
   let string_of_ref_rule verb fp refs =
     (* let refs = List.map trefs ~f:Label.reference_of_label in *)
     Util.tabs i     ^ "whenever" ^ Pattern.patt_to_string fp.patt ^ "\n"
-    ^ string_of_formula_list fp.fs ^ "\n"
+    ^ string_of_formula_list fp.fs
     ^ Util.tabs i   ^ verb                             ^ "\n"
-    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string)
+    ^ String.concat ~sep:"\n" (List.map refs ~f:ref_to_string)
   in
   let string_of_refc_rule verb fp refs g =
     Util.tabs i     ^ "whenever"  ^ Pattern.patt_to_string fp.patt ^ "\n"
     ^ string_of_formula_list fp.fs ^ "\n"
     ^ Util.tabs i   ^ verb
-    ^ String.concat ~sep:"\n" (List.map refs ~f:Lex.Ref.to_string)
+    ^ String.concat ~sep:"\n" (List.map refs ~f:ref_to_string)
     ^ Util.tabs i   ^ "constitute"
     ^ string_of_formula_list g
   in
@@ -343,12 +375,12 @@ let string_of_tstmt ?(i=0) =
           | Some s -> "\n" ^ make_doc_string (of_annot s) i
           | None -> ""
       in
-      Printf.sprintf "%srule %s\n%s%s\n%s"
+      Printf.sprintf "%srule %s\n%s%s%s"
         (Util.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_trule (i+1) rule)
-       description
+        description
   | TSEvent (event_type, name, typed_args, enftype, doc_string) ->
       let description =
           match doc_string with
@@ -397,7 +429,7 @@ let string_of_signature signature =
        (String.concat ~sep:", " (List.map typed_idents ~f:string_of_typed_idents))
     
 let string_of_tprog tprog =
-  String.concat ~sep:"\n" (List.map tprog.tstmts ~f:string_of_tstmt)
+  String.concat ~sep:"\n\n" (List.map tprog.tstmts ~f:string_of_tstmt)
 
 let print_tprog tprog =
   Stdio.printf "%s\n" (string_of_tprog tprog)
