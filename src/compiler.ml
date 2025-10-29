@@ -332,24 +332,29 @@ let compile_let_rule aliases = function
     end, enftype
   | _ -> assert false
 
-let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) =
+let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) (label_opt: string option) =
   let vars_forall = Set.elements (fv f2) in
   let vars_exists = Set.elements (Set.diff (fv f1) (fv f2)) in
-  make (always Interval.full
-          (tbigcauforall vars_forall
-             (make (imp s (tbigexists vars_exists f1) f2)
-                { I.dummy with enftype = Enftype.causable })))
-    { I.dummy with enftype = Enftype.causable }
+  let cau = { I.dummy with enftype = Enftype.causable } in
+  let f = 
+    make (always Interval.full
+            (tbigcauforall vars_forall
+               (make (imp s (tbigexists vars_exists f1) f2)
+                  cau ))) cau in
+  match label_opt with
+  | None -> f
+  | Some s -> make (label s f) cau
 
-let compile_imp_rule = function
-  | ECImplication (_, _, _, pf1, ex, sc, pf2, _, _, Some enf_info) as r ->
+let compile_imp_rule label = function
+  | ECImplication (_, _, info, pf1, ex, sc, pf2, _, _, Some enf_info) as r ->
      begin
        let vars = fv_of_ecrule r in
+       let label_opt = if label then Some (LexingInfo.to_string info) else None in
        match enf_info with
        | ESciLhs enf_sup ->
           let lhs = compile_lhs ~sup_constr:(Some enf_sup) vars Enftype.suppressable pf1 ex sc in
           let rhs = compile_epformula ~f:tbignonconj pf2 in
-          compile_imp lhs rhs L
+          compile_imp lhs rhs L label_opt
        | ECciRhs enf_cau ->
           let cpf = compile_epformula ~f:tbignonconj pf1 in
           let ex_neg = List.map ex ~f:(fun x -> make (neg x) { I.dummy with enftype = Enftype.suppressable; pos = x.info.pos }) in
@@ -357,13 +362,13 @@ let compile_imp_rule = function
           begin match enf_cau with
           | ECpfFormulas ->
              let rhs = compile_epformula ~f:tbigcauconj pf2 in
-             compile_imp lhs rhs R
+             compile_imp lhs rhs R label_opt
           | ECpfPformula ->
              let rhs = compile_epformula ~use_pattern_for_enf:true ~f:tbigcauconj pf2 in
-             compile_imp lhs rhs R
+             compile_imp lhs rhs R label_opt
           | ECpfPattern ->
              let rhs = compile_epformula ~use_pattern_for_enf:true ~only_pattern:true ~f:tbignonconj pf2 in
-             compile_imp lhs rhs R
+             compile_imp lhs rhs R label_opt
           end
     end
   | _ ->  assert false
@@ -432,7 +437,7 @@ let is_vanilla = function
   | ECImplication (_, _, _, _, _, _, _, Assumed, _, _) -> true
   | _ -> false
 
-let compile (eprog:Elex.eprog) (unroll: bool) : Clex.cprog =
+let compile (eprog:Elex.eprog) (unroll: bool) (label: bool) : Clex.cprog =
   let sorted_c_rules_opt = List.map eprog.compilation_order ~f:(Map.find eprog.ecrules) in
   let sorted_c_rules     = List.filter_map ~f:(fun x -> x) sorted_c_rules_opt in
   let let_rules          = List.filter sorted_c_rules ~f:is_let_rule in
@@ -441,7 +446,7 @@ let compile (eprog:Elex.eprog) (unroll: bool) : Clex.cprog =
   if List.is_empty non_vanilla then
     Errors.warn "No obligation rules are marked as (transparently) enforceable, compiled formula will be a tautology" None;
   debug (Printf.sprintf "Non-vanilla rules: %d" (List.length non_vanilla));
-  let formulae = List.map non_vanilla ~f:compile_imp_rule in
+  let formulae = List.map non_vanilla ~f:(compile_imp_rule label) in
   let let_bindings = List.map let_rules ~f:(compile_let_rule eprog.ealiases) in
   let phi = List.fold_right let_bindings ~f:(
                 fun ((p_name, vars, rhs), enftype) phi ->

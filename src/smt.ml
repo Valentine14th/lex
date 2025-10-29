@@ -238,6 +238,9 @@ let rec to_fol_core_ ((f:Tformula.t),  u) : Tformula.core_t * FOL_State.u =
      u'''
   | Type _ ->
      TT, u
+  | Label (_, f) ->
+     let f, u' = to_fol_ (f, u) in
+     f.form, u'
 
 and to_fol_ (f, u) =
   let f = Tformula.unroll_let f in

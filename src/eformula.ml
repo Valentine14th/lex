@@ -66,6 +66,7 @@ let rec max_id_core (f : t) = match f.form with
     | Historically (_, f)
     | Always (_, f)
     | Type (f, _)
+    | Label (_, f)
     -> max_id f
   | And (_, fs)
     | Or (_, fs)
@@ -177,6 +178,7 @@ let rec core_of_tformula ?id:(id=1) d =
   | Since (s, i, f, g) -> Since (s, i, lof_formula f, rof_formula g), None
   | Until (s, i, f, g) -> Until (s, i, lof_formula f, rof_formula g), Some true
   | Type (f, ty) -> Type (lof_formula f, ty), None
+  | Label (s, f) -> Label (s, lof_formula f), None
 
 and of_tformula ?id:(id=1) (f: Tformula.t) : t =
   let d = Tformula.deg f in
@@ -220,6 +222,7 @@ let rec core_of_typed_tformula ?id:(id=1) d =
   | Since (s, i, f, g) -> Since (s, i, lof_formula f, rof_formula g), None
   | Until (s, i, f, g) -> Until (s, i, lof_formula f, rof_formula g), Some true
   | Type (f, ty) -> Type (lof_formula f, ty), None
+  | Label (s, f) -> Label (s, lof_formula f), None
 
 and of_typed_tformula ?id:(id=1) (f: Tformula.typed_t) : t =
   let d = Tformula.deg f in
@@ -266,4 +269,5 @@ and to_formula_core: core_t -> Formula.core_t =
   | Since (s, i, f, g) -> Since (fix_side s f g, i, to_formula f, to_formula g)
   | Until (s, i, f, g) -> Until (s, i, to_formula f, to_formula g)
   | Type (f, ty) -> Type (to_formula f, ty)
+  | Label (s, f) -> Label (s, to_formula f)
 

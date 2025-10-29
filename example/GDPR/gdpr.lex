@@ -18,7 +18,7 @@ type legal_basis is string
 type legal_obligation is string
 type public_interest is string
 type vital_interests is string
-type declaration is string
+type declaration
 type special_data_category is string
 type request
 type country_or_international_organisation
@@ -69,6 +69,11 @@ suppressable predicate HasPurpose
 
 internal predicate CompatibleWithPurpose
     """Data processing activity {a} is compatible with purpose {p}, taking into account ... (see Art. 6(4))"""
+    a : activity
+    p : purpose
+
+observable predicate IsCompatibleWithPurpose
+    """Data processing activity {a} is compatible with purpose {p}"""
     a : activity
     p : purpose
 
@@ -195,6 +200,12 @@ rule "purpose_limitation"
         EXISTS c, p. CompatibleWithPurpose(a, p) AND ONCE (DataProcessing(pr, co, c, d) AND IsCollection(c, ds) AND HasPurpose(c, p))
     transparently enforceable suppressing condition[0]
 
+rule "general_purpose"
+    whenever
+        IsCompatibleWithPurpose(a, p)
+    constitute
+        CompatibleWithPurpose(a, p)
+  
 rule "archiving_purpose"
     whenever
         IsArchival(a)
@@ -512,7 +523,7 @@ rule
 
 point "3"
 
-observable predicate IsWithdrawalInformation
+causable observable predicate IsWithdrawalInformation
     """Withdrawal information {wi} contains information about the right to withdraw consent"""
     wi : declaration
 
@@ -521,7 +532,7 @@ rule
         GiveConsent(ds, p, c)
     oblige
         ONCE (EXISTS de, wi. Inform(c, ds, de) AND Contains(de, wi) AND IsWithdrawalInformation(wi))
-    transparently enforceable suppressing conditions
+    transparently enforceable causing effects
 
 point "4"
 
@@ -1132,7 +1143,7 @@ rule
         IsLawful(a, b)
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsPurposeOfProcessing(re, p))
-        ONCE (EXISTS de, re, b. Inform(c, ds, de) AND Contains(de, re) AND IsLegalBasisOfProcessing(re, b))
+        ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsLegalBasisOfProcessing(re, b))
     transparently enforceable causing effects
 
 point "d"

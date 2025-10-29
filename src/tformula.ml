@@ -64,3 +64,4 @@ and to_formula_core: core_t -> Formula.core_t =
   | Since (s, i, f, g) -> Since (s, i, to_formula f, to_formula g)
   | Until (s, i, f, g) -> Until (s, i, to_formula f, to_formula g)
   | Type (f, ty) -> Type (to_formula f, ty)
+  | Label (s, f) -> Label (s, to_formula f)

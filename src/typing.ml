@@ -376,6 +376,9 @@ let rec collect_formula (s: tprog) ?(event_type=Event (false, Standard)) (c: ctx
   | Type (f, ty) ->
      let* c, f = collect_formula s c f in
      ok (c, Tformula.ftype f ty, None)
+  | Label (s', f) ->
+     let* c, f = collect_formula s c f in
+     ok (c, Tformula.label s' f, None)
   | Predicate' _ | Let _ | Let' _  | Top _ ->
      raise (Invalid_argument (Printf.sprintf "typing not implemented for %s" (Formula.to_string f)))
   in
@@ -583,6 +586,7 @@ let rec type_formula ctxt (f : Tformula.t) : Tformula.t =
     | Since (side, i, f, g) -> Since (side, i, type_formula ctxt f, type_formula ctxt g)
     | Until (side, i, f, g) -> Until (side, i, type_formula ctxt f, type_formula ctxt g)
     | Type (f, ty) -> Type (type_formula ctxt f, ty)
+    | Label (s, f) -> Label (s, type_formula ctxt f)
     | Predicate' _ | Let _ | Let' _  | Top _ ->
        raise (Invalid_argument
                 (Printf.sprintf "typing not implemented for %s" (Tformula.to_string f)))

@@ -82,6 +82,7 @@ let rec html_of_formula_ formula_id l (f : Eformula.t) =
     | Since (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "SINCE" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
     | Until (_, i, f, g) -> Util.paren_string l 0 (html_of_formula_ formula_id 5 f ^ kw "UNTIL" ^ (interval (html_of_interval i)) ^ html_of_formula_ formula_id 5 g)
     | Type (f, t) -> Util.paren_string l 0 (html_of_formula_ formula_id  5 f ^ kw ": " ^ Enftype.to_string t)
+    | Label (_, f) -> html_of_formula_ formula_id 0 f
     | Predicate' _ | Let _ | Let' _ | Top _ ->
        raise (Invalid_argument (Printf.sprintf "HTML not implemented for %s" (Eformula.to_string f)))
   in
