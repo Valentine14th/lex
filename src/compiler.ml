@@ -336,15 +336,14 @@ let compile_imp (f1: Eformula.t) (f2: Eformula.t) (s: Side.t) (label_opt: string
   let vars_forall = Set.elements (fv f2) in
   let vars_exists = Set.elements (Set.diff (fv f1) (fv f2)) in
   let cau = { I.dummy with enftype = Enftype.causable } in
-  let f = 
-    make (always Interval.full
-            (tbigcauforall vars_forall
-               (make (imp s (tbigexists vars_exists f1) f2)
-                  cau ))) cau in
-  match label_opt with
-  | None -> f
-  | Some s -> make (label s f) cau
-
+  let f = (tbigcauforall vars_forall
+             (make (imp s (tbigexists vars_exists f1) f2)
+                cau )) in
+  let f = match label_opt with
+    | None -> f
+    | Some s -> make (label s f) cau
+  in make (always Interval.full f) cau
+                   
 let compile_imp_rule label = function
   | ECImplication (_, _, info, pf1, ex, sc, pf2, _, _, Some enf_info) as r ->
      begin

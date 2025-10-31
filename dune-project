@@ -28,5 +28,7 @@
     ppx_jane
     calendar
     z3
+    pyml
+    alcotest
   )
   (allow_empty))
