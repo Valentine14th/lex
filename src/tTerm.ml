@@ -29,6 +29,5 @@ let rec to_term_core = function
   | Record kvs -> Record (List.map ~f:(fun (k, v) -> (k, to_term v)) kvs)
 
 and to_term t = { trm = to_term_core t.trm; info = Term.{ pos = t.info.pos } }
-
 let dummy_int i = { trm = Const (Dom.Int i);
                     info = { PosTypeInfo.dummy with typ = TypeTerm.TConst (Dom.TInt) } }

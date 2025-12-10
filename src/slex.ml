@@ -31,7 +31,7 @@ type sstmt =
   | SSInclude    of LexingInfo.t * string list
   | SSSection    of LexingInfo.t * section_kind * string * string option
   | SSRule       of LexingInfo.t * string option * (ident * TypeTerm.t) list * srule * string option
-  | SSEvent      of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
+  | SSEvent      of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * (Enftype.t * bool) * string option
   | SSType       of LexingInfo.t * ident * (TypeTerm.t option) * string option
   | SSFunction   of LexingInfo.t * ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | SSNote       of LexingInfo.t * string
@@ -71,7 +71,7 @@ let to_stmt : sstmt -> stmt = function
   | SSInclude _ -> assert false
   | SSSection (pos, section_kind, label, title) -> SSection (pos, section_kind, label, title)
   | SSRule (pos, label, type_fixes, rule, doc_string) -> SRule (pos, label, type_fixes, to_rule rule, doc_string)
-  | SSEvent (pos, event_type, name, typed_args, pol, doc_string) -> SEvent (pos, event_type, name, typed_args, pol, doc_string)
+  | SSEvent (pos, event_type, name, typed_args, (pol, itl), doc_string) -> SEvent (pos, event_type, name, typed_args, (pol, itl), doc_string)
   | SSType (pos, name, typ, doc_string) -> SType (pos, name, typ, doc_string)
   | SSFunction (pos, name, typed_args, return_typ, doc_string) -> SFunction (pos, name, typed_args, return_typ, doc_string)
   | SSNote (pos, text) -> SNote (pos, text)
@@ -163,15 +163,16 @@ let string_of_stmt ?(i=0) =
        (string_of_type_fixes (i+1) type_fixes)
        (string_of_rule (i+1) rule)
        description
-  | SSEvent (_, event_type, name, typed_args, pol, doc_string) ->
+  | SSEvent (_, event_type, name, typed_args, (pol, itl), doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s %s %s\n%s%s"
+      Printf.sprintf "%s%s%s %s %s\n%s%s"
           (Util.tabs i)
           (string_of_enftype pol)
+          (if itl then " internal" else "")
           (string_of_event_type event_type)
           name
           description

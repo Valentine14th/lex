@@ -42,8 +42,6 @@ module Info : Modules.I with type t = einfo_type = struct
 
 end
 
-module ETerm = TTerm
-
 include MFOTL_lib.MFOTL.Make(Info)(StringVar)(Dom)(ETerm)
 
 let rec max_id_core (f : t) = match f.form with
@@ -150,19 +148,13 @@ let rec core_of_tformula ?id:(id=1) d =
   function
   | Tformula.TT -> TT, None
   | FF -> FF, None
-  | EqConst (x, y) -> 
-     (if Dom.equal y (Dom.Bool true) then
-       EqConst (x, Dom.Bool true)
-     else
-       EqConst (ETerm.make
-                  (ETerm.Binop (x, Term.Bop.BEq, ETerm.make_dummy (ETerm.const y)))
-                  { pos = x.info.pos; typ = TypeTerm.TConst (Dom.TBool)}, Dom.Bool true)), None
-  | Predicate (e, t) -> Predicate (e, t), None
-  | Predicate' (s, trms, f) -> Predicate' (s, trms, lof_formula f), None
+  | EqConst (x, y) -> EqConst (ETerm.of_tterm x, y), None
+  | Predicate (e, t) -> Predicate (e, ETerm.of_tterms t), None
+  | Predicate' (s, trms, f) -> Predicate' (s, ETerm.of_tterms trms, lof_formula f), None
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, lof_formula f, rof_formula g), None
   | Let' (s, ty_opt, vars, f, g) -> Let' (s, ty_opt, vars, lof_formula f, rof_formula g), None
-  | Agg (s, op, x, y, f) -> Agg (s, op, x, y, lof_formula f), None
-  | Top (s, op, x, y, f) -> Top (s, op, x, y, lof_formula f), None
+  | Agg (s, op, x, y, f) -> Agg (s, op, ETerm.of_tterm x, y, lof_formula f), None
+  | Top (s, op, x, y, f) -> Top (s, op, ETerm.of_tterms x, y, lof_formula f), None
   | Neg f -> Neg (lof_formula f), None
   | And (s, fs) -> And (s, List.mapi ~f:iof_formula fs), None
   | Or (s, fs) -> Or (s, List.mapi ~f:iof_formula fs), None
@@ -194,19 +186,13 @@ let rec core_of_typed_tformula ?id:(id=1) d =
   function
   | Tformula.TT -> TT, None
   | FF -> FF, None
-  | EqConst (x, y) -> 
-     (if Dom.equal y (Dom.Bool true) then
-       EqConst (x, Dom.Bool true)
-     else
-       EqConst (ETerm.make
-                  (ETerm.Binop (x, Term.Bop.BEq, ETerm.make_dummy (ETerm.const y)))
-                  { pos = x.info.pos; typ = TypeTerm.TConst (Dom.TBool)}, Dom.Bool true)), None
-  | Predicate (e, t) -> Predicate (e, t), None
-  | Predicate' (s, trms, f) -> Predicate' (s, trms, lof_formula f), None
+  | EqConst (x, y) -> EqConst (ETerm.of_tterm x, y), None
+  | Predicate (e, t) -> Predicate (e, ETerm.of_tterms t), None
+  | Predicate' (s, trms, f) -> Predicate' (s, ETerm.of_tterms trms, lof_formula f), None
   | Let (s, ty_opt, vars, f, g) -> Let (s, ty_opt, vars, lof_formula f, rof_formula g), None
   | Let' (s, ty_opt, vars, f, g) -> Let' (s, ty_opt, vars, lof_formula f, rof_formula g), None
-  | Agg (s, op, x, y, f) -> Agg (s, op, x, y, lof_formula f), None
-  | Top (s, op, x, y, f) -> Top (s, op, x, y, lof_formula f), None
+  | Agg (s, op, x, y, f) -> Agg (s, op, ETerm.of_tterm x, y, lof_formula f), None
+  | Top (s, op, x, y, f) -> Top (s, op, ETerm.of_tterms x, y, lof_formula f), None
   | Neg f -> Neg (lof_formula f), None
   | And (s, fs) -> And (s, List.mapi ~f:iof_formula fs), None
   | Or (s, fs) -> Or (s, List.mapi ~f:iof_formula fs), None

@@ -16,15 +16,15 @@ let type_trrule : trrule -> errule = function
 
 let type_estmt erule_map : trtmt -> ertmt = function
   | TRStmt tstmt ->
-     ERStmt (Enforceability.type_tstmt erule_map tstmt)
+    ERStmt (Enforceability.type_tstmt erule_map tstmt)
   | TRRule (pos, i, label, type_fixes, trrule, doc_string) ->
-     ERRule (pos, i, label, type_fixes, type_trrule trrule, doc_string)
+    ERRule (pos, i, label, type_fixes, type_trrule trrule, doc_string)
   | TRType (pos, name, typ, doc_string) ->
-     ERType (pos, name, typ, doc_string)
+    ERType (pos, name, typ, doc_string)
   | TRReplace (pos, kind, refs1, refs2, doc_string) ->
-     ERReplace (pos, kind, refs1, refs2, doc_string)
+    ERReplace (pos, kind, refs1, refs2, doc_string)
   | TRAssume (pos, name, b, doc_string) ->
-     ERAssume (pos, name, b, doc_string)
+    ERAssume (pos, name, b, doc_string)
 
 let insert_refinement_rules (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
   let open Errors.OrErrors in
@@ -45,25 +45,28 @@ let update_types (trefi: trefi) (tprog: tprog) : tprog =
 let insert_assumed_event_rules (trefi: trefi) (tprog: tprog) : tprog =
   let make_tsrule b (pos, name, label) =
     let (_, vars, _, _) = Map.find_exn tprog.tevents name in
-    let f (x, typ) = Eformula.ETerm.make (Eformula.ETerm.var x) { pos = LexingInfo.dummy; typ } in
+    let f (x, typ) = TTerm.make (TTerm.var x) { pos; typ } in
     let pred = Tformula.make_dummy (Tformula.Predicate (name, List.map ~f vars)) in
     let idx = Typing.fresh () in
     let fb = if b then Tformula.TT else Tformula.FF in
     let trule = TConstitutive (
-                    LexingInfo.dummy,
+                    pos,
                     Tlex.Pattern.make PPresent [Tformula.make_dummy fb],
                     [pred]
                   ) in
     TSRule (pos, idx, label, [], trule, None) in
   let f tprog (pos, name, b, label) =
     let tsrule = make_tsrule b (pos, name, label) in
+    (*print_endline ("insert_assumed_event_rules");
+      print_endline (LexingInfo.to_string pos);
+      print_endline (string_of_tstmt tsrule);*)
     { tprog with tstmts = tprog.tstmts @ [tsrule] } in
   List.fold_left ~init:tprog ~f trefi.trassumed
 
 let internalize_events (trefi: trefi) (tprog: tprog) : tprog =
   let internalize_event name tprog =
-    let update_event (event_type, params, _, doc_string) =
-      (event_type, params, Enftype.itl, doc_string) in
+    let update_event (event_type, params, (enftype, _), doc_string) =
+      (event_type, params, (enftype, true), doc_string) in
     let tevents = 
       Map.update tprog.tevents name
         ~f:(function None -> assert false | Some ev -> update_event ev) in
@@ -186,9 +189,8 @@ let hide_and_replace (trefi: trefi) (tprog: tprog) : tprog Errors.OrErrors.t =
 
 let do_type (trefi: Trex.trefi) (b: Interval.v) : (Tlex.tprog * Erex.erefi) Errors.OrErrors.t =
   let open Errors.OrErrors in
-  (* TODO[FH]: check that the refinement is valid *)
-  (* TODO[FH]: check that all events have been mapped *)
   let* tprog = hide_and_replace trefi trefi.tprog in
+  (*print_endline (Tlex.string_of_tprog tprog);*)
   let* eprog = Enforceability.do_type ~mon_constrs:(trefi.tr_mon, trefi.tr_anti_mon) tprog b in
   let erules = Enforceability.erules_from_tcrules (Enforceability.create_tcrules tprog) in
   let erefi = {

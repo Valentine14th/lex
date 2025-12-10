@@ -114,7 +114,7 @@ type stmt =
   | SImport    of LexingInfo.t * import_format * string list
   | SSection   of LexingInfo.t * section_kind * string * string option
   | SRule      of LexingInfo.t * string option * (ident * TypeTerm.t) list * rule * string option
-  | SEvent     of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
+  | SEvent     of LexingInfo.t * event_type * ident * (ident * TypeTerm.t) list * (Enftype.t * bool) * string option
   | SType      of LexingInfo.t * ident * (TypeTerm.t option) * string option
   | SFunction  of LexingInfo.t * ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | SNote      of LexingInfo.t * string
@@ -288,15 +288,16 @@ let string_of_stmt ?(i=0) =
        (string_of_type_fixes (i+1) type_fixes)
        (string_of_rule (i+1) rule)
        description
-  | SEvent (_, event_type, name, typed_args, pol, doc_string) ->
+  | SEvent (_, event_type, name, typed_args, (pol, itl), doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s %s %s\n%s%s"
+      Printf.sprintf "%s%s%s %s %s\n%s%s"
           (Util.tabs i)
           (string_of_enftype pol)
+          (if itl then " internal" else "")
           (string_of_event_type event_type)
           name
           description

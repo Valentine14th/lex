@@ -30,6 +30,7 @@ module Bop = struct
     | BAnd | BOr | BImp
     | BAdd | BSub | BMul | BDiv | BPow
     | BEq | BNeq | BLt | BLeq | BGt | BGeq
+    | BConc
     [@@deriving compare, sexp_of, hash]
 
   let is_relational = function
@@ -51,6 +52,7 @@ module Bop = struct
     | BLeq   -> "≤"
     | BGt    -> ">"
     | BGeq   -> "≥"
+    | BConc  -> "^"
 
   let prio = function
     | BPow   -> 10
@@ -58,6 +60,7 @@ module Bop = struct
     | BDiv   -> 20
     | BAdd   -> 30
     | BSub   -> 30
+    | BConc  -> 30
     | BEq    -> 40
     | BNeq   -> 40
     | BLt    -> 40

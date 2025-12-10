@@ -7,7 +7,7 @@ module Time = MFOTL_lib.Time
 module Interval = MFOTL_lib.Interval
 module Aggregation = MFOTL_lib.Aggregation
 
-let rec html_of_trm ?(l=0) (f : TTerm.t) = match f.trm with
+let rec html_of_trm ?(l=0) (f : ETerm.t) = match f.trm with
   | Var x -> ident x
   | Const d -> const (Dom.to_string d)
   | App (f, trms) -> Printf.sprintf "%s(%s)" (ident f) (html_of_trms trms)
@@ -17,7 +17,7 @@ let rec html_of_trm ?(l=0) (f : TTerm.t) = match f.trm with
   | Binop (t, o, t') -> let l' = Term.Uop.prio o in
                          Printf.sprintf (Util.paren l l' "%s %s %s")
                            (html_of_trm ~l:l' t)
-                           (Term.Bop.to_string o)
+                           (ETerm.Bop.to_string o)
                            (html_of_trm ~l:l' t')
   | Proj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t) p
   | Record kvs ->
@@ -371,31 +371,32 @@ let html_of_estmt eprog =
              eprog type_fixes erule doc_string)
       )
   | ESEvent (Exception, _, _, _, _) -> ""
-  | ESEvent (event_type, name, typed_args, enftype, doc_string) ->
+  | ESEvent (event_type, name, typed_args, (enftype, itl), doc_string) ->
      let event_id = "lex-event-" ^ name in
      let html_of_event =
        match event_type with
        | Event (_, Functional) ->
-          html_of_enftype enftype
-          ^ kw (Lex.string_of_event_type event_type)
-          ^ ident name
-          ^ " ("
-          ^ html_of_args2 (List.drop_last_exn typed_args)
-          ^ ") -> "
-          ^ (match List.last_exn typed_args with
+         html_of_enftype enftype
+         ^ (if itl then kw "internal" else "")
+         ^ kw (Lex.string_of_event_type event_type)
+         ^ ident name
+         ^ " ("
+         ^ html_of_args2 (List.drop_last_exn typed_args)
+         ^ ") -> "
+         ^ (match List.last_exn typed_args with
                (_, ty) -> typ (TypeTerm.to_string ty))
        | Event (_, Variable) ->
-          html_of_enftype enftype
-          ^ kw (Lex.string_of_event_type event_type)
-          ^ ident name
-          ^ " : "
-          ^ (match List.last_exn typed_args with
+         html_of_enftype enftype
+         ^ kw (Lex.string_of_event_type event_type)
+         ^ ident name
+         ^ " : "
+         ^ (match List.last_exn typed_args with
                (_, ty) -> typ (TypeTerm.to_string ty))
        | _ ->
-          html_of_enftype enftype
-          ^ kw (Lex.string_of_event_type event_type)
-          ^ ident name
-          ^ html_of_args typed_args
+         html_of_enftype enftype
+         ^ kw (Lex.string_of_event_type event_type)
+         ^ ident name
+         ^ html_of_args typed_args
      in
      div "lex-stmt-event" ~id:(Some event_id)
        (match doc_string with

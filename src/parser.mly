@@ -71,7 +71,7 @@
 
 %token <LexingInfo.t> EQ SUB NOT AND OR IMP IFF EXISTS FORALL 
 %token <LexingInfo.t> PREV NEXT ONCE EVENTUALLY HISTORICALLY ALWAYS SINCE UNTIL RELEASE TRIGGER
-%token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR
+%token <LexingInfo.t> ADD MUL DIV POW NEQ LT GT LAR CONC
 %token <LexingInfo.t> SUM AVG MED CNT MIN MAX
 %token <LexingInfo.t> FUNCTION EXTERNAL EVENT PREDICATE FUNCTIONAL VARIABLE
 %token <LexingInfo.t> REFINE LEX REX STRENGTHEN WEAKEN BY ASSUME FULFILLED
@@ -103,7 +103,7 @@
 %nonassoc SINCE UNTIL RELEASE TRIGGER
 %left ONCE 
 %nonassoc LT GT EQ NEQ
-%left ADD SUB
+%left ADD SUB CONC
 %left MUL DIV
 %left POW
 %left NOT
@@ -282,24 +282,28 @@ functional_event_type:
     { false }
 
 pol:
+  | base_pol
+    { fst $1, (Option.value ~default:Enftype.bot (snd $1), false) }
+  | base_pol TINTERNAL
+    { fst $1, (Option.value ~default:Enftype.itl (snd $1), true) }
+
+base_pol:
   | TCAUSABLE
-    { Some $1,         Enftype.caubot }
+    { Some $1,         Some Enftype.caubot }
   | TSUPPRESSABLE
-    { Some $1,         Enftype.sup }
+    { Some $1,         Some Enftype.sup }
   | TOBSERVABLE
-    { Some $1,         Enftype.obs }
-  | TINTERNAL
-    { Some $1,         Enftype.itl }
+    { Some $1,         Some Enftype.obs }
   | TCAUSABLE     TOBSERVABLE
-    { Some ($1 +> $2), Enftype.cau }
+    { Some ($1 +> $2), Some Enftype.cau }
   | TOBSERVABLE   TCAUSABLE
-    { Some ($1 +> $2), Enftype.cau }
+    { Some ($1 +> $2), Some Enftype.cau }
   | TCAUSABLE     TSUPPRESSABLE
-    { Some ($1 +> $2), Enftype.causup }
+    { Some ($1 +> $2), Some Enftype.causup }
   | TSUPPRESSABLE TCAUSABLE
-    { Some ($1 +> $2), Enftype.causup }
+    { Some ($1 +> $2), Some Enftype.causup }
   |
-    { None,            Enftype.bot }
+    { None,            None }
 
 /* Rule declarations */
 
@@ -574,6 +578,8 @@ agg:
     { Bop.BGt }
   | GT EQ
     { Bop.BGeq }
+  | CONC
+    { Bop.BConc }
 
 %inline bop2:
   | IFF

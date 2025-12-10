@@ -315,13 +315,13 @@ let rec term_to_expr
      (* TODO: add arithmetic operators *)
      (match o with
       | Term.Bop.BLeq -> Arithmetic.mk_le ctx e e'
-      | Term.Bop.BLt  -> Arithmetic.mk_lt ctx e e'
-      | Term.Bop.BGeq -> Arithmetic.mk_ge ctx e e'
-      | Term.Bop.BGt  -> Arithmetic.mk_gt ctx e e'
-      | Term.Bop.BAdd -> Arithmetic.mk_add ctx [e; e']
-      | Term.Bop.BSub -> Arithmetic.mk_sub ctx [e; e']
-      | Term.Bop.BMul -> Arithmetic.mk_mul ctx [e; e']
-      | Term.Bop.BDiv -> Arithmetic.mk_div ctx e e'
+      | BLt  -> Arithmetic.mk_lt ctx e e'
+      | BGeq -> Arithmetic.mk_ge ctx e e'
+      | BGt  -> Arithmetic.mk_gt ctx e e'
+      | BAdd -> Arithmetic.mk_add ctx [e; e']
+      | BSub -> Arithmetic.mk_sub ctx [e; e']
+      | BMul -> Arithmetic.mk_mul ctx [e; e']
+      | BDiv -> Arithmetic.mk_div ctx e e'
       | _ -> let func_decl = make_func_decl aliases ctx ("bop:" ^ Term.Bop.to_string o) [t; t'] trm in
              Expr.mk_app ctx func_decl [e; e']
      )

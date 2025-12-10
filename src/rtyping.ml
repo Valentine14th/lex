@@ -205,14 +205,14 @@ let make_implication_error pos pos' =
   let open Errors.OrErrors in
   error (Errors.refinement_error
           (Printf.sprintf
-              "Cannot weaken constitutive rule defined at %s: cannot prove implication"
+              "Cannot replace rule defined at %s: cannot prove implication"
               (LexingInfo.to_string pos'))
           pos)
 
 let check_regulative_replacement_implication old_obligation new_obligations pos pos' (rs:rt) : rt =
   let always_imp = make_always_imp ~close:true new_obligations old_obligation in
   let imp = Tformula.make_dummy (Tformula.imp N new_obligations always_imp) in
-  add_tautology rs pos pos' ~assume:(Some new_obligations) imp
+  add_tautology rs pos pos' ~assume:None imp
 
 let check_regulative_replacement rs new_trules pos : trule -> rt = function
   | TObligation (pos', lhs, rhs, _, _) ->
@@ -469,8 +469,8 @@ let collect_rtmt (rs: rt) : rtmt -> rt Errors.WithErrors.t =
        add_trreplacements kind old_reference_labels new_reference_labels doc_string rs pos in
      we rs
   | RAssume (pos, name, b, doc_string) ->
-     let label = Label.set_rule_id_force (Some ("assume_" ^ name)) rs.s.label in
-     we (add_trhidden name b label doc_string rs pos)
+    let label = Label.set_rule_id_force (Some ("assume_" ^ name)) rs.s.label in
+    we (add_trhidden name b label doc_string rs pos)
 
 (* Checking of tautologies *)
 
@@ -485,6 +485,7 @@ let check_tautology tprog (pos, pos', (assume: Tformula.t option), (f: Tformula.
        ok (ctxt, Some assume) in
   let* ctxt, f = collect_formula tprog ctxt (Tformula.to_formula f) in
   let f = type_formula ctxt f in
+  (*print_endline ("check_tautology: " ^ Tformula.to_string f);*)
   if (Smt.is_tautology tprog ~assume f)
   then ok ()
   else make_implication_error pos pos'
@@ -493,9 +494,15 @@ let check_tautology tprog (pos, pos', (assume: Tformula.t option), (f: Tformula.
 
 let do_type (s: Typing.t) (refi: refi) : (Typing.t * trefi) Errors.WithErrors.t =
   let open Errors.WithErrors in
-  let label = Label.set_rule_id_force None s.label in
-  let s = { s with tprog = { s.tprog with tstmts = s.tprog.tstmts @ [Tlex.TSSection (Article 0, label, "refinement", None)] } } in
-  let init = { s; trefi = { trempty with lex_file = refi.lex_file; base_file_type = refi.base_file_type } } in
+  let label =
+    match Label.set LexingInfo.dummy (Article 0) ("refinement", None) s.label with
+    | Ok label -> label
+    | _ -> assert false in
+  let tsection = Tlex.TSSection (Article 0, label, "refinement", None) in
+  let tstmts = s.tprog.tstmts @ [tsection] in
+  let s = { s with tprog = { s.tprog with tstmts }; label } in
+  let lex_file = refi.lex_file and base_file_type = refi.base_file_type in
+  let init = { s; trefi = { trempty with lex_file; base_file_type } } in
   (* First pass: type statements *)
   let* rs: rt = fold refi.rtmts ~init ~f:collect_rtmt in
   (* Second pass: compute rule contexts *)

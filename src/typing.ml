@@ -116,6 +116,10 @@ let collect_bsub c pos (ttt, ttt') =
   let c, ttt = unify_ctxt ttt ttt' c in
   constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat; Dom.TSpan], ttt
 
+let collect_bconc c pos (ttt, ttt') =
+  let c, ttt = unify_ctxt ttt ttt' c in
+  constrain_base_type_ctxt' c pos ttt [Dom.TStr], ttt
+
 let collect_bmul c pos (ttt, ttt') =
   let c, ttt = unify_ctxt ttt ttt' c in
   constrain_base_type_ctxt' c pos ttt [Dom.TInt; Dom.TFloat], ttt
@@ -201,6 +205,7 @@ let rec collect_term (s: tprog) (c: ctxt) (v: Term.t):
            | BAnd | BOr | BXor -> collect_band
            | BEq | BNeq -> collect_beq
            | BLt | BLeq | BGt | BGeq -> collect_blt
+           | BConc -> collect_bconc
          in
          let* c, trm  = collect_term s c trm  in
          let* c, trm' = collect_term s c trm' in
@@ -479,7 +484,7 @@ let collect_rule (s: t) : stmt -> t Errors.OrErrors.t =
              let pred = Tformula.make (Tformula.predicate p_name terms)
                           { Tformula.Info.dummy with event_type_opt = Some (Event (false, Standard)) } in
              let* s' = add_exception_first_pass rule_num pred reference_labels s in
-             let* s' = add_tevent Lex.Exception p_name args Enftype.itl None s' LexingInfo.dummy in 
+             let* s' = add_tevent Lex.Exception p_name args (Enftype.itl, true) None s' LexingInfo.dummy in 
              ok ((s', c), TException (pos, tpf, reference_labels, pred))
           | Scope (pos, pf, refs) ->
              let _ = List.map ~f:decreasing_section_kinds refs in
@@ -492,7 +497,7 @@ let collect_rule (s: t) : stmt -> t Errors.OrErrors.t =
              let pred = Tformula.make (Tformula.predicate p_name terms)
                           { Tformula.Info.dummy with event_type_opt = Some (Event (false, Standard)) } in
              let* s' = add_scope_first_pass rule_num pred reference_labels s in
-             let* s' = add_tevent Lex.Exception p_name args Enftype.itl None s' LexingInfo.dummy in 
+             let* s' = add_tevent Lex.Exception p_name args (Enftype.itl, true) None s' LexingInfo.dummy in 
              ok ((s', c), TScope (pos, tpf, reference_labels, pred))
           | Obligation (pos, pf1, pf2, rt, rcs) ->
              combine2 c pf1 pf2 (collect_pformula' s.tprog) (collect_pformula' s.tprog)

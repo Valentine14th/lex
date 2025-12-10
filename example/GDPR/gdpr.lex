@@ -140,11 +140,6 @@ suppressable event Stored
     """Data {d} is stored"""
     d : data
 
-observable predicate AllowsIdentification
-    """Data {d} allows the identification of its data subject {ds}"""
-    d : data
-    ds : data_subject
-
 observable predicate IsNecessary
     """Data {d} is necessary to fulfill purpose {p}"""
     d : data
@@ -250,7 +245,6 @@ rule "temporal_storage_limitation"
     whenever
         Stored(d)
         PersonalData(d, ds)
-        AllowsIdentification(d, ds)
         EXISTS c, ds'. ONCE (DataProcessing(pr, co, c, d) AND IsCollection(c, ds') AND HasPurpose(c, p))
     oblige
         IsNecessary(d, p)
@@ -284,7 +278,7 @@ suppressable event GiveConsent
     p : purpose
     c : entity
 
-causable observable predicate IsNecessaryForLegitimateInterest
+observable predicate IsNecessaryForLegitimateInterest
     """Data processing activity {a} is necessary to protect the interest {i} of party {e}"""
     a : activity
     e : entity
@@ -434,11 +428,9 @@ observable predicate IsAbleToDemonstrateConsent
     ds : data_subject
     p : purpose
 
-observable predicate WrittenDeclaration
-    """A written declaration {de} is presented to the data subject {ds} by controller {c}"""
-    c : entity
+observable predicate ContainsOtherMatters
+    """The written declaration {de} contains matters other than those related to consent."""
     de : declaration
-    ds : data_subject
 
 causable observable predicate Contains
     """Written declaration {de} contains subdeclaration {de2}"""
@@ -490,7 +482,8 @@ point "1"
 rule
     whenever
         GiveConsent(ds, p, c)
-        WrittenDeclaration(c, de, ds)
+        Inform(c, ds, de)       
+        ContainsOtherMatters(de)
     oblige
         EXISTS cr. Contains(de, cr) AND IsConsentRequest(cr) AND IsDistinguishableFromOtherMatters(cr, de) AND IsIntelligible(cr) AND IsEasilyAccessible(de) AND IsClearAndPlainLanguage(cr)
     transparently enforceable suppressing condition[0]
@@ -523,15 +516,17 @@ rule
 
 point "3"
 
-causable observable predicate IsWithdrawalInformation
-    """Withdrawal information {wi} contains information about the right to withdraw consent"""
-    wi : declaration
+causable observable predicate IsRightToWithdrawConsent
+    """Declaration {de} declares the existence of the right to withdraw consent at any time, without 
+       affecting the lawfulness of processing based on consent before its withdrawal"""
+    de : declaration
+
 
 rule
     whenever
         GiveConsent(ds, p, c)
     oblige
-        ONCE (EXISTS de, wi. Inform(c, ds, de) AND Contains(de, wi) AND IsWithdrawalInformation(wi))
+        ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsRightToWithdrawConsent(re))
     transparently enforceable causing effects
 
 point "4"
@@ -673,7 +668,7 @@ observable predicate HasRegularContact
     c : entity
 
 observable predicate IsOutsideDisclosure
-    """Processing activity {a} does not involve disclosure of data {d} to outsiders of controller {c}"""
+    """Processing activity {a} involves disclosure of data {d} to outsiders of controller {c}"""
     a : activity
     c : entity
     d : data
@@ -858,10 +853,6 @@ observable predicate RelatesToCriminalConvictionsOrOffences
     """Data {d} relates to criminal convictions and offences or related security measures"""
     d : data
 
-observable predicate IsOfficialAuthority
-    """Entity {e} is an official authority or body"""
-    e : entity
-
 observable predicate IsSpecialAuthorizedCriminalProcessing
     """Activity {a} is authorised by Union or Member State law providing for appropriate safeguards
        for the rights and freedoms of data subject to process data relating to criminal convictions
@@ -874,13 +865,13 @@ observable predicate ConcernsCriminalRegister
 
 rule "criminal_data_prohibition_general"
     whenever
-        RelatesToCriminalConvictionsOrOffences(d) IMPLIES (IsOfficialAuthority(c) OR IsSpecialAuthorizedCriminalProcessing(a))
+        RelatesToCriminalConvictionsOrOffences(d) IMPLIES (IsPublicAuthority(c) OR IsSpecialAuthorizedCriminalProcessing(a))
     scope
         article "6" paragraph "1"
     
 rule "criminal_data_prohibition_register"
     whenever
-        ConcernsCriminalRegister(a) IMPLIES IsOfficialAuthority(c)
+        ConcernsCriminalRegister(a) IMPLIES IsPublicAuthority(c)
     scope
         article "6" paragraph "1"
 
@@ -995,7 +986,7 @@ rule "request_response_standard"
     whenever
         Request(ds, rq, c)
     oblige
-        (NOT UndueDelay(rq)) UNTIL[0, 1M] ((EXISTS rs. RequestResponse(ds, rq, rs)) OR RequestExtension(c, rq))
+        (NOT UndueDelay(rq)) UNTIL[0, 1M] (RequestExtension(c, rq) OR (EXISTS rs. RequestResponse(ds, rq, rs)))
     transparently enforceable causing effects
 
 rule "request_response_extension_condition"
@@ -1108,7 +1099,7 @@ observable predicate IsDataProtectionOfficer
     c' : entity
 
 causable observable predicate IsContactDetailsOfDataProtectionOfficer
-    """Declaration {de} contains the contact details of the data protection officer  {c}"""
+    """Declaration {de} contains the contact details of the data protection officer of {c}"""
     de : declaration
     c : entity
 
@@ -1160,8 +1151,9 @@ rule
         IsCollection(a, ds)
         PersonalData(d, ds)
         IsLawful(a, "6(1)(f)")
+        IsNecessaryForLegitimateInterest(a, e, i)
     oblige
-        ONCE (EXISTS de, re, e, i. Inform(c, ds, de) AND Contains(de, re) AND IsNecessaryForLegitimateInterest(a, e, i) AND IsLegitimateInterest(re, e, i))
+        ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsLegitimateInterest(re, e, i))
     transparently enforceable causing effects
 
 point "e"
@@ -1334,11 +1326,6 @@ rule
 
 point "c"
 
-causable observable predicate IsRightToWithdrawConsent
-    """Declaration {de} declares the existence of the right to withdraw consent at any time, without 
-       affecting the lawfulness of processing based on consent before its withdrawal"""
-    de : declaration
-
 rule
     whenever
         DataProcessing(pr, c, a, d)
@@ -1394,7 +1381,8 @@ rule
 point "f"
 
 observable predicate HasIntendedAutomatedDecision
-    """The {d} is collected with the intent to use it for automated decision-making, including profiling, with
+    """The {d} is collected with the intent to use it for automated decision-making, including profiling,
+       which produces legal effects concerning the data subject or similarly significantly affects the data subject with
        meaningful information about the logic involved, as well as the significance and the envisaged consequences
        of such processing for the data subject, declared in {de}"""
     d : data    
@@ -1406,6 +1394,7 @@ observable predicate AutomatedDecision
        of such processing for the data subject, declared in {de}"""
     a : activity
     d : data
+    ds : data_subject
     de : declaration
 
 causable observable predicate IsAutomatedDecision
@@ -1420,7 +1409,7 @@ rule "prior_declaration_of_automated_decision"
     whenever
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
-        AutomatedDecision(a, d, de)
+        AutomatedDecision(a, d, ds, de)
     oblige
         ONCE HasIntendedAutomatedDecision(d, de)
     transparently enforceable suppressing condition[0]
@@ -1526,7 +1515,7 @@ rule
         IsLawful(a, b)
     oblige
         CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsPurposeOfProcessing(re, p)))
-        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re, b. Inform(c, ds, de) AND Contains(de, re) AND IsLegalBasisOfProcessing(re, b)))
+        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsLegalBasisOfProcessing(re, b)))
     transparently enforceable causing effects
 
 point "d"
@@ -1537,7 +1526,7 @@ observable predicate HasCategory
     cat : special_data_category
 
 causable observable predicate IsCategory
-    """Declaration {de} declares that data {d} belongs to category {cat}"""
+    """Declaration {de} declares that the data belongs to category {cat}"""
     de : declaration
     cat : special_data_category
 
@@ -1629,9 +1618,10 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         IsIndirectCollection(a, d, ds)
+        IsNecessaryForLegitimateInterest(a, e, i)
         IsLawful(a, "6(1)(f)")
     oblige
-        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re, e, i. Inform(c, ds, de) AND Contains(de, re) AND IsNecessaryForLegitimateInterest(a, e, i) AND IsLegitimateInterest(re, e, i)))
+        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsLegitimateInterest(re, e, i)))
     transparently enforceable causing effects
 
 point "c"
@@ -1691,12 +1681,12 @@ rule "inform_reception_source"
 rule "inform_dssource"
     whenever
         DataProcessing(pr, c, a, d)
-        IsIndirectCollection(a, d, ds)
+        IsIndirectCollection(a, d, ds')
         IsReception(a, e)
-        PersonalData(d, ds')
+        PersonalData(d, ds)
         ds <> ds'
     oblige
-        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re, ds'. Inform(c, ds, de) AND Contains(de, re) AND IsDSSource(re, ds')))
+        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsDSSource(re, ds')))
     transparently enforceable causing effects
 
 point "g"
@@ -1794,14 +1784,6 @@ causable observable predicate IsDataProcessingOngoing
 
 causable observable predicate IsDataProcessingNotOngoing
     """Declaration {de} states the data subject's data is not being processed"""
-    de : declaration
-
-observable predicate IsSourceInformation
-    """Declaration {de} contains available information about the source of personal data not collected from the data subject"""
-    de : declaration
-
-observable predicate IsAutomatedDecisionInformation
-    """Declaration {de} contains information about the existence of automated decision-making, including profiling, with meaningful information about the logic involved"""
     de : declaration
 
 rule "data_processing_ongoing"
@@ -2123,7 +2105,7 @@ observable event Share
 causable observable event NotifyOfErasure
     """The controller {c}, taking account of available technology and the cost of implementation, takes 
        reasonable steps, including technical measures, to inform {e} that the data subject has requested 
-       the erasure of any links to, or copy or replication of, those personal data."""
+       the erasure of any links to, or copy or replication of, data {d}."""
     c : entity
     e : entity
     d : data
@@ -2515,11 +2497,6 @@ article "22" "Automated individual decision-making, including profiling"
 
 paragraph "1"
 
-observable predicate IsAutomatedDecisionMaking
-    """Activity {a} consists in making a decision based solely on automated processing, including profiling,
-       which produces legal effects concerning the data subject or similarly significantly affects the data subject."""
-    a : activity
-
 observable predicate IsAutomatedDecisionMakingPurpose
     """Purpose {p} is a purpose that consists in making a decision based solely on automated processing,
        including profiling, which produces legal effects concerning the data subject or similarly significantly
@@ -2531,7 +2508,7 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
     oblige
-        NOT IsAutomatedDecisionMaking(a)
+        NOT (EXISTS de. AutomatedDecision(a, d, ds, de))
     transparently enforceable suppressing condition[0]
 
 paragraph "2"
@@ -3130,7 +3107,7 @@ rule "last_resort_transfer"
     whenever
         IsNotRepetitiveTransfer(a, c', pr', co, sg)
         IsLimitedDSTransfer(a, c', pr', co, sg)
-        IsNecessaryForLegitimateInterest(a, c, i) AND NOT IsOverriddenByDataSubjectInterests(e, i, ds)
+        IsNecessaryForLegitimateInterest(a, c, i) AND NOT IsOverriddenByDataSubjectInterests(c, i, ds)
         ONCE AssessTransfer(c, a, c', pr', co, sg, de)
         IsAppropriateSafeguards(sg)
     constitute

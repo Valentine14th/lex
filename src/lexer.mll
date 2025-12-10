@@ -155,7 +155,8 @@ rule read =
   | '-'                                          { SUB (info1 lexbuf) }
   | '*'                                          { MUL (info1 lexbuf) }
   | '/'                                          { DIV (info1 lexbuf) }
-  | '^'                                          { POW (info1 lexbuf) }
+  | "**"                                         { POW (info1 lexbuf) }
+  | '^'                                          { CONC (info1 lexbuf) }
   | '\''                                         { QUOTE (info1 lexbuf) }
   | "<-"                                         { LAR (info1 lexbuf) }
   | "<>"                                         { NEQ (info1 lexbuf) }

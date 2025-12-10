@@ -6,7 +6,7 @@ open Elex
 open Clex
 
 module I = Info
-module P = ETerm.PosTypeInfo
+module P = TTerm.PosTypeInfo
 
 let debug_compiler = ref false
 let debug msg = if !debug_compiler then Errors.debug_print ~f_name:(Some "compiler.ml") msg else ignore msg
@@ -55,26 +55,6 @@ let prefix_tt = function
   | TStr -> "s"
   | TFloat -> "f"
   | _ -> assert false
-
-let compile_unop = function
-  | Term.Uop.USub -> "usub"
-  | UNot -> "not"
-
-let compile_binop = function
-  | Term.Bop.BAdd -> "add"
-  | BSub -> "sub"
-  | BMul -> "mul"
-  | BDiv -> "div"
-  | BPow -> "pow"
-  | BAnd -> "and"
-  | BOr  -> "or"
-  | BXor -> "xor"
-  | BEq  -> "eq"
-  | BNeq -> "neq"
-  | BLt  -> "lt"
-  | BLeq -> "leq"
-  | BGt  -> "gt"
-  | BGeq -> "geq"
 
 let compile_epattern ?(use_pattern_for_enf=false) ?(only_pattern=false) ?(enftype=Enftype.causable) (f: Eformula.t) =
   let open Eformula in
@@ -210,7 +190,7 @@ let compile_eval_default aliases typeterm =
 let compile_let_binding aliases (f: Eformula.t) (pred: Eformula.t) : string * (ident * Dom.tt option) list * Eformula.t =
   match pred with
   | { form = Predicate (p_name, trms); _ } ->
-    let process_term fs (t: TTerm.t) = match t.trm with
+    let process_term fs (t: ETerm.t) = match t.trm with
       | ETerm.Var v ->
          (*print_endline ("process_term " ^ v ^ " " ^ TypeTerm.to_string t.info.typ);*)
          fs, (v, compile_eval_default aliases t.info.typ)
@@ -218,10 +198,14 @@ let compile_let_binding aliases (f: Eformula.t) (pred: Eformula.t) : string * (i
          let w = fresh_var () in
          let v = ETerm.{ trm = var w;
                          info = { P.dummy with typ = t.info.typ } } in
-         let eq = ETerm.{ trm = binop v Term.Bop.BEq t;
-                          info = { P.dummy with typ = TypeTerm.TConst Dom.TBool } } in
-         let ef = Eformula.{ form = eqconst eq (Dom.Bool true);
-                             info = { I.dummy with enftype = Enftype.obs } } in
+         let ef = match t.trm with
+           | Const c -> Eformula.{ form = eqconst v c;
+                                   info = { I.dummy with enftype = Enftype.obs } }
+           | _ -> 
+             let eq = ETerm.{ trm = binop v ETerm.Bop.BEq t;
+                              info = { P.dummy with typ = TypeTerm.TConst Dom.TBool } } in
+             Eformula.{ form = eqconst eq (Dom.Bool true);
+                        info = { I.dummy with enftype = Enftype.obs } } in
          ef :: fs, (w, compile_eval_default aliases t.info.typ)
     in
     let bvs = Set.of_list (module String) (ETerm.fv_list trms) in
@@ -373,9 +357,9 @@ let compile_imp_rule label = function
   | _ ->  assert false
 
 let compile_events events aliases =
-  let f (_, (_, _, enftype, _)) = not (Enftype.is_internal enftype) in
+  let f (_, (_, _, (_, itl), _)) = not itl in
   let event_list = List.filter ~f (Map.to_alist events) in
-  let compile_event (name, (event_type, args, enftype, _)) =
+  let compile_event (name, (event_type, args, (enftype, _), _)) =
     let type_args (name, typ_alias) =
       let terms = compile_eval_default aliases typ_alias in
       terms |>
@@ -437,6 +421,7 @@ let is_vanilla = function
   | _ -> false
 
 let compile (eprog:Elex.eprog) (unroll: bool) (label: bool) : Clex.cprog =
+  (*print_endline (string_of_eprog eprog);*)
   let sorted_c_rules_opt = List.map eprog.compilation_order ~f:(Map.find eprog.ecrules) in
   let sorted_c_rules     = List.filter_map ~f:(fun x -> x) sorted_c_rules_opt in
   let let_rules          = List.filter sorted_c_rules ~f:is_let_rule in

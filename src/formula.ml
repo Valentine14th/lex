@@ -32,6 +32,8 @@ let rec init (sf: Sformula.t) : t =
     | SConst (Dom.Bool false) -> ff
     | SApp (s, sfs) -> predicate s (List.map sfs ~f:Term.init)
     | SAgg (s, op, x, y, f) -> agg s op (Term.init x) y (init f)
+    | SBop (None, f, BEq, { f = SConst c; _ }) -> eqconst (Term.init f) c
+    | SBop (None, { f = SConst c; _ }, BEq, g) -> eqconst (Term.init g) c
     | SBop (None, f, op, g) when Sformula.Bop.is_relational op ->
        begin
          let binop = match op with

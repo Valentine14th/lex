@@ -10,7 +10,7 @@ let debug msg = if !debug_elex then Errors.debug_print ~f_name:(Some "elex.ml") 
  
 (* Temporal patterns *)
 
-module Pattern = Patt.Make(Eformula.Info)(Term.StringVar)(Dom)(TTerm)
+module Pattern = Patt.Make(Eformula.Info)(Term.StringVar)(Dom)(ETerm)
 
 let epatt_of_tpatt = function
   | Tlex.Pattern.PPresent -> Pattern.PPresent
@@ -44,8 +44,8 @@ type edisjunct = {
   exceptions:      Eformula.t list;                                   (* list of predicates *)
   scopes:          Eformula.t list;                                   (* list of predicates *)
   fv_renaming:     (string, string, String.comparator_witness) Map.t; (* renaming of free variables *)
-  params_original: TTerm.t list;                                      (* list of the original terms*)
-  params_new:      TTerm.t list;                                      (* list of the new terms*)
+  params_original: ETerm.t list;                                      (* list of the original terms*)
+  params_new:      ETerm.t list;                                      (* list of the new terms*)
 }
 
 let edisjunct_of_tdisjunct (td: tdisjunct) = {
@@ -57,8 +57,8 @@ let edisjunct_of_tdisjunct (td: tdisjunct) = {
   exceptions      = List.map td.exceptions ~f:Eformula.of_tformula;
   scopes          = List.map td.scopes ~f:Eformula.of_tformula;
   fv_renaming     = td.fv_renaming;
-  params_original = td.params_original;
-  params_new      = td.params_new;
+  params_original = ETerm.of_tterms td.params_original;
+  params_new      = ETerm.of_tterms td.params_new;
 }
 
 type enf_pformula_sup =
@@ -107,7 +107,7 @@ type estmt =
   | ESImport  of LexingInfo.t * string list * import_format
   | ESSection of section_kind * Label.t * string * string tannot option
   | ESRule    of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * erule * string tannot option
-  | ESEvent   of event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
+  | ESEvent   of event_type * ident * (ident * TypeTerm.t) list * (Enftype.t * bool) * string option
   | ESType    of ident * TypeTerm.t option * string option
   | ESFunction of ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | ESNote    of string
@@ -246,7 +246,7 @@ module Sig : MFOTL_lib.Modules.S = struct
     Map.mem !prog.eevents p_name
 
   let enftype_of_pred p_name =
-    let _, _, enftype, _ = Map.find_exn !prog.eevents p_name in
+    let _, _, (enftype, _), _ = Map.find_exn !prog.eevents p_name in
     enftype
 
   let kind_of_pred p_name =
@@ -257,7 +257,7 @@ module Sig : MFOTL_lib.Modules.S = struct
 
   let pred_enftype_map () =
     Map.map !prog.eevents
-      ~f:(fun data -> let _, args, enftype, _ = data in
+      ~f:(fun data -> let _, args, (enftype, _), _ = data in
                       (enftype, List.init (List.length args) ~f:(fun x -> x)))
 
   let strict_of_func _ = false
@@ -269,8 +269,8 @@ module Sig : MFOTL_lib.Modules.S = struct
         !prog with
         eevents = Map.update !prog.eevents p_name
                     ~f:(function
-                      | Some data -> let event_type, args, _, ds = data in
-                                     (event_type, args, enftype, ds)
+                      | Some data -> let event_type, args, (_, itl), ds = data in
+                                     (event_type, args, (enftype, itl), ds)
                       | None -> assert false)
       }
 
@@ -365,17 +365,18 @@ let string_of_estmt ecrules ?(i=0) =
         (Util.tabs i)
         (Label.qualified_name label)
         (string_of_type_fixes (i+1) type_fixes)
-        (string_of_erule ecrules (i+1) rule)
+        (try string_of_erule ecrules (i+1) rule with _ -> "")
        description
-  | ESEvent (event_type, name, typed_args, enftype, doc_string) ->
+  | ESEvent (event_type, name, typed_args, (enftype, itl), doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s %s %s\n%s%s"
+      Printf.sprintf "%s%s%s %s %s\n%s%s"
           (Util.tabs i)
           (Enftype.to_string enftype)
+          (if itl then " internal" else "")
           (string_of_event_type event_type)
           name
           description

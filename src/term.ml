@@ -60,14 +60,15 @@ module Bop = struct
   type t =
     | BAdd | BSub | BMul | BDiv | BPow
     | BAnd | BOr | BXor
-    | BEq | BNeq | BLt | BLeq | BGt | BGeq  [@@deriving compare, sexp_of, hash, equal]
+    | BEq | BNeq | BLt | BLeq | BGt | BGeq
+    | BConc [@@deriving compare, sexp_of, hash, equal]
 
   let to_string = function
     | BAdd -> "+"
     | BSub -> "-"
     | BMul -> "*"
     | BDiv -> "/"
-    | BPow -> "^"
+    | BPow -> "**"
     | BAnd -> "and"
     | BOr  -> "or"
     | BXor -> "xor"
@@ -77,6 +78,7 @@ module Bop = struct
     | BLeq -> "<="
     | BGt  -> ">"
     | BGeq -> ">="
+    | BConc -> "^"
 
   let to_latex = function
     | BAdd -> "+"
@@ -93,12 +95,13 @@ module Bop = struct
     | BLeq -> "\\leq"
     | BGt  -> ">"
     | BGeq -> "\\geq"
+    | BConc -> "\\cdot"
 
   let prio = function
     | BXor | BOr -> 1
     | BAnd -> 2
     | BEq | BNeq | BLt | BLeq | BGt | BGeq -> 3
-    | BAdd | BSub -> 4
+    | BAdd | BSub | BConc -> 4
     | BMul | BDiv -> 5
     | BPow -> 6
 
@@ -126,6 +129,7 @@ let rec init (sf: Sformula.t) : t = match sf.f with
          | BLeq -> BLeq
          | BGt -> BGt
          | BGeq -> BGeq
+         | BConc -> BConc
          | _ -> assert false in
        make (Binop (init f, bop, init g)) { pos = sf.pos }
      end

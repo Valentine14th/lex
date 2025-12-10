@@ -93,7 +93,7 @@ type tcrule =
 let pos_of_tcrule = function
   | TCImplication (_, _, pos, _, _, _, _, _, _) -> pos
   | TCDefinitionRef (_, _, pos, _, _, _, _, _) -> pos
-  | TCDefinitionDis (m, _) -> LexingInfo.union_all (List.map (Map.data m) ~f:(fun disjunct -> disjunct.def_pos))
+  | TCDefinitionDis (m, _) -> LexingInfo.union_all (List.map (Map.data m) ~f:(fun disjunct -> disjunct.rule_pos))
 
 (* Statements and programs *)
 
@@ -101,12 +101,12 @@ type tstmt =
   | TSImport   of LexingInfo.t * string list * import_format
   | TSSection  of section_kind * Label.t * string * string tannot option
   | TSRule     of LexingInfo.t * int * Label.t * (ident * TypeTerm.t) list * trule * string tannot option
-  | TSEvent    of event_type * ident * (ident * TypeTerm.t) list * Enftype.t * string option
+  | TSEvent    of event_type * ident * (ident * TypeTerm.t) list * (Enftype.t * bool) * string option
   | TSType     of ident * TypeTerm.t option * string option
   | TSFunction of ident * (ident * TypeTerm.t) list * TypeTerm.t * string option
   | TSNote     of string
 
-type tevent = event_type * (ident * TypeTerm.t) list * Enftype.t * string option
+type tevent = event_type * (ident * TypeTerm.t) list * (Enftype.t * bool) * string option
 type tfunction = (ident * TypeTerm.t) list * TypeTerm.t * string option
 type var_types = (ident, TypeTerm.t, Base.String.comparator_witness) Map.t
 
@@ -177,16 +177,16 @@ let check_arg_types tprog pos args =
   else
     error (Errors.type_error "duplicate argument names" pos) 
      
-let add_tevent event_type name (args : (ident * TypeTerm.t) list) enftype ds tprog pos =
+let add_tevent event_type name (args : (ident * TypeTerm.t) list) (enftype, itl) ds tprog pos =
   let open Errors.OrErrors in
-  let event = (event_type, args, enftype, ds) in
+  let event = (event_type, args, (enftype, itl), ds) in
   let* args = check_arg_types tprog pos args in
   (* TODO: (potentially in the future) allow for overwriting/reusing event names *)
   let* events =
     try ok (Map.add_exn tprog.tevents ~key:name ~data:event)
     with _ -> error (Errors.type_error (Printf.sprintf "event %s already exists" name) pos)
   in
-  ok { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, enftype, ds)::tprog.tstmts}
+  ok { tprog with tevents = events; tstmts = TSEvent (event_type, name, args, (enftype, itl), ds)::tprog.tstmts}
 
 let add_tfunction name arg_types return_type ds tprog pos =
   let open Errors.OrErrors in
@@ -266,7 +266,7 @@ module Sig = struct
     Map.mem !prog.tevents p_name
 
   let enftype_of_pred p_name =
-    let _, _, enftype, _ = Map.find_exn !prog.tevents p_name in
+    let _, _, (enftype, _), _ = Map.find_exn !prog.tevents p_name in
     (*Stdio.printf "Tlex.Sig.enftype_of_pred (%s) = %s\n" p_name (Enftype.to_string enftype);*)
     enftype
 
@@ -279,7 +279,7 @@ module Sig = struct
 
   let pred_enftype_map () =
     Map.map !prog.tevents
-      ~f:(fun data -> let _, args, enftype, _ = data in
+      ~f:(fun data -> let _, args, (enftype, _), _ = data in
                       (enftype, List.init (List.length args) ~f:(fun x -> x)))
 
   let strict_of_func _ = false
@@ -291,8 +291,8 @@ module Sig = struct
         !prog with
         tevents = Map.update !prog.tevents p_name
                     ~f:(function
-                      | Some data -> let event_type, args, _, ds = data in
-                                     (event_type, args, enftype, ds)
+                      | Some data -> let event_type, args, (_, itl), ds = data in
+                                     (event_type, args, (enftype, itl), ds)
                       | None -> assert false)
       }
 
@@ -381,15 +381,16 @@ let string_of_tstmt ?(i=0) =
         (string_of_type_fixes (i+1) type_fixes)
         (string_of_trule (i+1) rule)
         description
-  | TSEvent (event_type, name, typed_args, enftype, doc_string) ->
+  | TSEvent (event_type, name, typed_args, (enftype, itl), doc_string) ->
       let description =
           match doc_string with
           | Some s -> make_doc_string s i
           | None -> ""
       in
-      Printf.sprintf "%s%s %s %s\n%s%s"
+      Printf.sprintf "%s%s%s %s %s\n%s%s"
           (Util.tabs i)
           (Enftype.to_string enftype)
+          (if itl then " internal" else "")
           (string_of_event_type event_type)
           name
           description

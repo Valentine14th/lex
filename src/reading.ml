@@ -23,17 +23,17 @@ module Placeholders = struct
 
 end
 
-let rec html_of_trm ?(l=0) (t : TTerm.t) = match t.trm with
-  | TTerm.Var x -> ident x
+let rec html_of_trm ?(l=0) (t : ETerm.t) = match t.trm with
+  | ETerm.Var x -> ident x
   | Const d -> const (Dom.to_string d)
   | App (f, trms) -> Printf.sprintf "%s(%s)" f (html_of_trms trms)
   | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
                      (Term.Uop.to_string o)
                      (html_of_trm ~l:10 t)
-  | Binop (t, o, t') -> let l' = Term.Bop.prio o in
+  | Binop (t, o, t') -> let l' = ETerm.Bop.prio o in
                         Printf.sprintf (Util.paren l l' "%s %s %s")
                           (html_of_trm ~l:l' t)
-                          (Term.Bop.to_string o)
+                          (ETerm.Bop.to_string o)
                           (html_of_trm ~l:l' t')
   | Proj (t, p) -> Printf.sprintf "%s.%s" (html_of_trm ~l:10 t) p
   | Record kvs ->
@@ -61,6 +61,7 @@ let reading_of_binop = function
   | BLeq -> "is less or equal to"
   | BGt  -> "is greater than"
   | BGeq -> "is greater or equal to"
+  | BConc -> "concatenated with"
 
 let reading_of_span =
   let open Time.Span in
@@ -82,7 +83,7 @@ let reading_of_dom = function
   | Span v -> reading_of_span v
   | Money v -> Money.to_string_reading v
 
-let rec reading_of_trm ?(l=0) eprog (t : TTerm.t) = match t.trm with
+let rec reading_of_trm ?(l=0) eprog (t : ETerm.t) = match t.trm with
   | Var x -> ident x
   | Const d -> const (reading_of_dom d)
   | App (f, trms) ->
@@ -95,10 +96,10 @@ let rec reading_of_trm ?(l=0) eprog (t : TTerm.t) = match t.trm with
   | Unop (o, t) -> Printf.sprintf (Util.paren l 10 "%s %s")
                      (reading_of_unop o)
                      (reading_of_trm ~l:10 eprog t)
-  | Binop (t, o, t') -> let l' = Term.Bop.prio o in
+  | Binop (t, o, t') -> let l' = ETerm.Bop.prio o in
                         Printf.sprintf (Util.paren l l' "%s %s %s")
                           (reading_of_trm ~l:l' eprog t)
-                          (reading_of_binop o)
+                          (reading_of_binop (ETerm.to_term_bop o))
                           (reading_of_trm ~l:l' eprog t')
   | Proj (t, p) -> Printf.sprintf "the field %s of %s" p (html_of_trm ~l:10 t) 
   | Record kvs ->
