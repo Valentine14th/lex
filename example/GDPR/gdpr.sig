@@ -7,6 +7,7 @@ CheckNotChild(c: int, ds: int)
 ConcernsCriminalRegister(a: int)
 Contains(de: int, de2: int)+
 ContainsData(de: int, f: int)+
+ContainsOtherMatters(de: int)
 ContestsAccuracy(rq: int, d: int, d': int)
 DataIsNecessaryForJudicialClaims(d: int)
 DataProcessing(p: int, c: int, a: int, d: int)-
@@ -51,19 +52,18 @@ IsApprovedCertificationMechanism(sg: int)
 IsApprovedCodeOfConduct(sg: int)
 IsArchival(a: int)
 IsAutomatedDecision(de: int)+
-IsAutomatedDecisionInformation(de: int)
 IsAutomatedDecisionMakingPurpose(p: string)
 IsBindingCorporateRules(sg: int)
 IsCategory(de: int, cat: string)+
 IsChild(ds: int)
-IsClearAndPlainLanguage(de: int)
+IsClearAndPlainLanguage(de: int)+
 IsCollection(a: int, ds: int)
 IsCommissionStandardClauses(sg: int)
 IsCommonlyUsedFormat(f: int)+
 IsCompatibleWithPurpose(a: int, p: string)
 IsComplaintStatement(re: int, rq: int)+
 IsConcise(de: int)
-IsConsentRequest(de: int)
+IsConsentRequest(de: int)+
 IsContactDetailsOfDataProtectionOfficer(de: int, c: int)+
 IsContractParty(ds: int, co: int)
 IsContractualClauses(ct: int, c: int, pr: int, c': int, pr': int, sg: int)
@@ -74,8 +74,8 @@ IsDataProcessingOngoing(de: int)+
 IsDataProtectionOfficer(c: int, c': int)
 IsDirectMarketing(p: string)
 IsDirectTransmissionFeasible(c: int, c': int)
-IsDistinguishableFromOtherMatters(de: int, de2: int)
-IsEasilyAccessible(de: int)
+IsDistinguishableFromOtherMatters(de: int, de2: int)+
+IsEasilyAccessible(de: int)+
 IsElectronicDeclaration(de: int)
 IsElectronicRequest(rq: int)
 IsErasureRequest(rq: int, d: int)
@@ -87,7 +87,7 @@ IsHealthRelated(pi: string)
 IsIdentityOfControllerOrRepresentative(de: int, c: int)+
 IsImpossibleElectronic(rq: int)
 IsInInterestOf(co: int, ds: int)
-IsIntelligible(de: int)
+IsIntelligible(de: int)+
 IsJointController(a: int, c: int, jc: int)
 IsLastResortTransfer(re: int, c: int, c': int, pr': int, co: int, sg: int, i: int)+
 IsLegalBasisOfProcessing(de: int, b: string)+
@@ -109,7 +109,7 @@ IsNecessaryForFreedomOfExpression(a: int)
 IsNecessaryForImportantPublicInterest(a: int, pi: string)
 IsNecessaryForJudicialClaims(a: int)
 IsNecessaryForLegalObligation(a: int, l: string)
-IsNecessaryForLegitimateInterest(a: int, e: int, i: int)+
+IsNecessaryForLegitimateInterest(a: int, e: int, i: int)
 IsNecessaryForProtectionOfRights(a: int, e: int)
 IsNecessaryForPublicInterest(a: int, pi: string)
 IsNecessaryForSpecialMedicalReasons(a: int)
@@ -120,7 +120,6 @@ IsNonProfit(c: int)
 IsNotRepetitiveTransfer(a: int, c': int, pr': int, co: int, sg: int)
 IsOccasionalProcessing(a: int)
 IsOfferOfInformationSocietyServices(a: int)
-IsOfficialAuthority(e: int)
 IsOpenRegisterData(d: int, reg: int)
 IsOutsideDisclosure(a: int, c: int, d: int)
 IsOverriddenByDataSubjectInterests(e: int, i: int, ds: int)
@@ -148,7 +147,6 @@ IsRights(de: int)+
 IsRisksOfTransfer(re: int, c': int, pr': int, co: int, sg: int)
 IsRiskyProcessing(a: int)
 IsSME(c: int)
-IsSourceInformation(de: int)
 IsSpecialAuthorizedCriminalProcessing(a: int)
 IsSpecialData(d: int, sp: string)
 IsSpecified(p: string)
@@ -166,7 +164,6 @@ IsTransparentDeclaration(de: int)
 IsUnableToConsent(ds: int)
 IsUnfoundedOrExcessive(rq: int)
 IsUpToDate(d: int, p: string)
-IsWithdrawalInformation(wi: int)+
 JustifiesStorage(a: int, d: int)
 LiftRestriction(c: int, d: int, rq: int)-
 MakePublic(ds: int, d: int)
@@ -200,7 +197,6 @@ UndueDelay(rq: int)
 UseForCommunication(d: int, ds: int)
 ValidRegisterConsultationRequest(ds: int, d: int, reg: int, i: int)
 WithdrawConsent(ds: int, p: string, c: int)
-WrittenDeclaration(c: int, de: int, ds: int)
 fun add_time_span(t: int, s: int) : int
 fun string_of_category(cat: string) : string
 fun string_of_country_io(co: int) : string

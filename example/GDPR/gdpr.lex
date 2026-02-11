@@ -437,24 +437,24 @@ causable observable predicate Contains
     de : declaration
     de2 : declaration
 
-observable predicate IsConsentRequest
+causable observable predicate IsConsentRequest
     """Declaration {de} is a consent request"""
     de : declaration
 
-observable predicate IsDistinguishableFromOtherMatters
+causable observable predicate IsDistinguishableFromOtherMatters
     """Subdeclaration {de} is distinguishable from other matters within declaration {de2}"""
     de : declaration
     de2 : declaration
 
-observable predicate IsIntelligible
+causable observable predicate IsIntelligible
     """Declaration {de} is intelligible"""
     de : declaration
 
-observable predicate IsEasilyAccessible
+causable observable predicate IsEasilyAccessible
     """Declaration {de} is easily accessible"""
     de : declaration
 
-observable predicate IsClearAndPlainLanguage
+causable observable predicate IsClearAndPlainLanguage
     """Declaration {de} is written in clear and plain language"""
     de : declaration
 
@@ -486,7 +486,7 @@ rule
         ContainsOtherMatters(de)
     oblige
         EXISTS cr. Contains(de, cr) AND IsConsentRequest(cr) AND IsDistinguishableFromOtherMatters(cr, de) AND IsIntelligible(cr) AND IsEasilyAccessible(de) AND IsClearAndPlainLanguage(cr)
-    transparently enforceable suppressing condition[0]
+    transparently enforceable causing effects
 
 point "2"
 
@@ -1008,7 +1008,7 @@ rule "request_response_extension_inform"
     whenever
         RequestExtension(c, rq)
     oblige
-        (NOT ONCE[1M, *] (EXISTS de, ds. Request(ds, rq, c) UNTIL (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestExtension(re, rq)))))
+        ONCE[1M, *] (EXISTS de, ds. Request(ds, rq, c) UNTIL[0, 1M] (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestExtension(re, rq))))
     enforceable suppressing conditions
 
 rule "request_response_electronic"
@@ -1035,7 +1035,7 @@ rule "refusal_information"
     whenever
         RefuseRequest(c, rq)
     oblige
-        NOT ONCE[1M, *] (EXISTS de, ds. Request(ds, rq, c) UNTIL (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestRefusal(re, rq)) AND (EXISTS re. Contains(de, re) AND IsComplaintStatement(re, rq))))
+        ONCE[1M, *] (EXISTS de, ds. Request(ds, rq, c) UNTIL[0, 1M] (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestRefusal(re, rq)) AND (EXISTS re. Contains(de, re) AND IsComplaintStatement(re, rq))))
     enforceable suppressing conditions
 
 paragraph "5"
@@ -1738,7 +1738,7 @@ rule
         NOT ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
-    transparently enforceable causing effects
+    transparently enforceable suppressing condition[0]
 
 paragraph "5"
 

@@ -14,7 +14,7 @@ HasText(de: string, text: string)+
 Inform(c: string, ds: string, de: string)+
 IsAdministrativeArrangement(ct: int, co: int, sg: int)
 IsCompatibleWithPurpose(a: string, p: string)
-IsConsentRequest(de: string)
+IsConsentRequest(de: string)+
 IsContractualClauses(ct: int, c: string, pr: string, c': string, pr': string, sg: int)
 IsErasureRequest(rq: string, d: string)
 IsFurtherCopy(rq: string)

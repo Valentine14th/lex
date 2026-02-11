@@ -452,7 +452,7 @@ rule "r_AutomatedDecision"
     whenever
         Read(d, ds, a, "personalized_ad", ds') OR Write(d, ds, a, "personalized_ad", ds')
     refine
-        AutomatedDecision(a, d, ds', "we use the content of the page shown to the user to display personalized advertisement")
+        AutomatedDecision(a, d, ds', "We use the content of the page shown to the user to display personalized advertisement")
 
 rule "r_CheckNotChild"
     """Users must upload a copy of their ID when registering, which is then semi-automatically vetted. Users below the age of 16 are not allowed to register. Hence, any user in hte system is at least 16. This fulfills our due diligence obligation."""
@@ -695,7 +695,7 @@ rule "r_IsNecessaryForLegitimateInterest"
 
 rule "no_new_purpose"
     whenever
-        DataProcessing(pr, c, a, d)
+        EXISTS pr. DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
     oblige
