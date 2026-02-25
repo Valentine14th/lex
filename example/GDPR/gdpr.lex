@@ -2764,7 +2764,6 @@ observable predicate IsOccasionalProcessing
 
 rule "SME_exemption"
     whenever
-        DataProcessing(pr, c, a, d)
         IsSME(c)
         IsSME(pr)
     except
