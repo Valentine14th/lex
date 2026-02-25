@@ -428,8 +428,8 @@ observable predicate IsAbleToDemonstrateConsent
     ds : data_subject
     p : purpose
 
-observable predicate ContainsOtherMatters
-    """The written declaration {de} contains matters other than those related to consent."""
+observable predicate ConsentDeclarationContainsOtherMatters
+    """The consent declaration {de} contains matters other than those related to consent."""
     de : declaration
 
 causable observable predicate Contains
@@ -483,9 +483,9 @@ rule
     whenever
         GiveConsent(ds, p, c)
         Inform(c, ds, de)       
-        ContainsOtherMatters(de)
+        ConsentDeclarationContainsOtherMatters(de)
     oblige
-        EXISTS cr. Contains(de, cr) AND IsConsentRequest(cr) AND IsDistinguishableFromOtherMatters(cr, de) AND IsIntelligible(cr) AND IsEasilyAccessible(de) AND IsClearAndPlainLanguage(cr)
+        EXISTS cr. Contains(de, cr) AND IsConsentRequest(cr) AND IsDistinguishableFromOtherMatters(cr, de) AND IsIntelligible(cr) AND IsEasilyAccessible(cr) AND IsClearAndPlainLanguage(cr)
     transparently enforceable causing effects
 
 point "2"

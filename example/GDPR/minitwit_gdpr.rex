@@ -408,8 +408,8 @@ assume false TechnicalAndOrganisationalMeasures
 assume false UseForCommunication
     """Irrelevant since we never delay informing users."""
 
-assume true ContainsOtherMatters
-    """In general, the declaration can contain other matters (e.g., privacy-related but not consent-related information)."""
+assume false ConsentDeclarationContainsOtherMatters
+    """Consent declarations never contain other matters."""
 
 assume true IsNewPurpose
     """Irrelevant since Article 13(3) is replaced by rule no_new_purpose."""
