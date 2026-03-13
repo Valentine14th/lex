@@ -699,7 +699,7 @@ rule "no_new_purpose"
         PersonalData(d, ds)
         HasPurpose(a, p)
     oblige
-        ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND HasPurpose(co, p))
+        NOT ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND NOT HasPurpose(co, p))
     transparently enforceable suppressing condition[0]
 
 replace
