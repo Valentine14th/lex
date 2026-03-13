@@ -5,9 +5,9 @@ AutomatedDecision(a: int, d: int, ds: int, de: int)
 ChargeForRequest(rq: int, fee: int)-
 CheckNotChild(c: int, ds: int)
 ConcernsCriminalRegister(a: int)
+ConsentDeclarationContainsOtherMatters(de: int)
 Contains(de: int, de2: int)+
 ContainsData(de: int, f: int)+
-ContainsOtherMatters(de: int)
 ContestsAccuracy(rq: int, d: int, d': int)
 DataIsNecessaryForJudicialClaims(d: int)
 DataProcessing(p: int, c: int, a: int, d: int)-

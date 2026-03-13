@@ -511,8 +511,8 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         (NOT WithdrawConsent(ds, p, c)) SINCE GiveConsent(ds, p, c)
-    constitute
-        IsLawful(a, "6(1)(a)")
+    scope
+        article "6" paragraph "1" paragraph[1] "1" point "a"
 
 point "3"
 
@@ -1735,7 +1735,7 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
-        NOT ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND HasPurpose(co, p))
+        ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND NOT HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
     transparently enforceable suppressing condition[0]
