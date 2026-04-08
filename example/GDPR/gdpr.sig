@@ -176,7 +176,7 @@ PersonalDataCopy(f: int, ds: int)+
 PrepareContract(co: int)
 Record(pr: int, c: int, a: int, p: string, v: string)+
 Rectify(d_old: int, d_new: int)+
-RefuseRequest(c: int, rq: int)-
+RefuseRequest(c: int, rq: int, ds: int)-
 RelatesToCriminalConvictionsOrOffences(d: int)
 ReportLastResortTransfer(a: int, c: int, c': int, pr': int, co: int, sg: int, i: int)+
 Request(ds: int, rq: int, c: int)

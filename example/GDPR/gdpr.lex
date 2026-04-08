@@ -357,7 +357,8 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
-        (NOT EndContract(co)) SINCE ((PrepareContract(co) OR StartContract(co)) AND IsContractParty(ds, co))
+        (NOT EndContract(co)) SINCE (PrepareContract(co) OR StartContract(co))
+        ONCE (StartContract(co) AND IsContractParty(ds, co))
         IsNecessaryForContract(a, co)
     constitute
         IsLawful(a, "6(1)(b)")
@@ -388,7 +389,7 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
-        IsNecessaryForPublicInterest(a, pi) OR IsPerformanceOfPublicAuthorityTask(a) AND IsPublicAuthority(c)
+        (EXISTS pi. IsNecessaryForPublicInterest(a, pi)) OR IsPerformanceOfPublicAuthorityTask(a) AND IsPublicAuthority(c)
     constitute
         IsLawful(a, "6(1)(e)")
 
@@ -723,9 +724,10 @@ rule
     whenever
         IsSpecialData(d, sp)
         PersonalData(d, ds)
+        DataProcessing(pr, c, a, d)
     oblige
-        NOT DataProcessing(pr, c, a, d)
-    transparently enforceable causing effects
+        false
+    transparently enforceable suppressing condition[2]
 
 paragraph "2"
 
@@ -777,7 +779,7 @@ rule
         IsNonProfit(c)
         HasPoliticalAim(c) OR HasPhilosophicalAim(c) OR HasReligiousAim(c) OR HasTradeUnionAim(c)
         (ONCE IsMember(ds, c)) OR HasRegularContact(ds, c)
-        NOT IsOutsideDisclosure(a, c, d)
+        NOT (EXISTS d. IsOutsideDisclosure(a, c, d))
     except
         paragraph "1"
 
@@ -865,12 +867,14 @@ observable predicate ConcernsCriminalRegister
 
 rule "criminal_data_prohibition_general"
     whenever
-        RelatesToCriminalConvictionsOrOffences(d) IMPLIES (IsPublicAuthority(c) OR IsSpecialAuthorizedCriminalProcessing(a))
+       DataProcessing(pr, c, a, d)
+       RelatesToCriminalConvictionsOrOffences(d) IMPLIES (IsPublicAuthority(c) OR IsSpecialAuthorizedCriminalProcessing(a))
     scope
-        article "6" paragraph "1"
+       article "6" paragraph "1"
     
 rule "criminal_data_prohibition_register"
     whenever
+        DataProcessing(pr, c, a, d)
         ConcernsCriminalRegister(a) IMPLIES IsPublicAuthority(c)
     scope
         article "6" paragraph "1"
@@ -928,10 +932,11 @@ observable predicate IsElectronicDeclaration
     de : declaration
 
 suppressable event RefuseRequest
-    """Controller {c} refuses to respond to request {rq}, e.g., because it is manifestly unfounded 
+    """Controller {c} refuses to respond to request {rq} of user {ds}, e.g., because it is manifestly unfounded 
        or excessive (Article 12(5)(b))"""
     c : entity
     rq : request
+    ds : data_subject
 
 causable observable predicate IsReasonForRequestRefusal
     """Declaration {re} contains the reason for the refusal of request {rq}"""
@@ -1006,9 +1011,10 @@ rule "request_response_extended"
 
 rule "request_response_extension_inform"
     whenever
+        ONCE Request(ds, rq, c)
         RequestExtension(c, rq)
     oblige
-        ONCE[1M, *] (EXISTS de, ds. Request(ds, rq, c) UNTIL[0, 1M] (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestExtension(re, rq))))
+        ONCE[1M, *] (EXISTS de. Request(ds, rq, c) UNTIL[0, 1M] (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestExtension(re, rq))))
     enforceable suppressing conditions
 
 rule "request_response_electronic"
@@ -1026,25 +1032,26 @@ note "The first rule is implicit in the formulation of (4)"
 rule "refuse_request"
     whenever
         ONCE Request(ds, rq, c)
-        RefuseRequest(c, rq)
+        RefuseRequest(c, rq, ds)
     except
         paragraph "3" rule "request_response_standard"
         paragraph "3" rule "request_response_extended"
 
 rule "refusal_information"
     whenever
-        RefuseRequest(c, rq)
+        ONCE Request(ds, rq, c)
+        RefuseRequest(c, rq, ds)
     oblige
-        ONCE[1M, *] (EXISTS de, ds. Request(ds, rq, c) UNTIL[0, 1M] (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestRefusal(re, rq)) AND (EXISTS re. Contains(de, re) AND IsComplaintStatement(re, rq))))
+        ONCE[1M, *] (EXISTS de. Request(ds, rq, c) UNTIL[0, 1M] (Inform(c, ds, de) AND (EXISTS re. Contains(de, re) AND IsReasonForRequestRefusal(re, rq)) AND (EXISTS re. Contains(de, re) AND IsComplaintStatement(re, rq))))
     enforceable suppressing conditions
 
 paragraph "5"
 
 rule "free_of_charge"
     whenever
-        Request(ds, rq, c)
+        ONCE Request(ds, rq, c)
     oblige
-        ALWAYS (NOT ChargeForRequest(rq, fee))
+        NOT ChargeForRequest(rq, fee)    
     transparently enforceable causing effects
 
 rule "unfounded_exception"
@@ -1296,13 +1303,24 @@ rule "respect_storage_criteria"
         IsRespected(d, cr) UNTIL Delete(d)
     transparently enforceable causing effects
 
-rule
+rule "inform_storage_period"
     whenever
         DataProcessing(pr, c, a, d)
         IsCollection(a, ds)
         PersonalData(d, ds)
+        HasStoragePeriod(d, t)		       
     oblige
-        ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND (FORALL t. HasStoragePeriod(d, t) IMPLIES IsStoragePeriod(re, t)) AND (FORALL cr. HasStorageCriteria(d, cr) IMPLIES IsStorageCriteria(re, cr)))
+        ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsStoragePeriod(re, t))
+    transparently enforceable causing effects
+
+rule "inform_storage_criteria"
+    whenever
+        DataProcessing(pr, c, a, d)
+        IsCollection(a, ds)
+        PersonalData(d, ds)
+        HasStorageCriteria(d, cr)			  
+    oblige
+        ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsStorageCriteria(re, cr))
     transparently enforceable causing effects
 
 point "b"
@@ -1437,7 +1455,7 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
-        ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND NOT HasPurpose(co, p))
+        NOT ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
     transparently enforceable causing effects
@@ -1604,14 +1622,24 @@ rule "respect_storage_criteria"
         IsRespected(d, cr) UNTIL Delete(d)
     transparently enforceable causing effects
 
-rule
+rule "inform_storage_period"
     whenever
         DataProcessing(pr, c, a, d)
         IsIndirectCollection(a, d, ds)
+        HasStoragePeriod(d, t)    
     oblige
-        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND (FORALL t. HasStoragePeriod(d, t) IMPLIES IsStoragePeriod(re, t)) AND (FORALL cr. HasStorageCriteria(d, cr) IMPLIES IsStorageCriteria(re, cr))))
+        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsStoragePeriod(re, t)))
     transparently enforceable causing effects
-        
+
+rule "inform_storage_condition"
+    whenever
+        DataProcessing(pr, c, a, d)
+        IsIndirectCollection(a, d, ds)
+        HasStorageCriteria(d, cr)    
+    oblige
+        CanDelayInform(c, ds, a) UNTIL[0, 1M] (ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsStorageCriteria(re, cr)))
+    transparently enforceable causing effects
+
 point "b"
 
 rule
@@ -1721,6 +1749,7 @@ observable event Disclose
 rule
     whenever
         ONCE (DataProcessing(pr, c, a, d) AND TP(t))
+        IsIndirectCollection(a, d, ds)
         TP(t')
         IsReasonablePeriod(t, t')
         NOT UseForCommunication(d, ds)
@@ -1735,7 +1764,7 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
-        ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND NOT HasPurpose(co, p))
+        NOT ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
     transparently enforceable suppressing condition[0]
@@ -2044,7 +2073,7 @@ point "a"
 
 rule
     whenever
-        (ONCE (EXISTS rq. Request(ds, rq, c) AND IsErasureRequest(rq, d)) AND RequestResponse(ds, rq, rs)) OR DataReview(c, d)
+        (ONCE (EXISTS rq. Request(ds, rq, c) AND IsErasureRequest(rq, d)) AND RequestResponse(ds, rq, rs)) OR (DataReview(c, d) AND PersonalData(d, ds))
         NOT (EXISTS pr, a, d, p. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND HasPurpose(a, p))) AND IsNecessary(d, p))
     constitute
         IsObligedToDelete(c, d)
@@ -2053,8 +2082,8 @@ point "b"
 
 rule
     whenever
-        (ONCE (EXISTS rq. Request(ds, rq, c) AND IsErasureRequest(rq, d)) AND RequestResponse(ds, rq, rs)) OR DataReview(c, d)
-        NOT (EXISTS pr, a, d. (NOT WithdrawConsent(ds, p, c)) SINCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND (IsLawful(a, "6(1)(a)") OR IsLawful(a, "9(2)(a)"))) AND NOT (EXISTS ba. IsLawful(a, ba)))
+        (ONCE (EXISTS rq. Request(ds, rq, c) AND IsErasureRequest(rq, d)) AND RequestResponse(ds, rq, rs)) OR (DataReview(c, d) AND PersonalData(d, ds))
+        NOT (EXISTS pr, a, d, p. (NOT WithdrawConsent(ds, p, c)) SINCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND (IsLawful(a, "6(1)(a)") OR IsLawful(a, "9(2)(a)"))) AND NOT (EXISTS ba. IsLawful(a, ba)))
     constitute
         IsObligedToDelete(c, d)
 
@@ -2115,7 +2144,7 @@ rule
         IsObligedToDelete(c, d)
         ONCE Share(c, e, d)
     oblige
-        NOT UndueDataDelay(d) UNTIL (EXISTS e. NotifyOfErasure(c, e, d))
+        NOT UndueDataDelay(d) UNTIL (NotifyOfErasure(c, e, d))
     transparently enforceable causing effects
 
 paragraph "3"
@@ -2392,12 +2421,19 @@ rule
 
 paragraph "3"
 
-rule
+rule "public_interest"
     whenever
-        IsNecessaryForPublicInterest(a, pi) OR IsPerformanceOfPublicAuthorityTask(a) AND IsPublicAuthority(c)
+        IsNecessaryForPublicInterest(a, pi)
     except
         paragraph "1"
 
+rule "performance_public_authority_task"
+    whenever					      
+        IsPerformanceOfPublicAuthorityTask(a)
+        IsPublicAuthority(c)
+    except					  
+        paragraph "1"
+					    
 note "Skipped: without prejudice to Article 17 (taken into account in interpretation)."
 
 paragraph "4"
@@ -2519,7 +2555,8 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         IsNecessaryForContract(a, co)
-        (NOT EndContract(co)) SINCE ((PrepareContract(co) OR StartContract(co)) AND IsContractParty(ds, co))
+        (NOT EndContract(co)) SINCE (PrepareContract(co) OR StartContract(co))
+        ONCE (StartContract(co) AND IsContractParty(ds, co))
     except
         paragraph "1"
 
@@ -2774,7 +2811,7 @@ rule
     whenever
         IsRiskyProcessing(a)
         NOT IsOccasionalProcessing(a)
-        EXISTS d', sp. (DataProcessing(pr, c, a, d') AND IsSpecialData(d', sp) OR RelatesToCriminalConvictionsOrOffences(d'))
+        DataProcessing(pr, c, a, d') AND ((EXISTS sp. IsSpecialData(d', sp)) OR RelatesToCriminalConvictionsOrOffences(d'))
     except
         rule "SME_exemption"
 
@@ -2784,9 +2821,10 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
+        Transfer(a, c', pr', co, sg)
     oblige
-        NOT Transfer(a, c', pr', co, sg)
-    enforceable causing effects
+        false
+    enforceable suppressing condition[2]
 
 article "45" "Transfers on the basis of an adequacy decision"
 
@@ -2970,7 +3008,8 @@ observable event RequestContractPreparation
 
 rule
     whenever
-        (NOT EndContract(con)) SINCE ((PrepareContract(con) AND (ONCE RequestContractPreparation(ds, con)) OR StartContract(con)) AND IsContractParty(ds, con))
+        (NOT EndContract(con)) SINCE (PrepareContract(con) OR StartContract(con))
+        ONCE (RequestContractPreparation(ds, con) AND IsContractParty(ds, con))
         IsNecessaryForContract(a, con)
     except
         article "44"
@@ -3106,7 +3145,7 @@ rule "last_resort_transfer"
     whenever
         IsNotRepetitiveTransfer(a, c', pr', co, sg)
         IsLimitedDSTransfer(a, c', pr', co, sg)
-        IsNecessaryForLegitimateInterest(a, c, i) AND NOT IsOverriddenByDataSubjectInterests(c, i, ds)
+        IsNecessaryForLegitimateInterest(a, c, i) AND NOT (EXISTS ds. IsOverriddenByDataSubjectInterests(c, i, ds))
         ONCE AssessTransfer(c, a, c', pr', co, sg, de)
         IsAppropriateSafeguards(sg)
     constitute
@@ -3150,7 +3189,7 @@ observable event ValidRegisterConsultationRequest
 rule
     whenever
         IsLimitedRegisterData(a, reg)
-        IsLegitimateInterestRegister(reg) IMPLIES (EXISTS ds'. ONCE ValidRegisterConsultationRequest(ds', d, reg, i))
+        IsLegitimateInterestRegister(reg) IMPLIES (EXISTS d, ds', i. ONCE ValidRegisterConsultationRequest(ds', d, reg, i))
     scope
         paragraph "1" paragraph[1] "1" point "g"
 

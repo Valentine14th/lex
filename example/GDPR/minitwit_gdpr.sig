@@ -33,8 +33,17 @@ IsRecipientRequest(rq: string, d: string)
 IsRestrictionRequest(rq: string, d: string, p: string)
 IsSpecialData(d: string, sp: string)
 IsStatutoryContractualRequirement(de: string, ds: string, d: string, r: string)+
-IsStoragePeriod(de: string, t: int)+
 LiftRestriction(c: string, d: string, rq: string)-
+NoteCategory(cat: string)+
+NoteCriteria(c: string)+
+NoteDS(ds: string)+
+NoteData(d: string)+
+NoteEntity(e: string)+
+NoteInterest(i: string)+
+NoteLegalBasis(b: string)+
+NotePurpose(p: string)+
+NoteRequest(rq: string)+
+NoteSpan(s: int)+
 NotifyErasure(entity: string, data: string)+
 NotifyRectification(entity: string, data: string, data': string)+
 NotifyRestriction(entity: string, data: string, purpose: string)+

@@ -9,6 +9,7 @@ type file_id     is string
 type decl_id     is string
 
 suppressable event Read
+    """Data {id}, which is personal data of {owner}, is read for purpose {purpose} in the context of activity {activity} while responding to a request by user {user}."""
     id      : data_id
     owner   : user_id
     activity: activity_id
@@ -576,10 +577,14 @@ rule "r_IsAutomatedDecisionMakingPurpose"
     refine
         IsAutomatedDecisionMakingPurpose("personalized_ad")
 
+observable causable event NoteCategory
+    cat : special_data_category
+
 rule "r_IsCategory"
     whenever
         Declaration(d)
         HasText(d, "Some of the collected data belongs to the following special category: " + string_of_category(cat))
+        NoteCategory(cat)	
     refine
         IsCategory(d, cat)
 
@@ -593,17 +598,25 @@ function string_of_request(
     c : request
 ) -> string
 
+observable causable event NoteRequest
+    rq : request
+
 rule "r_IsComplaintStatement"
     whenever
         Declaration(d)
         HasText(d, "You have a right to lodge a complaint with the National DPA regarding request " + string_of_request(rq))
+        NoteRequest(rq)	
     refine
         IsComplaintStatement(d, rq)
+
+observable causable event NoteEntity
+    e : entity
 
 rule "r_IsContactDetailsOfDataProtectionOfficer"
     whenever
         Declaration(d)
         HasText(d, "You can contact our data protection officer at: " + string_of_entity(c))
+        NoteEntity(c)
     refine
         IsContactDetailsOfDataProtectionOfficer(d, c)
 
@@ -611,10 +624,14 @@ function string_of_ds(
     ds : data_subject
 ) -> string
 
+observable causable event NoteDS
+    ds : data_subject
+
 rule "r_IsDSSource"
     whenever
         Declaration(d)
         HasText(d, "We have collected this data from " + string_of_ds(ds))
+        NoteDS(ds)
     refine
         IsDSSource(d, ds)
 
@@ -655,6 +672,7 @@ rule "r_IsIdentityOfControllerOrRepresentative"
     whenever
         Declaration(d)
         HasText(d, "The controller is " + string_of_entity(c))
+        NoteEntity(c)
     refine
         IsIdentityOfControllerOrRepresentative(d, c)
 
@@ -662,10 +680,14 @@ function string_of_legal_basis(
     b : legal_basis
 ) -> string
 
+causable observable event NoteLegalBasis
+    b : legal_basis
+
 rule "r_IsLegalBasisOfProcessing"
     whenever
         Declaration(d)
         HasText(d, "The legal basis of the processing is Article " + string_of_legal_basis(b) + " GDPR")
+        NoteLegalBasis(b)	
     refine
         IsLegalBasisOfProcessing(d, b)
 
@@ -679,10 +701,15 @@ function string_of_interest(
     i : interest
 ) -> string
 
+causable observable event NoteInterest
+    i : interest
+
 rule "r_IsLegitimateInterest"
     whenever
         Declaration(d)
         HasText(d, "Entity " + string_of_entity(e) + " claims the following legitimate interest: " + string_of_interest(i))
+        NoteEntity(e)	
+        NoteInterest(i)	
     refine
         IsLegitimateInterest(d, e, i)
 	
@@ -699,7 +726,7 @@ rule "no_new_purpose"
         PersonalData(d, ds)
         HasPurpose(a, p)
     oblige
-        NOT ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND NOT HasPurpose(co, p))
+        ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND HasPurpose(co, p))
     transparently enforceable suppressing condition[0]
 
 replace
@@ -715,9 +742,13 @@ rule "r_IsOverriddenByDataSubjectInterests"
     refine
         IsOverriddenByDataSubjectInterests(c, i, ds)
 
+observable causable event NotePurpose
+    p : purpose
+
 rule "r_IsPurposeOfProcessing"
     whenever
         Declaration(d)
+        NotePurpose(p)	
         p = "service" IMPLIES HasText(d, "The purpose of processing is: providing Minitwit's essential functionality ('service').")
         p = "personalized_ad" IMPLIES HasText(d, "The purpose of processing is: personalized advertisement ('personalize_ad').")
         p = "statistics" IMPLIES HasText(d, "The purpose of processing is: website statistics and analytics ('statistics')")
@@ -728,6 +759,7 @@ rule "r_IsRecipient"
     whenever
         Declaration(d)
         HasText(d, "We intend to share your data with the following entity: " + string_of_entity(e))
+        NoteEntity(e)	
     refine
         IsRecipient(d, e)
 
@@ -735,6 +767,7 @@ rule "r_IsRecipientCategory"
     whenever
         Declaration(d)
         HasText(d, "We intend to share your data with the following categories of entities:  " + string_of_entity(e))
+        NoteEntity(e)
     refine
         IsRecipientCategory(d, e)
 
@@ -742,10 +775,15 @@ function string_of_data(
     d : data_id
 ) -> string
 
+observable causable event NoteData
+    d : data_id
+
 rule "r_IsRestrictionToBeLifted"
     whenever
         Declaration(d)
         HasText(d, "The restriction on data " + string_of_data(data) + " due to request " + string_of_request(rq) + " is to be lifted.")
+        NoteData(data)
+        NoteRequest(rq)
     refine
         IsRestrictionToBeLifted(d, data, rq)
 
@@ -780,19 +818,27 @@ function string_of_criteria(
     c : criteria
 ) -> string
 
+observable causable event NoteCriteria
+    c : criteria
+
 rule "r_IsStorageCriteria"
     whenever
         Declaration(d)
         HasText(d, "The condition under which we keep your data is: " + string_of_criteria(c))
+        NoteCriteria(c)
     refine
         IsStorageCriteria(d, c)
+
+observable causable event NoteSpan
+    s : span
 
 rule "r_IsStoragePeriod"
     whenever
         Declaration(d)
-        HasText(d, "The period for which we keep your data is: " + string_of_criteria(c))
+        HasText(d, "The period for which we keep your data is: " + string_of_span(c))
+        NoteSpan(c)
     refine
-        IsStorageCriteria(d, c)
+        IsStoragePeriod(d, c)
 
 # TODO: Discuss _
 rule "r_NotifyOfErasure"
@@ -842,6 +888,23 @@ rule "r_WithdrawConsent"
         Revoke(ds, p)
     refine
         WithdrawConsent(ds, p, "Minitwit, Inc.")
+
+
+rule "r_accuracy_deletion_new"
+    whenever
+        NOT IsAccurate(d, p)
+        EXISTS c, ds'. ONCE (DataProcessing(pr, co, c, d) AND IsCollection(c, ds') AND HasPurpose(c, p))
+    oblige
+        (NOT UndueDataDelay(d)) UNTIL Delete(d)
+    transparently enforceable causing effects
+
+replace
+    strengthen
+        article "5" paragraph "1" point "d" rule "accuracy_deletion"
+    by
+        rule "r_accuracy_deletion_new"
+
+
 
 note "### Not refined ###"
 	        
