@@ -1764,7 +1764,7 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
-        NOT ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND HasPurpose(co, p))
+        ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND NOT HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
     transparently enforceable suppressing condition[0]
@@ -1828,7 +1828,7 @@ rule "data_processing_not_ongoing"
     whenever
         ONCE (Request(ds, rq, c) AND IsAccessRequest(rq))
         RequestResponse(ds, rq, rs)
-        NOT (EXISTS pr, a, d. (ONCE DataProcessing(pr, c, a, d) AND PersonalData(d, ds)))
+        NOT (EXISTS pr, a, d. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds))))
     oblige
         EXISTS de. Contains(rs, de) AND IsDataProcessingNotOngoing(de) 
     transparently enforceable causing effects
@@ -1839,7 +1839,7 @@ rule
     whenever
         ONCE (Request(ds, rq, c) AND IsAccessRequest(rq))
         RequestResponse(ds, rq, rs)
-        EXISTS pr, a, d. (ONCE DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND HasPurpose(a, p))
+        EXISTS pr, a, d. ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND HasPurpose(a, p))
     oblige
         EXISTS de. Contains(rs, de) AND IsPurposeOfProcessing(de, p)
     transparently enforceable causing effects
