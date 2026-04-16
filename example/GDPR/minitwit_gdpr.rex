@@ -9,7 +9,7 @@ type file_id     is string
 type decl_id     is string
 
 suppressable event Read
-    """Data {id}, which is personal data of {owner}, is read for purpose {purpose} in the context of activity {activity} while responding to a request by user {user}."""
+    """Data {id}, which is personal data of {owner}, is read for purpose {purpose} in the context of activity {activity} while building a webpage for user {user}."""
     id      : data_id
     owner   : user_id
     activity: activity_id
@@ -17,86 +17,110 @@ suppressable event Read
     user    : user_id
 
 suppressable event Write
+    """Data {id}, which is personal data of {owner}, is written for purpose {purpose} in the context of activity {activity} while building a webpage for user {user}."""
     id      : data_id
     owner   : user_id
     activity: activity_id	
     purpose : purpose
     user    : user_id
 
-observable event Collect
+suppressable event Collect
+    """Data {data}, which is personal data of {owner}, is collected in the context of activity {activity} for purpose {purpose}."""
     activity: activity_id
     data    : data_id
     owner   : user_id
     purpose : purpose
 
-observable event AcceptDataUsage
-    caller  : user_id
-
 causable observable event DailyErasureReview
+    """Data {d} is reviewed for potential deletion, which happens at least once daily."""
     data    : data_id
 
 suppressable event Consent
+    """User {user} gives consent for their data to be used for purpose {purpose}."""
     user    : user_id
     purpose : purpose
 
 suppressable event Revoke
+    """User {user} revokes consent for their data to be used for purpose {purpose}."""
     user    : user_id
     purpose : purpose
 
 suppressable event SpecialConsent
+    """User {user} gives consent for their data of special data category {sp} to be used for purpose {purpose}."""
     user    : user_id
     purpose : purpose
     sp      : special_data_category
 
 observable event ContestAccuracy
+    """User {user} challenges the accuracy of data {data}, claiming that it should be {data'} instead."""
     user    : user_id
     data    : data_id
     data'   : data_id
 
 observable event RequestRectification
+    """User {user} requests rectification of data {data}, to be updated to {data'}, via request {request}"""
     user    : user_id
     data    : data_id
     data'   : data_id
+    request : request_id
 
 observable event RequestAccess
+    """User {user} requests access to their data via request {request}."""
     user    : user_id
+    request : request_id
+
+observable event RequestErasure
+    """User {user} requests erasure to their data {data} via request {request}."""
+    user    : user_id
+    data    : data_id
+    request : request_id
 
 causable observable event Declaration
+    """Declaration {de} exists in the current context."""
     de      : decl_id
 
 causable observable event HasText
+    """Declaration {de} contains (at least) text {text}."""
     de      : decl_id
     text    : string
 
 causable observable event NotifyErasure
+    """Erasure of data {data} is notified to entity {entity}."""
     entity  : string
     data    : data_id
 
 causable observable event NotifyRectification
+    """Rectification of data {data} to {data'} is notified to entity {entity}."""
     entity  : string
     data    : data_id
     data'   : data_id
 
 causable observable event NotifyRestriction
+    """Restriction on the use of data {data} for purpose {purpose} is notified to entity {entity}."""
     entity  : string
     data    : data_id
     purpose : purpose
 
 observable event RequestObjection
+    """User {user_id} objects to the processing of their data for purpose {purpose}, making declaration {de}, via request {request}."""
     user    : user_id
     purpose : purpose
     de      : decl_id
+    request : request_id
 
 causable observable event ActivityRecord
+    """An entry with property {property} and value {value} is added to the record of processing activities to document activity {activity}."""
     activity: activity_id
     property: string
     value   : string
 
 observable event Send
+    """Data {data} is sent to entity {entity}."""
     entity  : string
     data    : data_id
 
 causable observable event SendFile
+    """File {data} is sent to entity {entity}."""
     entity  : string
     file    : file_id
 
@@ -304,10 +328,10 @@ assume false StartContract
 assume false Transfer
     """No transfers are taking place."""
 
-assume false UndueDataDelay
+assume true UndueDataDelay
     """We do not wait to delete data."""
 
-assume false UndueDelay
+assume true UndueDelay
     """We do not wait to inform users."""
 
 assume false ValidRegisterConsultationRequest
@@ -368,7 +392,7 @@ assume false IsLegitimateActivity
     """We never claim a legitimate activity with respect to a controller with a political, philosophical, religious, or trade union aim."""
 
 assume true IsOfferOfInformationSocietyServices
-    """Minitwit, Inc. provides information society services."""
+    """GDPRSocial, Inc. provides information society services."""
 
 assume true IsReasonForRequestExtension
     """Irrelevant since we never extend requests."""
@@ -418,35 +442,43 @@ assume true IsNewPurpose
 assume false IsStorage
     """We never assume that an activity is only a storage activity."""
 
-note "### Other assumptions ###"
+assume false IsFurtherCopy
+    """We always assume that copies are not duplicates. As a result, no fee is to be paid."""
 
 assume true IsFair
-    """TODO: Complete informal justification of fairness"""
+    """The automated enforcement of the GDPR requirements ensures fairness with respect to the user. Only strictly necessary data is used for each purpose."""
 
 assume true IsTransparent
-    """The automated enforcement of the GDPR requirement, in particular the ROPA logging mechanism, ensures transparency with respect to the user."""
+    """The automated enforcement of the GDPR requirements, in particular the ROPA logging mechanism, ensures transparency with respect to the user."""
 
 assume true EnsuresAppropriateSecurity
-    """TODO: Complete informal justification of security"""
+    """GDPRSocial, Inc. uses a safe software stack to guarantee personal data security."""
 
 assume true IsAdequate
-    """TODO: Complete informal justification of data adequacy wrt purposes"""
+    """The personal data processed by GDPRSocial, Inc. is adequate for each declared purpose: (1) for the 'service' purpose, user profile data (name, email), twits, replies, direct messages, follows, likes, and reposts are adequate to provide core social-networking functionality; (2) for the 'personalized_ad' purpose, twit content and page visit data are adequate to select relevant advertisements via TF-IDF content matching; (3) for the 'statistics' purpose, page visit timestamps and anonymised interaction counts are adequate to generate website analytics."""
 
 assume true IsLimitedToWhatIsNecessary
-    """TODO: Complete informal justification of limitation"""
+    """Data collection is limited to what is strictly necessary for each purpose: (1) for the 'service' purpose, only the minimal profile fields (username, first name, last name, email) and user-generated content (twits of at most 140 characters, replies, direct messages) are collected; (2) for the 'personalized_ad' purpose, only the textual content of the currently displayed page is used for TF-IDF similarity matching — no browsing history, location data, or third-party tracking is employed; (3) for the 'statistics' purpose, only page visit records (URL, timestamp) are collected. No surplus personal data is gathered beyond what each purpose requires."""
 
 assume true IsNecessary
-    """TODO: Complete informal justification of necessity"""
+    """Each category of personal data processed is necessary for its declared purpose: (1) user profile data is necessary to authenticate users and display authored content; (2) twit content, replies, reposts, likes, and follows are necessary to deliver the core social-networking service; (3) direct messages are necessary to enable private communication between users; (4) page visit data is necessary to compute website usage statistics; (5) twit content exposure to the ad recommender is necessary to select contextually relevant advertisements. None of these purposes can be fulfilled without processing the respective data."""
 
 assume true IsRelevant
-    """TODO: Complete informal justification of data adequacy wrt purposes"""
+    """All personal data processed is directly relevant to its declared purpose: profile fields are relevant to user identification and account management; user-generated content (twits, replies, reposts, direct messages) is relevant to providing the social-networking service; textual content shown on pages is relevant to selecting personalized advertisements; and page visit records are relevant to generating website usage statistics. No data is collected that lacks a direct relationship to one of the declared purposes."""
 
 assume true IsUpToDate
-    """TODO: Complete informal justification of data being up to date"""
-
-# TODO: IsCompatibleWithPurpose
+    """Personal data is kept up to date through the following mechanisms: (1) users can edit their profile information (name, email) at any time via the account settings page; (2) twit content can be edited by its author, which updates the 'updated_on' timestamp; (3) users may request rectification of any inaccurate data under Article 16 GDPR, which is enforced automatically by the system; (4) ad recommendations are recomputed on each page load using the latest content, ensuring no stale data influences personalisation; (5) every reasonable step is taken to ensure that inaccurate data is erased or rectified without delay."""
 
 note "### Refinement to system events ###"
+
+rule "r_IsCompatibleWithPurpose"
+    whenever
+        a = "post_twit" OR a = "view_Twit" or a = "edit_Twit" OR a = "view_User" OR a = "edit_PageVisit" OR a = "view_PageVisit" OR a = "view_AdImpression" OR a = "edit_AdImpression"
+    refine
+        IsCompatibleWithPurpose(a, "service")
+        IsCompatibleWithPurpose(a, "personalized_ad")
+        IsCompatibleWithPurpose(a, "statistics")
+
 
 rule "r_AutomatedDecision"
     """The only form of automated decision-making / profiling taking place concerns the selection of personalized ads. Otherwise, no profiling occurs."""
@@ -460,26 +492,26 @@ rule "r_CheckNotChild"
     whenever
         true
     refine
-        CheckNotChild("Minitwit, Inc.", ds)
+        CheckNotChild("GDPRSocial, Inc.", ds)
 
 rule "r_ContestsAccuracy"
     whenever
         ContestAccuracy(ds, d, d')
     refine
-        Request(ds, "", "Minitwit, Inc.")
+        Request(ds, "", "GDPRSocial, Inc.")
         ContestsAccuracy("", d, d')
 
 rule "r_DataProcessing"
     whenever
-        Read(d, ds, a, p, ds') OR Write(d, ds, a, p, ds')
+        (EXISTS ds'. Read(d, ds, a, p, ds')) OR (EXISTS ds'. Write(d, ds, a, p, ds')) OR Collect(a, d, ds, p)
     refine
-        DataProcessing("Minitwit, Inc.", "Minitwit, Inc.", a, d)
+        DataProcessing("GDPRSocial, Inc.", "GDPRSocial, Inc.", a, d)
 
 rule "r_DataReview"
     whenever
         DailyErasureReview(d)
     refine
-        DataReview("Minitwit, Inc.", d)
+        DataReview("GDPRSocial, Inc.", d)
 
 rule "r_Disclose"
     whenever
@@ -491,21 +523,28 @@ rule "r_GiveConsent"
     whenever
         Consent(ds, p) OR (EXISTS sp. SpecialConsent(ds, p, sp))
     refine
-        GiveConsent(ds, p, "Minitwit, Inc.")
+        GiveConsent(ds, p, "GDPRSocial, Inc.")
 
 rule "r_GiveSpecialConsent"
     whenever
         SpecialConsent(ds, p, sp)
     refine
-        GiveSpecialConsent(ds, p, "Minitwit, Inc.", sp)
+        GiveSpecialConsent(ds, p, "GDPRSocial, Inc.", sp)
 
 rule "r_IsRectificationRequest"
     whenever
-        RequestRectification(ds, d, d')
+        RequestRectification(ds, d, d', rq)
     refine
-        Request(ds, "", "Minitwit, Inc.")
-        IsRectificationRequest("", d, d')
+        Request(ds, rq, "GDPRSocial, Inc.")
+        IsRectificationRequest(rq, d, d')
         HasInaccuracy(d)
+
+rule "r_IsErasureRequest"
+    whenever
+        RequestErasure(ds, d, rq)
+    refine
+        Request(ds, rq, "GDPRSocial, Inc.")
+        IsErasureRequest(rq, d)
 
 rule "r_HasIntendedAutomatedDecision"
     whenever
@@ -521,7 +560,7 @@ rule "r_HasIntendedRecipient"
 
 rule "r_HasPurpose"
     whenever
-        Read(d, ds, a, p, ds') OR Write(d, ds, a, p, ds')
+        (EXISTS ds'. Read(d, ds, a, p, ds')) OR (EXISTS ds'. Write(d, ds, a, p, ds')) OR Collect(a, d, ds, p)
     refine
         HasPurpose(a, p)
 
@@ -529,45 +568,45 @@ rule "r_HasRegularContact"
     whenever
         true
     refine
-        HasRegularContact(d, "Minitwit, Inc.")
+        HasRegularContact(d, "GDPRSocial, Inc.")
 
 rule "r_HasSecurityMeasuresDeclaration"
     whenever
         true
     refine
-        HasSecurityMeasuresDeclaration(a, "TODO: Complete list of security measures")
+        HasSecurityMeasuresDeclaration(a, "GDPRSocial, Inc. implements the following technical and organisational security measures: (1) all web traffic is served over HTTPS/TLS; (2) user passwords are stored using Django's PBKDF2-SHA256 hashing with per-user salts; (3) CSRF protection is enforced on all state-changing requests; (4) access control ensures users can only modify their own data; (5) the proactive GDPR enforcement engine automatically prevents policy-violating data processing at runtime; (6) personal data deletion is available on demand via the right-to-erasure mechanism.")
 	
 rule "r_HasStorageCriteria"
     whenever
         true
     refine
-        HasStorageCriteria(d, "Data is stored until the user deletes their account")
+        HasStorageCriteria(d, "Your data is stored until you delete your account")
 
 rule "r_IsAbleToDemonstrateConsent"
     """The presence of the Consent event in the trace demonstrates consent."""
     whenever
-        ONCE Consent(ds, p)
+        (ONCE Consent(ds, p)) OR (EXISTS sp. ONCE SpecialConsent(ds, p, sp))
     refine
-        IsAbleToDemonstrateConsent("Minitwit, Inc.", ds, p)
+        IsAbleToDemonstrateConsent("GDPRSocial, Inc.", ds, p)
 
 rule "r_IsAccessRequest"
     whenever
-        RequestAccess(ds)
+        RequestAccess(ds, rq)
     refine
-        Request(ds, "", "Minitwit, Inc.")
-        IsAccessRequest("")
+        Request(ds, rq, "GDPRSocial, Inc.")
+        IsAccessRequest(rq)
 
 rule "r_IsAccurate"
     """Data is assumed to be accurate unless their owner has contested its accuracy."""
     whenever
-        NOT EXISTS d'. ONCE RequestRectification(ds, d, d')
+        NOT ONCE (EXISTS ds, d', rq. RequestRectification(ds, d, d', rq))
     refine
         IsAccurate(d, p)
 
 rule "r_IsAutomatedDecision"
     whenever
         Declaration(d)
-        HasText(d, "We use the content of the page shown to the user to display personalized advertisement")
+        HasText(d, "<h6>Automated decision-making</h6><p>We use the content of your latest posts to display personalized advertisement. No human review is involved in this decision.</p>")
     refine
         IsAutomatedDecision(d)
 
@@ -583,7 +622,7 @@ observable causable event NoteCategory
 rule "r_IsCategory"
     whenever
         Declaration(d)
-        HasText(d, "Some of the collected data belongs to the following special category: " + string_of_category(cat))
+        HasText(d, "<h6>Special categories of personal data</h6><p>Some of the personal data we process belongs to the following special category as defined in Article 9 GDPR: " + string_of_category(cat) + ".</p>")
         NoteCategory(cat)	
     refine
         IsCategory(d, cat)
@@ -604,7 +643,7 @@ observable causable event NoteRequest
 rule "r_IsComplaintStatement"
     whenever
         Declaration(d)
-        HasText(d, "You have a right to lodge a complaint with the National DPA regarding request " + string_of_request(rq))
+        HasText(d, "<h6>Right to lodge a complaint</h6><p>You have the right to lodge a complaint with the competent National Data Protection Authority regarding request " + string_of_request(rq) + ". You may do so without prejudice to any other administrative or judicial remedy.</p>")
         NoteRequest(rq)	
     refine
         IsComplaintStatement(d, rq)
@@ -615,7 +654,7 @@ observable causable event NoteEntity
 rule "r_IsContactDetailsOfDataProtectionOfficer"
     whenever
         Declaration(d)
-        HasText(d, "You can contact our data protection officer at: " + string_of_entity(c))
+        HasText(d, "<h6>Contact details of the Data Protection Officer</h6><p>You can contact our Data Protection Officer at: " + string_of_entity(c) + ". The DPO can be reached for any queries related to the processing of your personal data or the exercise of your rights.</p>")
         NoteEntity(c)
     refine
         IsContactDetailsOfDataProtectionOfficer(d, c)
@@ -630,7 +669,7 @@ observable causable event NoteDS
 rule "r_IsDSSource"
     whenever
         Declaration(d)
-        HasText(d, "We have collected this data from " + string_of_ds(ds))
+        HasText(d, "<h6>Source of your personal data</h6><p>We have collected this personal data from " + string_of_ds(ds) + ".</p>")
         NoteDS(ds)
     refine
         IsDSSource(d, ds)
@@ -638,21 +677,21 @@ rule "r_IsDSSource"
 rule "r_IsDataProcessingNotOngoing"
     whenever
         Declaration(d)
-        HasText(d, "We are not currently processing your data.")
+        HasText(d, "<h6>Processing status</h6><p>We are not currently processing your personal data.</p>")
     refine
         IsDataProcessingNotOngoing(d)
 	
 rule "r_IsDataProcessingOngoing"
     whenever
         Declaration(d)
-        HasText(d, "We are currently processing your data.")
+        HasText(d, "<h6>Processing status</h6><p>We are currently processing your personal data. You may exercise your rights regarding this processing as described in the applicable privacy notice.</p>")
     refine
         IsDataProcessingOngoing(d)
 
 rule "r_IsDataProcessingOfficer"
     whenever
-        c = "Minitwit, Inc."
-        c' = "dpo@minitwit-inc.com"
+        c = "GDPRSocial, Inc."
+        c' = "dpo@gdprsocial-inc.com"
     refine
         IsDataProtectionOfficer(c, c')
 
@@ -666,12 +705,12 @@ rule "r_IsDirectTransmissionFeasible"
     whenever
         true
     refine
-        IsDirectTransmissionFeasible("Minitwit, Inc.", "Othertwit, Inc.")
+        IsDirectTransmissionFeasible("GDPRSocial, Inc.", x)
 
 rule "r_IsIdentityOfControllerOrRepresentative"
     whenever
         Declaration(d)
-        HasText(d, "The controller is " + string_of_entity(c))
+        HasText(d, "<h6>Identity of the controller</h6><p>The controller responsible for the processing of your personal data is " + string_of_entity(c) + ".</p>")
         NoteEntity(c)
     refine
         IsIdentityOfControllerOrRepresentative(d, c)
@@ -683,13 +722,26 @@ function string_of_legal_basis(
 causable observable event NoteLegalBasis
     b : legal_basis
 
+observable causable event NotePurpose
+    p : purpose
+
 rule "r_IsLegalBasisOfProcessing"
     whenever
         Declaration(d)
-        HasText(d, "The legal basis of the processing is Article " + string_of_legal_basis(b) + " GDPR")
-        NoteLegalBasis(b)	
+        HasText(d, "<h6>Legal basis for the processing: Article " + string_of_legal_basis(b) + "</h6><p>We rely on Article " + string_of_legal_basis(b) + " of the General Data Protection Regulation (GDPR) as a legal basis to process your personal data.</p>")
+        NoteLegalBasis(b)
     refine
         IsLegalBasisOfProcessing(d, b)
+
+rule "r_IsPurposeOfProcessing"
+    whenever
+        Declaration(d)
+        p = "service" IMPLIES HasText(d, "<h6>Processing for strictly necessary purposes</h6><p>We process your data to provide GDPRSocial's essential functionality.</p>")
+        p = "personalized_ad" IMPLIES HasText(d, "<h6>Processing for advertisement purposes</h6><p>We process your data to show you personalized advertisement.</p>")
+        p = "statistics" IMPLIES HasText(d, "<h6>Processing for statistical purposes</h6><p>We process your data to generate website statistics and analytics.</p>")
+        NotePurpose(p)	
+    refine
+        IsPurposeOfProcessing(d, p)
 
 rule "r_IsLegitimate"
     whenever
@@ -707,7 +759,7 @@ causable observable event NoteInterest
 rule "r_IsLegitimateInterest"
     whenever
         Declaration(d)
-        HasText(d, "Entity " + string_of_entity(e) + " claims the following legitimate interest: " + string_of_interest(i))
+        HasText(d, "<h6>Legitimate interest</h6><p>" + string_of_entity(e) + " relies on the following legitimate interest as the legal basis for processing your personal data: " + string_of_interest(i) + ". You have the right to object to processing based on legitimate interest at any time.</p>")
         NoteEntity(e)	
         NoteInterest(i)	
     refine
@@ -715,10 +767,10 @@ rule "r_IsLegitimateInterest"
 	
 rule "r_IsNecessaryForLegitimateInterest"
     whenever
-        Read(d, ds, a, p, ds') OR Write(d, ds, a, p, ds')
+        (EXISTS ds'. Read(d, ds, a, p, ds')) OR (EXISTS ds'. Write(d, ds, a, p, ds')) OR Collect(a, d, ds, p)
         p = "service"
     refine
-        IsNecessaryForLegitimateInterest(a, "Minitwit, Inc.", "Providing the service and performing Minitwit's normal operations.")
+        IsNecessaryForLegitimateInterest(a, "GDPRSocial, Inc.", "Providing the service and performing GDPRSocial's normal operations.")
 
 rule "no_new_purpose"
     whenever
@@ -737,28 +789,15 @@ replace
 
 rule "r_IsOverriddenByDataSubjectInterests"
     whenever
-        Read(d, ds, a, p, ds') OR Write(d, ds, a, p, ds')
+        (EXISTS ds'. Read(d, ds, a, p, ds')) OR (EXISTS ds'. Write(d, ds, a, p, ds')) OR Collect(a, d, ds, p)
         NOT (p = "service")
     refine
         IsOverriddenByDataSubjectInterests(c, i, ds)
 
-observable causable event NotePurpose
-    p : purpose
-
-rule "r_IsPurposeOfProcessing"
-    whenever
-        Declaration(d)
-        NotePurpose(p)	
-        p = "service" IMPLIES HasText(d, "The purpose of processing is: providing Minitwit's essential functionality ('service').")
-        p = "personalized_ad" IMPLIES HasText(d, "The purpose of processing is: personalized advertisement ('personalize_ad').")
-        p = "statistics" IMPLIES HasText(d, "The purpose of processing is: website statistics and analytics ('statistics')")
-    refine
-        IsPurposeOfProcessing(d, p)
-
 rule "r_IsRecipient"
     whenever
         Declaration(d)
-        HasText(d, "We intend to share your data with the following entity: " + string_of_entity(e))
+        HasText(d, "<h6>Recipients of your personal data</h6><p>We intend to share your personal data with the following entity: " + string_of_entity(e) + ".</p>")
         NoteEntity(e)	
     refine
         IsRecipient(d, e)
@@ -766,7 +805,7 @@ rule "r_IsRecipient"
 rule "r_IsRecipientCategory"
     whenever
         Declaration(d)
-        HasText(d, "We intend to share your data with the following categories of entities:  " + string_of_entity(e))
+        HasText(d, "<h6>Categories of recipients</h6><p>We intend to share your personal data with the following categories of entities: " + string_of_entity(e) + ".</p>")
         NoteEntity(e)
     refine
         IsRecipientCategory(d, e)
@@ -781,7 +820,7 @@ observable causable event NoteData
 rule "r_IsRestrictionToBeLifted"
     whenever
         Declaration(d)
-        HasText(d, "The restriction on data " + string_of_data(data) + " due to request " + string_of_request(rq) + " is to be lifted.")
+        HasText(d, "<h6>Lifting of processing restriction</h6><p>The restriction on the processing of data " + string_of_data(data) + ", imposed in response to request " + string_of_request(rq) + ", is to be lifted. Processing of the concerned data may resume from this point.</p>")
         NoteData(data)
         NoteRequest(rq)
     refine
@@ -790,21 +829,21 @@ rule "r_IsRestrictionToBeLifted"
 rule "r_IsRightToLodgeComplaint"
     whenever
         Declaration(d)
-        HasText(d, "You have a right to lodge a complaint with the National DPA")
+        HasText(d, "<h6>Right to lodge a complaint</h6><p>You have the right to lodge a complaint with the competent National Data Protection Authority if you consider that the processing of your personal data infringes the GDPR, without prejudice to any other administrative or judicial remedy.</p>")
     refine
         IsRightToLodgeComplaint(d)
 
 rule "r_IsRightToWithdrawConsent"
     whenever
         Declaration(d)
-        HasText(d, "You have the right to withdraw consent at any time")
+        HasText(d, "<h6>Right to withdraw consent</h6><p>You have the right to withdraw consent for processing your data at any time.</p>")
     refine
         IsRightToWithdrawConsent(d)
 
 rule "r_IsRights"
     whenever
         Declaration(d)
-        HasText(d, "You have the right to request from the controller to access, rectify, erase, or restrict the processing of any personal data we hold. You have the right to obtain a copy of your data in a machine-readable format to be easily ported to a different provider. You have the right to object to automated decision-making, including profiling.")
+        HasText(d, "<h6>Your rights as a data subject</h6><ul><li>You have the right to request access to, rectification of, or erasure of your personal data, or restriction of processing (Articles 15–18 GDPR).</li><li>You have the right to receive your personal data in a structured, commonly used, and machine-readable format and to transmit it to another controller (right to data portability, Article 20 GDPR).</li><li>You have the right to object to automated decision-making, including profiling (Article 22 GDPR).</li></ul>")
     refine
         IsRights(d)
 
@@ -812,7 +851,7 @@ rule "r_IsSME"
     whenever
         true
     refine
-        IsSME("Minitwit, Inc.")
+        IsSME("GDPRSocial, Inc.")
 
 function string_of_criteria(
     c : criteria
@@ -824,7 +863,7 @@ observable causable event NoteCriteria
 rule "r_IsStorageCriteria"
     whenever
         Declaration(d)
-        HasText(d, "The condition under which we keep your data is: " + string_of_criteria(c))
+        HasText(d, "<h6>Storage criteria</h6><p>The criteria used to determine the period for which your personal data will be stored are: " + string_of_criteria(c) + ".</p>")
         NoteCriteria(c)
     refine
         IsStorageCriteria(d, c)
@@ -835,12 +874,12 @@ observable causable event NoteSpan
 rule "r_IsStoragePeriod"
     whenever
         Declaration(d)
-        HasText(d, "The period for which we keep your data is: " + string_of_span(c))
+        HasText(d, "<h6>Storage period</h6><p>Your personal data will be stored for the following period: " + string_of_span(c) + ".</p>")
         NoteSpan(c)
     refine
         IsStoragePeriod(d, c)
 
-# TODO: Discuss _
+# Note: The wildcard _ is used for the notification identifier, as notifications are not individually tracked.
 rule "r_NotifyOfErasure"
     whenever
         NotifyErasure(e, d)
@@ -861,9 +900,9 @@ rule "r_NotifyOfRestriction"
 
 rule "r_Object"
     whenever
-        RequestObjection(ds, p, de)
+        RequestObjection(ds, p, de, rq)
     refine
-        Object(ds, "Minitwit, Inc.", p, de)
+        Object(ds, "GDPRSocial, Inc.", p, de)
 
 rule "r_Record"
     whenever
@@ -875,7 +914,7 @@ rule "r_Share"
     whenever
         Send(e, d)
     refine
-        Share("Minitwit, Inc.", e, d)
+        Share("GDPRSocial, Inc.", e, d)
 
 rule "r_Tranmit"
     whenever
@@ -887,7 +926,7 @@ rule "r_WithdrawConsent"
     whenever
         Revoke(ds, p)
     refine
-        WithdrawConsent(ds, p, "Minitwit, Inc.")
+        WithdrawConsent(ds, p, "GDPRSocial, Inc.")
 
 
 rule "r_accuracy_deletion_new"
@@ -903,8 +942,6 @@ replace
         article "5" paragraph "1" point "d" rule "accuracy_deletion"
     by
         rule "r_accuracy_deletion_new"
-
-
 
 note "### Not refined ###"
 	        

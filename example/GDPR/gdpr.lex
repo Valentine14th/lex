@@ -126,6 +126,17 @@ causable observable event Delete
     """Data {d} is deleted"""
     d : data
 
+internal predicate IsObligedToDelete
+    """Controller {c} is obliged to delete data {d}."""
+    c : entity
+    d : data
+
+observable event DataReview
+    """Controller {c} reviews data {d} for the purpose of erasure. Must occur regularly to comply with the
+       storage limitation principle."""
+    c : entity
+    d : data
+
 causable observable event Rectify
     """Data {d_old} is rectified into {d_new}"""
     d_old : data
@@ -347,7 +358,7 @@ rule
     whenever
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
-        ONCE GiveConsent(ds, p, c)
+        NOT (EXISTS p. HasPurpose(a, p) AND NOT (ONCE GiveConsent(ds, p, c)))
     constitute
         IsLawful(a, "6(1)(a)")
 
@@ -738,7 +749,7 @@ rule "special_data_consent_exception"
         IsSpecialData(d, sp)
         PersonalData(d, ds)
         DataProcessing(pr, c, a, d)
-        ONCE GiveSpecialConsent(ds, p, c, sp)
+        NOT (EXISTS p. HasPurpose(a, p) AND NOT (ONCE GiveSpecialConsent(ds, p, c, sp)))
     except
         paragraph "1"
 
@@ -747,7 +758,7 @@ rule "special_data_consent_valid"
         IsSpecialData(d, sp)
         PersonalData(d, ds)
         DataProcessing(pr, c, a, d)
-        ONCE GiveSpecialConsent(ds, p, c, sp)
+        NOT (EXISTS p. HasPurpose(a, p) AND NOT (ONCE GiveSpecialConsent(ds, p, c, sp)))
     constitute
         IsLawful(a, "9(2)(a)")
 
@@ -1282,26 +1293,22 @@ function add_time_span(
     s : span
 ) -> time
 
-rule "respect_storage_period_or_criteria"
+rule "respect_storage_period"
     whenever
-        DataProcessing(pr, c, a, d)
-        IsCollection(a, ds)
-        PersonalData(d, ds)
-        HasStoragePeriod(d, t)
-        TP(t')
-    oblige
-        (EXISTS t''. TP(t'') AND t'' <= add_time_span(t', t)) UNTIL Delete(d)
-    transparently enforceable causing effects
+        ONCE (DataProcessing(pr, c, a, d) AND IsCollection(a, ds) AND PersonalData(d, ds)AND HasStoragePeriod(d, t) AND TP(t'))
+        TP(t'')
+        t'' >= add_time_span(t', t)
+        DataReview(c, d)	    
+    constitute
+        IsObligedToDelete(c, d)
 
 rule "respect_storage_criteria"
     whenever
-        DataProcessing(pr, c, a, d)
-        IsCollection(a, ds)
-        PersonalData(d, ds)
-        HasStorageCriteria(d, cr)
-    oblige
-        IsRespected(d, cr) UNTIL Delete(d)
-    transparently enforceable causing effects
+        ONCE (DataProcessing(pr, c, a, d) AND IsCollection(a, ds) AND PersonalData(d, ds) AND HasStorageCriteria(d, cr))
+        NOT IsRespected(d, cr)
+        DataReview(c, d)
+    constitute
+        IsObligedToDelete(c, d)
 
 rule "inform_storage_period"
     whenever
@@ -1603,25 +1610,23 @@ rule "has_storage_period_or_criteria"
         (EXISTS t. HasStoragePeriod(d, t)) OR (EXISTS cr. HasStorageCriteria(d, cr))
     transparently enforceable suppressing condition[0]
 
-rule "respect_storage_period_or_criteria"
+rule "respect_storage_period"
     whenever
-        DataProcessing(pr, c, a, d)
-        IsIndirectCollection(a, d, ds)
-        HasStoragePeriod(d, t)
-        TP(t')
-    oblige
-        (EXISTS t''. TP(t'') AND t'' <= add_time_span(t', t)) UNTIL Delete(d)
-    transparently enforceable causing effects
+        ONCE (DataProcessing(pr, c, a, d) AND IsIndirectCollection(a, d, ds) AND PersonalData(d, ds) AND HasStoragePeriod(d, t) AND TP(t'))
+        TP(t'')
+        t'' >= add_time_span(t', t)
+        DataReview(c, d)	    
+    constitute
+        IsObligedToDelete(c, d)
 
 rule "respect_storage_criteria"
     whenever
-        DataProcessing(pr, c, a, d)
-        IsIndirectCollection(a, d, ds)
-        HasStorageCriteria(d, cr)
-    oblige
-        IsRespected(d, cr) UNTIL Delete(d)
-    transparently enforceable causing effects
-
+        ONCE (DataProcessing(pr, c, a, d) AND IsIndirectCollection(a, d, ds) AND PersonalData(d, ds) AND HasStorageCriteria(d, cr))
+        NOT IsRespected(d, cr)
+        DataReview(c, d)
+    constitute
+        IsObligedToDelete(c, d)
+			  
 rule "inform_storage_period"
     whenever
         DataProcessing(pr, c, a, d)
@@ -1819,7 +1824,7 @@ rule "data_processing_ongoing"
     whenever
         ONCE (Request(ds, rq, c) AND IsAccessRequest(rq))
         RequestResponse(ds, rq, rs)
-        EXISTS pr, a, d. (ONCE DataProcessing(pr, c, a, d) AND PersonalData(d, ds))
+        EXISTS pr, a, d. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds)))
     oblige
         EXISTS de. Contains(rs, de) AND IsDataProcessingOngoing(de)
     transparently enforceable causing effects
@@ -2042,22 +2047,11 @@ observable predicate IsErasureRequest
     rq : request
     d : data
 
-observable event DataReview
-    """Controller {c} reviews data {d} for the purpose of erasure. Must occur regularly to comply with the
-       storage limitation principle."""
-    c : entity
-    d : data
-
 internal predicate ValidObjection
     """Data subject {ds} has objected to the processing of data {d}, and there are no overriding legitimate
        grounds for the processing, or the data subject has objected to the processing of data {d} for direct
        marketing purposes."""
     ds : data_subject
-    d : data
-
-internal predicate IsObligedToDelete
-    """Controller {c} is obliged to delete data {d}."""
-    c : entity
     d : data
 
 paragraph "1"
@@ -2398,7 +2392,7 @@ rule
     whenever
         ONCE (Request(ds, rq, c) AND IsPortabilityRequest(rq))
         RequestResponse(ds, rq, rs)
-        EXISTS pr, d. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND (IsLawful(a, "6(1)(a))") OR IsLawful(a, "6(1)(b)") OR IsLawful(a, "9(2)(a)"))))
+        EXISTS pr, d. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND (IsLawful(a, "6(1)(a)") OR IsLawful(a, "6(1)(b)") OR IsLawful(a, "9(2)(a)"))))
     oblige
         EXISTS f. ContainsData(rs, f) AND PersonalDataCopy(f, ds) AND IsStructuredFormat(f) AND IsCommonlyUsedFormat(f) AND IsMachineReadableFormat(f)
     enforceable causing effects
@@ -2412,7 +2406,7 @@ rule
     whenever
         ONCE (Request(ds, rq, c) AND IsPortabilityRequest(rq) AND SpecifiesNewController(rq, c'))
         RequestResponse(ds, rq, rs)
-        EXISTS pr, a, d. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND (IsLawful(a, "6(1)(a))") OR IsLawful(a, "6(1)(b)") OR IsLawful(a, "9(2)(a)"))))
+        EXISTS pr, a, d. (ONCE (DataProcessing(pr, c, a, d) AND PersonalData(d, ds) AND (IsLawful(a, "6(1)(a)") OR IsLawful(a, "6(1)(b)") OR IsLawful(a, "9(2)(a)"))))
         IsDirectTransmissionFeasible(c, c')
         ContainsData(rs, f)
     oblige
