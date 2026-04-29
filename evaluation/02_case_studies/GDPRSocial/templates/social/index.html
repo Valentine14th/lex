@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Welcome To GDPRSocial{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <!-- Compose -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="post" id="twit-post" action="{% url 'post_twit' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="twit_uid" value="{{ twit_uid }}">
+                        {{ post_form|bootstrap }}
+                        <div class="text-end mt-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send me-1"></i>Post
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Feed -->
+            <div id="feed-container">
+            {% include 'social/_tweet_list.html' %}
+            </div>
+            {% if not twits %}
+            <div class="text-center text-body-secondary py-5" id="feed-empty">
+                <i class="bi bi-chat-dots" style="font-size:2rem;"></i>
+                <p class="mt-2">No tweets yet. Follow someone or post your first tweet!</p>
+            </div>
+            {% endif %}
+            {% if has_more %}
+            <div class="text-center my-3" id="load-more-wrap">
+                <button class="btn btn-outline-secondary btn-sm" id="load-more-btn" onclick="loadMore()">
+                    <i class="bi bi-chevron-down me-1"></i>Show more
+                </button>
+                <div class="spinner-border spinner-border-sm text-secondary d-none" id="load-more-spinner" role="status"></div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-4">
+            <div class="sidebar-box mb-3">
+                <h6 class="fw-semibold mb-2"><i class="bi bi-person-plus me-1"></i>Discover</h6>
+                <a href="/search/user" class="btn btn-sm btn-outline-primary w-100">Follow someone</a>
+            </div>
+            {% if recommended_ads %}
+            <div class="sidebar-box">
+                <h6 class="fw-semibold mb-2"><i class="bi bi-megaphone me-1"></i>Sponsored</h6>
+                {% for ad in recommended_ads %}
+                <div class="mb-2 pb-2{% if not forloop.last %} border-bottom{% endif %}">
+                    <strong class="d-block small">{{ ad.title }}</strong>
+                    <span class="text-body-secondary" style="font-size:.8rem;">{{ ad.body|truncatewords:15 }}</span>
+                    {% if ad.url %}
+                    <a href="{% url 'ad_click' ad.pk %}" class="d-block small mt-1" target="_blank">
+                        Learn more <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<style>
+    #twit-post label { display: none; }
+    #twit-post input[type='text'] { width: 100%; }
+
+    /* Engagement action buttons */
+    .tweet-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .3rem .6rem;
+        border: none;
+        background: transparent;
+        color: var(--mt-text-muted, #94a3b8);
+        font-size: .85rem;
+        border-radius: 9999px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color .15s, background .15s;
+        line-height: 1;
+    }
+    .tweet-action-btn i { font-size: .95rem; }
+    .tweet-action-btn span { font-size: .8rem; font-weight: 500; }
+    .tweet-action-btn:hover {
+        color: var(--mt-primary, #4f46e5);
+        background: var(--mt-primary-light, #e0e7ff);
+    }
+    .tweet-action-like:hover {
+        color: var(--mt-danger, #ef4444);
+        background: #fee2e2;
+    }
+    .tweet-action-repost:hover {
+        color: var(--mt-success, #10b981);
+        background: #d1fae5;
+    }
+</style>
+
+<script>
+(function () {
+    let offset = {{ tweets|length }};
+    const container = document.getElementById('feed-container');
+    const btn = document.getElementById('load-more-btn');
+    const spinner = document.getElementById('load-more-spinner');
+    const wrap = document.getElementById('load-more-wrap');
+
+    window.loadMore = function () {
+        if (!btn) return;
+        btn.classList.add('d-none');
+        spinner.classList.remove('d-none');
+
+        fetch('{% url "feed_more" %}?offset=' + offset)
+            .then(r => r.text())
+            .then(html => {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+
+                // Remove old has-more marker
+                const old = container.querySelector('#has-more-marker');
+                if (old) old.remove();
+
+                // Fade-in new cards
+                const cards = tmp.querySelectorAll('.card');
+                cards.forEach(c => {
+                    c.style.opacity = '0';
+                    c.style.transition = 'opacity .3s ease';
+                });
+
+                container.insertAdjacentHTML('beforeend', html);
+
+                requestAnimationFrame(() => {
+                    container.querySelectorAll('.card[style*="opacity: 0"]').forEach(c => {
+                        c.style.opacity = '1';
+                    });
+                });
+
+                offset += cards.length;
+
+                const marker = container.querySelector('#has-more-marker');
+                if (marker && marker.dataset.hasMore === 'true') {
+                    btn.classList.remove('d-none');
+                } else if (wrap) {
+                    wrap.classList.add('d-none');
+                }
+                spinner.classList.add('d-none');
+            })
+            .catch(() => {
+                btn.classList.remove('d-none');
+                spinner.classList.add('d-none');
+            });
+    };
+})();
+</script>
+{% endblock %}

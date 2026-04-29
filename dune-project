@@ -21,7 +21,7 @@
   (synopsis "Compiling the law into logic")
   (description "Compiling the law into logic")
   (depends
-    (ocaml (>= 4.14))
+    (ocaml (>= 4.13.1))
     core_unix
     menhir
     xml-light

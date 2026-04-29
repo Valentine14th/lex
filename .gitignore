@@ -341,3 +341,6 @@ TSWLatexianTemp*
 # temporary emacs files
 *~
 *#
+
+__pycache__
+*.secret

@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Request Data Portability{% endblock %}
+{% block content %}
+<div class="container" style="max-width:600px;">
+    <h2 class="mb-2"><i class="bi bi-box-arrow-up-right me-2"></i>Data Portability (Art.&nbsp;20)</h2>
+    <p class="text-body-secondary">You have the right to receive a copy of your personal data in a structured, commonly used and machine-readable format (JSON). You may also request that we transmit your data directly to another controller.</p>
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="gdpr_request_id" value="{{ gdpr_request_id }}">
+                {{ form|bootstrap }}
+                </button>
+            </form>
+        </div>
+    </div>
+    <a href="{% url 'gdpr_dashboard' %}" class="btn btn-link mt-3 p-0"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Request Access &amp; Portability{% endblock %}
+{% block content %}
+<div class="container" style="max-width:600px;">
+    <h2 class="mb-2"><i class="bi bi-eye me-2"></i>Request Access &amp; Portability (Art.&nbsp;15 / Art.&nbsp;20)</h2>
+    <p class="text-body-secondary">You have the right to obtain a copy of all personal data we hold about you in a structured, commonly used, and machine-readable format (JSON).</p>
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="gdpr_request_id" value="{{ gdpr_request_id }}">
+                <p>Click below to request a copy of all your personal data.</p>
+                <div class="mb-3">
+                    <label for="new_controller" class="form-label">Transfer to another controller <span class="text-body-secondary">(optional)</span></label>
+                    <input type="email" class="form-control" id="new_controller" name="new_controller" placeholder="e.g. dpo@otherservice.com">
+                    <div class="form-text">If you want us to transmit your data directly to another controller, enter their e-mail address. Leave blank to just download a copy.</div>
+                </div>
+                <button type="submit" name="submit" value="true" class="btn btn-primary">
+                    <i class="bi bi-download me-1"></i>Request Data
+                </button>
+            </form>
+        </div>
+    </div>
+    <a href="{% url 'gdpr_dashboard' %}" class="btn btn-link mt-3 p-0"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+{% endblock %}

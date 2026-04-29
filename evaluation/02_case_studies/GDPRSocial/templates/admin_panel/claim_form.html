@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Create Claim{% endblock %}
+{% block content %}
+<div class="container" style="max-width:700px;">
+    <h2 class="mb-2"><i class="bi bi-file-earmark-plus me-2"></i>Create Controller Claim</h2>
+    <p class="text-body-secondary">Declare a legal basis, data category, or other controller obligation. Fill in only the fields relevant to the selected claim type.</p>
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                {{ form|bootstrap }}
+                <button type="submit" name="submit" value="true" class="btn btn-primary mt-2">
+                    <i class="bi bi-check-lg me-1"></i>Submit Claim
+                </button>
+            </form>
+        </div>
+    </div>
+    <a href="{% url 'admin_dashboard' %}" class="btn btn-link mt-3 p-0"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+{% endblock %}

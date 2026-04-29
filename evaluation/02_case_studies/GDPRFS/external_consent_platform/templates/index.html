@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GDPR Consent Platform</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1em; }
+    td, th { border: 1px solid #ddd; padding: .4em; }
+  </style>
+</head>
+<body>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <h2>Data Subject Portal</h2>
+      {% if user %}
+        <p>
+          Logged in as: <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+          (<code>{{ user.uid }}</code>)
+        </p>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px;">
+      <a href="{{ url_for('my_data') }}" style="padding:5px 10px; background:#5cb85c; color:white; text-decoration:none; white-space:nowrap;">
+        View / Download My Data
+      </a>
+      <form method="post" action="{{ url_for('logout') }}" style="margin:0;">
+        <button type="submit" style="background:#d9534f; color:white; padding:5px 10px; cursor:pointer; border:none;">
+          Logout
+        </button>
+      </form>
+    </div>
+  </div>
+  
+  <form method="post" action="{{ url_for('submit') }}">
+    {% set all_fields = [] %}
+    {% for event in event_config %}
+      {% for f in event.fields if f not in all_fields %}
+        {% set _ = all_fields.append(f) %}
+      {% endfor %}
+    {% endfor %}
+
+    {# Create one shared input for each unique field used across all events #}
+    {% for field in all_fields %}
+      {% if field != 'uid' %}
+      {% if field|lower == 'spcat' %}
+      <label>Special Category</label>
+      <select name="spCat">
+        <option value="">-- Select Special Category --</option>
+        <option value="health">Health</option>
+        <option value="racial_ethnic">Racial / Ethnic</option>
+        <option value="political">Political</option>
+        <option value="religious">Religious</option>
+        <option value="trade_union">Trade Union</option>
+        <option value="genetic">Genetic</option>
+        <option value="biometric">Biometric</option>
+        <option value="sex_life">Sex Life</option>
+      </select>
+    {% elif field == 'fid_new' %}
+      <input id="fid_new_input" name="fid_new" placeholder="Fid_new (auto-filled after upload)">
+      <input type="file" id="rectify_file_picker" style="display:none">
+      <button type="button" onclick="document.getElementById('rectify_file_picker').click()">Upload corrected file</button>
+    {% else %}
+      <input name="{{ field }}" placeholder="{{ field|capitalize }}">
+    {% endif %}
+      {% endif %}
+    {% endfor %}
+
+    {# Create buttons dynamically from YAML event names #}
+    {% for event in event_config if event.name != "RequestErasure" %}
+      <button name="action" value="{{ event.name }}">{{ event.name }}</button>
+    {% endfor %}
+  </form>
+
+  <h3>Withdraw All Consent & Request Erasure (Art 17(1)(b))</h3>
+  <form method="post" action="{{ url_for('withdraw_and_erase') }}">
+    <input name="fid" placeholder="Fid" required>
+    <button type="submit" style="background:#d9534f; color:white; border:none; padding:5px 10px; cursor:pointer;">
+      Withdraw All Consent & Request Erasure
+    </button>
+  </form>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for msg in messages %}
+        <p style="color:green; font-weight:bold;">{{ msg }}</p>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <h3>Recent Events</h3>
+  <table>
+    <tr><th>Kind</th><th>User full name</th><th>Purpose</th><th>Special Category</th><th>Status</th></tr>
+    {% for e in events %}
+    <tr><td>{{ e.kind }}</td><td>{{ e.uid }}</td><td>{{ e.purpose }}</td><td>{{ e.spCat or '' }}</td><td>{{ e.status }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>Current States</h3>
+{% for category, group in states|groupby('category') %}
+  <h4>{{ category|capitalize }} States</h4>
+  {% set has_purpose = group|selectattr('purpose')|list|length > 0 %}
+  <table>
+    <tr>
+      <th>User full name</th>
+      {% if has_purpose %}<th>Purpose</th>{% endif %}
+      {% if category == 'special_consent' %}<th>Special Category</th>{% endif %}
+      <th>Status</th>
+    </tr>
+    {% for s in group %}
+      <tr>
+        <td>{{ s.uid }}</td>
+        {% if has_purpose %}<td>{{ s.purpose }}</td>{% endif %}
+        {% if category == 'special_consent' %}<td>{{ s.spCat or '' }}</td>{% endif %}
+        <td>{{ s.status }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endfor %}
+
+<script>
+  document.getElementById('rectify_file_picker').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    fetch('/upload_rectification', { method: 'POST', body: formData })
+      .then(r => r.json())
+      .then(data => {
+        if (data.fid_new) {
+          document.getElementById('fid_new_input').value = data.fid_new;
+          alert('File uploaded. fid_new: ' + data.fid_new);
+        } else {
+          alert('Upload failed: ' + JSON.stringify(data));
+        }
+      })
+      .catch(e => alert('Upload error: ' + e));
+  });
+</script>
+</body>
+</html>

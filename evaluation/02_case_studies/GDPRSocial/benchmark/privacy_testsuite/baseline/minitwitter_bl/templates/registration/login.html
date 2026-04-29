@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Login to GDPRSocial{% endblock %}
+{% block content %}
+<div class="container" style="max-width:440px;">
+    <div class="text-center mb-4">
+        <i class="bi bi-chat-heart-fill text-primary-custom" style="font-size:2.5rem;"></i>
+        <h3 class="mt-2">Welcome Back</h3>
+        <p class="text-body-secondary">Sign in to your account</p>
+    </div>
+    <div class="card">
+        <div class="card-body p-4">
+            <form method="post">
+                {% csrf_token %}
+                {{ form|bootstrap }}
+                <button type="submit" class="btn btn-primary w-100 mt-3">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Login
+                </button>
+            </form>
+        </div>
+    </div>
+    <p class="text-center mt-3">
+        <a href="{% url 'signup' %}">Don't have an account? <strong>Sign up</strong></a>
+    </p>
+</div>
+{% endblock %}

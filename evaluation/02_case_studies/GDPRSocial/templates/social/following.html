@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}People You Follow{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">People You Follow</h2>
+    {% if following_list %}
+    <div class="row g-3">
+        {% for user in following_list %}
+        <div class="col-md-4 col-lg-3">
+            <div class="card user-card h-100">
+                <div class="card-body">
+                    <div class="user-avatar mx-auto"><i class="bi bi-person-check"></i></div>
+                    <h6 class="fw-semibold">{{ user.first_name }} {{ user.last_name }}</h6>
+                    <p class="text-body-secondary small mb-2">@{{ user.username }}</p>
+                    <a href="{% url 'send_message' %}?to={{ user.pk }}" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-envelope me-1"></i>Message
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center text-body-secondary py-5">
+        <i class="bi bi-person-plus" style="font-size:2rem;"></i>
+        <p class="mt-2">You're not following anyone yet. <a href="{% url 'follow_user' %}">Find people to follow</a>.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

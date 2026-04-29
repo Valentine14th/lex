@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}My Twits{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">My Twits</h2>
+    {% for twit in twit_list %}
+    <div class="card tweet-card">
+        <div class="card-body">
+            <p class="mb-2">{{ twit.content }}</p>
+            <div class="d-flex align-items-center justify-content-between">
+                <span class="tweet-meta">
+                    <i class="bi bi-person"></i> {{ twit.author }}
+                    <span class="ms-2"><i class="bi bi-clock"></i> {{ twit.updated_on }}</span>
+                </span>
+                <span class="tweet-actions">
+                    <a href="{% url 'twit_detail' twit.pk %}" class="text-decoration-none me-2"><i class="bi bi-chat-dots"></i></a>
+                    <a href="{% url 'edit_twit' twit.pk %}" class="text-decoration-none me-2"><i class="bi bi-pencil"></i> Edit</a>
+                    <a href="{% url 'delete_twit' twit.pk %}" class="text-decoration-none text-danger"><i class="bi bi-trash"></i> Delete</a>
+                </span>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center text-body-secondary py-5">
+        <i class="bi bi-pencil-square" style="font-size:2rem;"></i>
+        <p class="mt-2">You haven't posted any twits yet.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

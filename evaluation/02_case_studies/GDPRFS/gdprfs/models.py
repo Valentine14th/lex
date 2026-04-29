@@ -1,0 +1,115 @@
+import os
+from pathlib import Path
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey, Text, Table
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
+Base = declarative_base()
+
+person_file_map = Table(
+    "person_file_map", Base.metadata,
+    Column("person_id", ForeignKey("person.id"), primary_key=True),
+    Column("file_id", ForeignKey("file.id"), primary_key=True)
+)
+
+class File(Base):
+    __tablename__ = "file"
+    id = Column(Integer, primary_key=True)
+    file_id = Column(String, unique=True, nullable=False)
+    abs_path = Column(Text) # absolute path
+    # timestamps:
+    created_at = Column(String)
+    modified_at = Column(String)
+    accessed_at = Column(String)
+    
+    sha256 = Column(String(64), nullable=True) # for LLM
+    special_categories = Column(Text, default="") # comma-separated GDPR Art 9 special data categories (e.g. "health,religious")
+
+    last_action = Column(String) # "read", "write", "rename", etc.
+
+    people = relationship("Person", secondary=person_file_map, back_populates="files")
+
+class Person(Base):
+    __tablename__ = "person"
+    id = Column(Integer, primary_key=True)
+    uid = Column(String, unique=True) # the user identifier field. This field can be NULL for potential users
+    first_name = Column(String)
+    last_name = Column(String)
+    registered = Column(Boolean, default=False)  # 0 = False  = potential user or not-yet-registered user, 1 = True = registered user
+    files = relationship("File", secondary=person_file_map, back_populates="people")
+    aliases = relationship("NameAlias", backref="person", cascade="all, delete") # list of NameAlias objects to allow the LLM to auto-detect aliases
+
+class PersonFileSpecialCategory(Base):
+    """Per-person-per-file Art 9 special data categories.
+    Tracks which special categories apply to which person in which file.
+    For PDFs, page_index tracks which page the category was detected on."""
+    __tablename__ = "person_file_special_category"
+    id = Column(Integer, primary_key=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    file_id = Column(Integer, ForeignKey("file.id"), nullable=False)
+    special_category = Column(String(32), nullable=False)  # e.g. "health", "genetic"
+    page_index = Column(Integer, nullable=True)  # PDF only: which page (NULL = file-level)
+    row_index = Column(Integer, nullable=True)   # CSV only: which row (NULL = file-level)
+
+    person = relationship("Person")
+    file = relationship("File")
+
+class ProcessingRecord(Base):
+    """Art 30: Records of processing activities.
+    Each row is one Record(pr, c, a, p, v) event caused by the enforcer."""
+    __tablename__ = "processing_record"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    processor = Column(String, nullable=False)
+    controller = Column(String, nullable=False)
+    activity = Column(String, nullable=False)
+    property = Column(String, nullable=False)
+    value = Column(String, nullable=False)
+    timestamp = Column(String, nullable=False)
+
+class NameAlias(Base):
+    __tablename__ = "alias_person_map"
+
+    id = Column(Integer, primary_key=True)
+    alias = Column(String, unique=True, nullable=False) # all in lowercase, for easy matching
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+
+# Shared engine + session
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_DB_PATH = _PROJECT_ROOT / "gdprfs.db"
+
+_db_path_env = os.getenv("GDPRFS_DB_PATH")
+if _db_path_env:
+    _candidate = Path(_db_path_env).expanduser()
+    _DB_PATH = _candidate if _candidate.is_absolute() else (_PROJECT_ROOT / _candidate)
+else:
+    _DB_PATH = _DEFAULT_DB_PATH
+
+_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+ENGINE = create_engine(f"sqlite:///{_DB_PATH.as_posix()}")
+Session = sessionmaker(bind=ENGINE)
+
+# Ensure all tables exist (safe to call repeatedly: only creates missing tables)
+Base.metadata.create_all(ENGINE)
+
+# Ensure DB is writable by all processes (root FUSE daemon + user Flask apps)
+try:
+    os.chmod(_DB_PATH, 0o666)
+except PermissionError:
+    pass  # non-root can't chmod root-owned file; root will fix it on next run
+
+# Migrate: add page_index/row_index columns if missing
+# (create_all only creates missing tables, not missing columns)
+try:
+    with ENGINE.connect() as _conn:
+        from sqlalchemy import text, inspect as _sa_inspect
+        _cols = [c["name"] for c in _sa_inspect(ENGINE).get_columns("person_file_special_category")]
+        for _col in ("page_index", "row_index"):
+            if _col not in _cols:
+                _conn.execute(text(f"ALTER TABLE person_file_special_category ADD COLUMN {_col} INTEGER"))
+                _conn.commit()
+                print(f"[GDPRFS] Migrated: added {_col} to person_file_special_category")
+except Exception as _e:
+    print(f"[GDPRFS] Migration check: {_e}")
+
+# Always print the DB path on import (once per process)
+print(f"[GDPRFS] Using GDPRFS database at: {ENGINE.url}")

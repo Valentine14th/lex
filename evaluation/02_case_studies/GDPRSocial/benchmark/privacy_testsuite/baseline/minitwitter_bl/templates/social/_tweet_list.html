@@ -1,0 +1,35 @@
+{% for twit in twits %}
+<div class="card tweet-card">
+    <div class="card-body">
+        <div class="d-flex align-items-center mb-2">
+            <i class="bi bi-person-circle text-body-secondary me-2" style="font-size:1.3rem;"></i>
+            <a href="#" class="fw-semibold text-decoration-none">{{ twit.author }}</a>
+            <span class="text-body-secondary ms-2 small"><i class="bi bi-clock me-1"></i>{{ twit.posted_on }}</span>
+            <span class="ms-auto text-body-tertiary" style="font-size:.75rem;cursor:pointer;" onclick="let el=this.nextElementSibling;el.classList.toggle('d-none')" title="Show ID"><i class="bi bi-chevron-down"></i></span>
+            <code class="ms-1 d-none text-body-tertiary" style="font-size:.7rem;user-select:all;">{{ twit.id }}</code>
+        </div>
+        <p class="mb-3">{{ twit.content }}</p>
+        <div class="d-flex align-items-center gap-3">
+            <a href="{% url 'twit_detail' twit.pk %}" class="tweet-action-btn" title="Comments">
+                <i class="bi bi-chat-dots"></i>
+                {% if twit.reply_count %}<span>{{ twit.reply_count }}</span>{% endif %}
+            </a>
+            <form method="post" action="{% url 'like_twit' twit.pk %}" class="d-inline mb-0">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="/">
+                <button type="submit" class="tweet-action-btn tweet-action-like" title="Like">
+                    <i class="bi bi-heart"></i>
+                    {% if twit.like_count %}<span>{{ twit.like_count }}</span>{% endif %}
+                </button>
+            </form>
+            <a href="{% url 'repost_twit' twit.pk %}" class="tweet-action-btn tweet-action-repost" title="Repost">
+                <i class="bi bi-repeat"></i>
+                {% if twit.repost_count %}<span>{{ twit.repost_count }}</span>{% endif %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% if has_more %}
+<div id="has-more-marker" data-has-more="true"></div>
+{% endif %}

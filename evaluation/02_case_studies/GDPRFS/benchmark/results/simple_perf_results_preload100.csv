@@ -1,0 +1,2 @@
+mode,iteration,t_read_file,t_write_file,t_give_consent,t_remove_consent,t_request_erasure,t_request_rectification,t_total
+gdpr_no_llm,1,0.04354758999761543,0.07003852900015772,0.007840938000299502,0.011873159997776384,1.0352536469981715,0.01934797600188176,3.7009605019993614

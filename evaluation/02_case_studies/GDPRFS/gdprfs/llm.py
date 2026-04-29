@@ -1,0 +1,319 @@
+from hashlib import sha256
+import json
+import os
+from pathlib import Path
+import requests
+from gdprfs.models import File, Person, NameAlias, PersonFileSpecialCategory, Session
+from sqlalchemy import and_, func
+from gdprfs.merge_alerts import save_merge_alerts_for_ui
+from Levenshtein import distance  # if installed
+from gdprfs.db_utils import _manual_owner_for_path
+
+
+def _is_typo(a, b):
+    # First try exact match
+    if a == b:
+        return True
+    if len(a) > 1 and len(b) > 1: # avoid too short strings
+        dist = distance(a, b)
+        return dist <= 3
+    return False
+
+def update_file_people_from_llm(path_abs: str, llm_results: list):
+    """
+    Given llm_results = list of chunk analyses,
+    update File.people based on all persons found in all chunks.
+    """
+
+    print(f"[LLM] Updating DB mapping for file: {path_abs}")
+
+    with Session() as s:
+        # 1. Retrieve File entry
+        file_obj = s.query(File).filter(File.abs_path == path_abs).first()
+        if not file_obj:
+            print(f"[LLM] File not in DB yet → creating entry")
+            file_obj = File(abs_path=path_abs)
+            s.add(file_obj)
+            s.commit()
+
+        # 2. Reset existing mapping
+        file_obj.people.clear()
+
+        # 3. For each chunk, add detected persons
+        for chunk in llm_results:
+            persons = chunk["analysis"]["persons"]
+            for person_info in persons:
+                name = person_info["name"].strip()
+                first, *rest = name.split(" ")
+                last = " ".join(rest) if rest else ""
+
+                # Known user?
+                if person_info["is_known_user"]:
+                    person = s.query(Person).filter_by(id=person_info["user_id"]).first()
+                else:
+                    # First, check if this token is a known alias validated by the internal UI
+                    alias_norm = name.strip().lower()
+                    alias_row = (
+                        s.query(NameAlias)
+                        .filter(func.lower(NameAlias.alias) == alias_norm)
+                        .first()
+                    )
+
+                    if alias_row:
+                        # Human already confirmed: alias → canonical person
+                        person = s.get(Person, alias_row.person_id)
+                        print(f"[LLM duplicate DS / alias already merged] Already-merged alias '{name}' which is the registered person id={person.id}")
+                    else:
+                        # Unknown → ensure entry exists in database
+                        person = (
+                            s.query(Person)
+                            .filter(and_(Person.first_name == first, Person.last_name == last))
+                            .first()
+                        )
+                        if not person:
+                            person = Person(
+                                first_name=first,
+                                last_name=last,
+                                uid=None,
+                                registered=False
+                            )
+                            s.add(person)
+                            s.commit()
+                            print(f"[LLM unregistered DS] Added new unregistered user: {first} {last}")
+
+                # Associate with file
+                if person not in file_obj.people:
+                    file_obj.people.append(person)
+
+        # Preload human-confirmed aliases to avoid spamming alerts
+        known_aliases = {
+            a.alias.lower()
+            for a in s.query(NameAlias).all()
+        }
+
+        # Build a lookup: last name → registered user
+        registered_people = {
+            (p.first_name.lower(), p.last_name.lower()): p
+            for p in s.query(Person).filter_by(registered=True) 
+        }
+        
+        # 4. Create merge alerts for partial matches or potential typos
+        # detect partial matches that require internal confirmation
+        alerts = []
+        for chunk in llm_results:
+            for person_info in chunk["analysis"]["persons"]: # list of {name, is_known_user, user_id, confidence}
+                if person_info["is_known_user"]: # if is_known_user = True
+                    continue  # skip exact matches
+                
+                detected = person_info["name"].strip()
+                detected_norm = detected.lower()
+
+                # If this token is already a validated alias, skip creating an alert
+                if detected_norm in known_aliases:
+                    continue
+
+                tokens = detected_norm.split()
+
+                # check if last name matches a registered user
+                for (first, last), reg_person in registered_people.items(): # iterate over registered users with the first and last names gotten
+                    # -----------------------------
+                    # Case A: multi-token name
+                    # Example: "J Doe", "John Doee"
+                    # -----------------------------
+                    if len(tokens) >= 2:
+                        det_first = tokens[0].lower()
+                        det_last  = tokens[-1].lower()
+
+                        if _is_typo(det_first, first) or _is_typo(det_last, last):
+                            print("Creating alert for multi-token name:", detected, "vs", reg_person.first_name, reg_person.last_name)
+                            alerts.append({
+                                "alias": detected,
+                                "candidate": f"{reg_person.first_name} {reg_person.last_name}",
+                                "person_id": reg_person.id
+                            })
+
+                    # -----------------------------
+                    # Case B: single-token name
+                    # Example: "Hsieeh", "Johnn", "Doee", "John", "Doe"
+                    # -----------------------------
+                    else:
+                        word = tokens[0]
+
+                        # Compare to first name
+                        if _is_typo(word, first) or _is_typo(word, last):
+                            print("Creating alert for single-token name:", detected, "vs", reg_person.first_name, reg_person.last_name)
+                            alerts.append({
+                                "alias": detected,
+                                "candidate": f"{reg_person.first_name} {reg_person.last_name}",
+                                "person_id": reg_person.id
+                            })
+
+        # If alerts exist → save for internal UI (with merge_alerts.json)
+        if alerts:
+            save_merge_alerts_for_ui(path_abs, alerts)
+            print(f"[LLM create merge alert] Merge alerts created for {path_abs}: {alerts}")
+
+        # 5. Extract GDPR Art 9 special data categories from all chunks
+        # chunk["analysis"] comes from ChunkAnalysis.model_dump() in LLManalyzer/api.py
+        # which includes "special_data_categories" field (default [])
+        all_special_cats = set()
+        for chunk in llm_results:
+            cats = chunk["analysis"].get("special_data_categories", [])
+            all_special_cats.update(cats)
+        joined = ",".join(sorted(all_special_cats))
+        file_obj.special_categories = joined
+        if all_special_cats:
+            print(f"[LLM Art9] Detected special data categories for {path_abs}: {all_special_cats}")
+            print(f"[LLM Art9] Storing special_categories = '{joined}' (len={len(joined)})")
+
+        # 6. Store per-person-per-file special categories
+        # Clear old per-person categories for this file
+        s.query(PersonFileSpecialCategory).filter_by(file_id=file_obj.id).delete()
+
+        for chunk in llm_results:
+            chunk_idx = chunk.get("chunk index")  # page index for PDFs, row index for CSVs
+            persons = chunk["analysis"]["persons"]
+            for person_info in persons:
+                per_person_cats = person_info.get("special_data_categories", [])
+                if not per_person_cats:
+                    continue
+                # Resolve person
+                name = person_info["name"].strip()
+                first, *rest = name.split(" ")
+                last = " ".join(rest) if rest else ""
+                if person_info["is_known_user"]:
+                    person = s.query(Person).filter_by(id=person_info["user_id"]).first()
+                else:
+                    alias_norm = name.strip().lower()
+                    alias_row = s.query(NameAlias).filter(func.lower(NameAlias.alias) == alias_norm).first()
+                    if alias_row:
+                        person = s.get(Person, alias_row.person_id)
+                    else:
+                        person = s.query(Person).filter(and_(Person.first_name == first, Person.last_name == last)).first()
+                if person:
+                    # Determine per-chunk index: page_index for PDFs, row_index for CSVs
+                    is_pdf = path_abs.lower().endswith(".pdf")
+                    is_csv = path_abs.lower().endswith(".csv")
+                    for cat in per_person_cats:
+                        s.add(PersonFileSpecialCategory(
+                            person_id=person.id,
+                            file_id=file_obj.id,
+                            special_category=cat,
+                            page_index=chunk_idx if is_pdf else None,
+                            row_index=chunk_idx if is_csv else None,
+                        ))
+                    print(f"[LLM Art9] Person '{name}' (id={person.id}) → special categories: {per_person_cats} (chunk {chunk_idx})")
+
+        s.commit()
+        # Verify what was actually committed
+        s.refresh(file_obj)
+        print(f"[LLM Art9] After commit, special_categories = '{file_obj.special_categories}'")
+        print(f"[LLM] Updated file_people for {len(file_obj.people)} persons")
+
+def _update_special_categories_for_gdprowner(path_abs: str, llm_results: list, owner_uid: str):
+    """
+    For .gdprowner files: ownership is already locked to the declared owner.
+    Only extract special data categories from LLM results and assign them
+    all to that owner (since all data in the file belongs to them).
+    """
+    print(f"[LLM gdprowner] Updating special categories only for {path_abs} (owner={owner_uid})")
+
+    with Session() as s:
+        file_obj = s.query(File).filter(File.abs_path == path_abs).first()
+        if not file_obj:
+            print(f"[LLM gdprowner] File not in DB: skipping special categories")
+            return
+
+        owner = s.query(Person).filter_by(uid=owner_uid).first()
+        if not owner:
+            print(f"[LLM gdprowner] WARNING: Person uid='{owner_uid}' not found in DB")
+            return
+
+        # Extract all special data categories from LLM chunks
+        all_special_cats = set()
+        for chunk in llm_results:
+            cats = chunk["analysis"].get("special_data_categories", [])
+            all_special_cats.update(cats)
+
+        # Store file-level special categories
+        joined = ",".join(sorted(all_special_cats))
+        file_obj.special_categories = joined
+        if all_special_cats:
+            print(f"[LLM gdprowner Art9] Detected special categories for {path_abs}: {all_special_cats}")
+
+        # Store per-person special categories: all assigned to the gdprowner owner
+        s.query(PersonFileSpecialCategory).filter_by(file_id=file_obj.id).delete()
+        for cat in all_special_cats:
+            s.add(PersonFileSpecialCategory(
+                person_id=owner.id,
+                file_id=file_obj.id,
+                special_category=cat
+            ))
+
+        s.commit()
+        print(f"[LLM gdprowner] Done. Owner '{owner_uid}' → special categories: {sorted(all_special_cats) or 'none'}")
+
+
+def run_llm_analysis_and_update_db(path_abs: str):
+    """
+    Call the LLM analyzer for the given absolute file path,
+    then update the gdprfs DB File.people accordingly.
+    """
+    print(f"[LLM] Running LLM analyzer on file: {path_abs}")
+
+    # Skip temporary editor files
+    if os.path.basename(path_abs).startswith(".goutputstream-"):
+        print(f"[LLM] Skipping temp file for analysis: {path_abs}")
+        return
+
+    # Check if file has .gdprowner override: tier 1 owns the ownership mapping
+    gdprowner_uid = _manual_owner_for_path(Path(path_abs))
+
+    data = Path(path_abs).read_bytes()
+    new_hash = sha256(data).hexdigest()
+    
+    # 1. Load known users from local DB
+    with Session() as s:
+        file_obj = s.query(File).filter_by(abs_path=path_abs).first()
+
+        # If file exists and hash matches, skip expensive LLM
+        if file_obj and file_obj.sha256 == new_hash:
+            print(f"[LLM] SKIPPED: content unchanged (hash match).")
+            return
+
+        known_users = [
+            {"user_id": person.id,
+             "full_name": f"{person.first_name} {person.last_name}"}
+            for person in s.query(Person).filter_by(registered=True)
+        ]
+
+    # 2. Call LLM analyzer API
+    try:
+        resp = requests.post(
+            "http://127.0.0.1:5005/analyze-file",
+            json={"path": path_abs, "known_users": known_users}
+        )
+        results = resp.json()
+        
+        print("[LLM] Raw analyzer result:")
+        print(json.dumps(results, indent=2))
+
+    except Exception as e:
+        print(f"[LLM] ERROR: analyzer failed: {e}")
+        return
+
+    # 3. Update DB mapping
+    if gdprowner_uid:
+        # .gdprowner file: ownership is locked to declared owner, only update special categories
+        _update_special_categories_for_gdprowner(path_abs, results, gdprowner_uid)
+    else:
+        # Normal file: full LLM-based people + special categories update
+        update_file_people_from_llm(path_abs, results)
+
+    # 4. Store new hash in DB
+    with Session() as s:
+        file_obj = s.query(File).filter_by(abs_path=path_abs).first()
+        if file_obj:
+            file_obj.sha256 = new_hash
+            s.commit()
+            print(f"[LLM] Updated content hash for {path_abs}")

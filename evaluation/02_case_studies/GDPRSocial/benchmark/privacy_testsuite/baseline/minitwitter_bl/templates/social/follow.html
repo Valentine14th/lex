@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Follow Someone{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">Follow Someone</h2>
+    {% if user_list %}
+    <div class="row g-3">
+        {% for user in user_list %}
+        <div class="col-md-4 col-lg-3">
+            <div class="card user-card h-100">
+                <div class="card-body">
+                    <div class="user-avatar mx-auto"><i class="bi bi-person"></i></div>
+                    <h6 class="fw-semibold">{{ user.first_name }} {{ user.last_name }}</h6>
+                    <p class="text-body-secondary small mb-2">@{{ user.username }}</p>
+                    <form method="post">
+                        <input type="hidden" name="pk" value="{{ user.pk }}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-person-plus me-1"></i>Follow
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center text-body-secondary py-5">
+        <i class="bi bi-people" style="font-size:2rem;"></i>
+        <p class="mt-2">No more users to follow.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

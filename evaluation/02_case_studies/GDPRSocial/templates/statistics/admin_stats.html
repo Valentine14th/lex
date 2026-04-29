@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% block title %}Platform Statistics{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="mb-4"><i class="bi bi-graph-up me-2"></i>Platform Statistics</h2>
+
+    <!-- Users & Content -->
+    <h5 class="mb-3">Users &amp; Content</h5>
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-primary">{{ total_users }}</h3>
+                <small class="text-body-secondary">Total Users</small>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-success">{{ new_users_30d }}</h3>
+                <small class="text-body-secondary">New Users (30d)</small>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-info">{{ total_twits }}</h3>
+                <small class="text-body-secondary">Total Twits</small>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-info">{{ twits_30d }}</h3>
+                <small class="text-body-secondary">Twits (30d)</small>
+            </div></div>
+        </div>
+    </div>
+
+    <!-- Engagement -->
+    <h5 class="mb-3">Engagement</h5>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-danger">{{ total_likes }}</h3>
+                <small class="text-body-secondary">Likes</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-warning">{{ total_replies }}</h3>
+                <small class="text-body-secondary">Replies</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-success">{{ total_reposts }}</h3>
+                <small class="text-body-secondary">Reposts</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-primary">{{ total_dms }}</h3>
+                <small class="text-body-secondary">Direct Messages</small>
+            </div></div>
+        </div>
+    </div>
+
+    <!-- Advertising – Aggregate -->
+    <h5 class="mb-3">Advertising (30-day)</h5>
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ total_ads }}</h4>
+                <small class="text-body-secondary">Active Ads</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ impressions_30d }}</h4>
+                <small class="text-body-secondary">Impressions</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ clicks_30d }}</h4>
+                <small class="text-body-secondary">Clicks</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ ctr }}%</h4>
+                <small class="text-body-secondary">Click Rate</small>
+            </div></div>
+        </div>
+    </div>
+
+    {% if ad_rows %}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Per-Ad Breakdown</div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Ad</th>
+                        <th class="text-end">Impressions</th>
+                        <th class="text-end">Unique</th>
+                        <th class="text-end">Clicks</th>
+                        <th class="text-end">Unique</th>
+                        <th class="text-end">Click Rate</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ad in ad_rows %}
+                    <tr>
+                        <td>{{ ad.title|truncatewords:5 }}</td>
+                        <td class="text-end">{{ ad.imp_count }}</td>
+                        <td class="text-end text-body-secondary">{{ ad.unique_impressions }}</td>
+                        <td class="text-end">{{ ad.click_count }}</td>
+                        <td class="text-end text-body-secondary">{{ ad.unique_clicks }}</td>
+                        <td class="text-end">{{ ad.ad_ctr }}%</td>
+                        <td><a href="{% url 'ad_analytics' ad.pk %}" class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-bar-chart"></i></a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Page Visits -->
+    <h5 class="mb-3">Page Visits</h5>
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ visits_30d }}</h4>
+                <small class="text-body-secondary">Hits (30d)</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ visits_7d }}</h4>
+                <small class="text-body-secondary">Hits (7d)</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ unique_visitors_30d }}</h4>
+                <small class="text-body-secondary">Unique Sessions</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ avg_response_time }} ms</h4>
+                <small class="text-body-secondary">Avg Response</small>
+            </div></div>
+        </div>
+    </div>
+
+    {% if top_pages %}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Top Pages (30d)</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th class="text-end">Hits</th>
+                        <th class="text-end">Unique Users</th>
+                        <th class="text-end">Avg ms</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for page in top_pages %}
+                    <tr>
+                        <td><code>{{ page.path }}</code></td>
+                        <td class="text-end">{{ page.total_hits }}</td>
+                        <td class="text-end">{{ page.unique_users }}</td>
+                        <td class="text-end">{{ page.avg_ms|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if top_visitors %}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Top Visitors (30d)</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>User</th><th class="text-end">Page Visits</th></tr></thead>
+                <tbody>
+                    {% for v in top_visitors %}
+                    <tr><td>{{ v.user__username }}</td><td class="text-end">{{ v.visit_count }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if top_posters %}
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Most Active Posters</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>User</th><th class="text-end">Posts</th></tr></thead>
+                <tbody>
+                    {% for u in top_posters %}
+                    <tr><td>{{ u.username }}</td><td class="text-end">{{ u.post_count }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

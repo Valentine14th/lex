@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Sign Up for GDPRSocial{% endblock %}
+{% block content %}
+<div class="container" style="max-width:520px;">
+    <div class="text-center mb-4">
+        <i class="bi bi-chat-heart-fill text-primary-custom" style="font-size:2.5rem;"></i>
+        <h3 class="mt-2">Create Account</h3>
+        <p class="text-body-secondary">Join GDPRSocial today</p>
+    </div>
+    <div class="card">
+        <div class="card-body p-4">
+            <form method="post">
+                {% csrf_token %}
+                {{ form.username|bootstrap }}
+                {{ form.first_name|bootstrap }}
+                {{ form.last_name|bootstrap }}
+                {{ form.password1|bootstrap }}
+                {{ form.password2|bootstrap }}
+
+                <hr class="my-3">
+                <h6 class="mb-2"><i class="bi bi-shield-check me-1"></i>Privacy Preferences</h6>
+                <p class="text-body-secondary small mb-3">
+                    You can change these at any time under <strong>Privacy &amp; Consent</strong>.
+                </p>
+                <div class="form-check mb-2">
+                    <input type="checkbox" name="consent_personalized_ad" id="id_consent_personalized_ad" class="form-check-input" value="on">
+                    <label class="form-check-label" for="id_consent_personalized_ad">
+                        I consent to <strong>personalized advertising</strong>
+                        <div class="text-body-secondary small">We use your posts to recommend relevant ads.</div>
+                    </label>
+                </div>
+                <div class="form-check mb-3">
+                    <input type="checkbox" name="consent_statistics" id="id_consent_statistics" class="form-check-input" value="on">
+                    <label class="form-check-label" for="id_consent_statistics">
+                        I consent to <strong>usage statistics collection</strong>
+                        <div class="text-body-secondary small">We collect anonymous page-visit analytics to improve the service.</div>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mt-2">
+                    <i class="bi bi-person-plus me-1"></i>Sign Up
+                </button>
+            </form>
+        </div>
+    </div>
+    <p class="text-center mt-3">
+        <a href="{% url 'login' %}">Already have an account? <strong>Log in</strong></a>
+    </p>
+</div>
+{% endblock %}

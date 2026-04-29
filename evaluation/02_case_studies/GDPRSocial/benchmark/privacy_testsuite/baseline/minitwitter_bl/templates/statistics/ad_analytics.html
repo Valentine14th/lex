@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Ad Analytics – {{ ad.title }}{% endblock %}
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'admin_stats' %}">Platform Stats</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ ad.title|truncatewords:5 }}</li>
+        </ol>
+    </nav>
+
+    <h2 class="mb-1"><i class="bi bi-megaphone me-2"></i>{{ ad.title }}</h2>
+    <p class="text-body-secondary mb-4">{{ ad.body|truncatewords:30 }}</p>
+
+    <!-- KPIs -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ imp_total }}</h4>
+                <small class="text-body-secondary">Impressions</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ unique_imp }}</h4>
+                <small class="text-body-secondary">Unique Imp.</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ click_total }}</h4>
+                <small class="text-body-secondary">Clicks</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card text-center"><div class="card-body py-2">
+                <h4 class="mb-0">{{ ctr }}%</h4>
+                <small class="text-body-secondary">Click Rate</small>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Daily Impressions -->
+        {% if daily_imp %}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header fw-semibold">Daily Impressions</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Date</th><th class="text-end">Count</th></tr></thead>
+                        <tbody>
+                            {% for row in daily_imp %}
+                            <tr><td>{{ row.day|date:"M d, Y" }}</td><td class="text-end">{{ row.count }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Daily Clicks -->
+        {% if daily_clicks %}
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header fw-semibold">Daily Clicks</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Date</th><th class="text-end">Count</th></tr></thead>
+                        <tbody>
+                            {% for row in daily_clicks %}
+                            <tr><td>{{ row.day|date:"M d, Y" }}</td><td class="text-end">{{ row.count }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <a href="{% url 'admin_stats' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Platform Stats</a>
+</div>
+{% endblock %}

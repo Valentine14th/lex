@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Consent Management{% endblock %}
+{% block content %}
+<div class="container" style="max-width:700px;">
+    <h2 class="mb-2"><i class="bi bi-hand-thumbs-up me-2"></i>Consent Management</h2>
+    <p class="text-body-secondary">You may withdraw consent at any time. Withdrawal does not affect the lawfulness of processing before its withdrawal.</p>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr><th>Purpose</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                {% for p in purposes %}
+                <tr>
+                    <td class="align-middle">{{ p }}</td>
+                    <td class="align-middle">
+                        {% for cr in consent_records %}{% if cr.purpose == p and cr.is_active %}<span class="badge bg-success"><i class="bi bi-check-lg"></i> Active</span>{% endif %}{% endfor %}
+                    </td>
+                    <td>
+                        <form method="post" class="d-inline-flex gap-1">
+                            {% csrf_token %}
+                            <button type="submit" name="give_consent" value="{{ p }}" class="btn btn-sm btn-success">Give</button>
+                            <button type="submit" name="revoke_consent" value="{{ p }}" class="btn btn-sm btn-outline-danger">Revoke</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <a href="{% url 'gdpr_dashboard' %}" class="btn btn-link mt-3 p-0"><i class="bi bi-arrow-left me-1"></i>Back to dashboard</a>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Contest Accuracy &amp; Request Restriction{% endblock %}
+{% block content %}
+<div class="container" style="max-width:600px;">
+    <h2 class="mb-2"><i class="bi bi-exclamation-circle me-2"></i>Contest Accuracy &amp; Restrict Processing (Art.&nbsp;16 + 18)</h2>
+    <p class="text-body-secondary">If you believe data we hold about you is inaccurate, you can contest its accuracy. While accuracy is being verified, processing of that data for the specified purpose will be restricted.</p>
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-1"></i>
+        Under Art.&nbsp;18(1)(a) GDPR, you have the right to obtain restriction of processing where you contest the accuracy of personal data, for a period enabling the controller to verify the accuracy.
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="gdpr_request_id" value="{{ gdpr_request_id }}">
+                {{ form|bootstrap }}
+                <button type="submit" name="submit" value="true" class="btn btn-warning mt-3">
+                    <i class="bi bi-exclamation-circle me-1"></i>Contest &amp; Restrict
+                </button>
+            </form>
+        </div>
+    </div>
+    <a href="{% url 'gdpr_dashboard' %}" class="btn btn-link mt-3 p-0"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+{% endblock %}

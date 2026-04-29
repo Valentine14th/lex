@@ -3,130 +3,116 @@ Lex - A Language for Compliance by Design
 
 ![Lex Logo](Logo.png "lex")
 
-# Table of Contents
-- [Lex - A language for Compliance by Design](#lex---a-language-for-compliance-by-design)
-- [Table of Contents](#table-of-contents)
-- [Repository Overview](#repository-overview)
-- [Installation](#installation)
-  - [VS Code Dev Container](#vs-code-dev-container)
-    - [Requirements:](#requirements)
-    - [Using Lex with devcontainer](#using-lex-with-devcontainer)
-      - [Setting up the devcontainr](#setting-up-the-devcontainr)
-      - [Start using the devcontainer](#start-using-the-devcontainer)
-  - [Build from source](#build-from-source)
-    - [requirements](#requirements-1)
-- [Usage](#usage)
-  - [Setting up the environment](#setting-up-the-environment)
-  - [Without installing Lex](#without-installing-lex)
-  - [With installation](#with-installation)
-
-# Repository Overview
+## Repository Overview
 
 This repository contains:
-- A copy of the [EnfGuard](https://github.com/runtime-enforcement/enfguard) tool in a submodule `enfguard` (update it with `git submodule update --init --recursive` before using Lex)
+- A copy of the [EnfGuard](https://github.com/runtime-enforcement/enfguard) tool in the `enfguard/` submodule
 - The Instrlib library (`Instrlib/`)
 - The source code of Lex (`src/` and `bin/`)
-- A VS Code extension providing code coloring for Lex (`vscode/lex`)
-- Documentation for Lex (`doc/`) including a cheatsheet, a syntax manual, and the tutorial used in our user study (RQ4)
-- Examples of Lex and Rex code (`example/`): `BGG` (RQ1), `GDPR` (RQ1-3, including Rex code for Shynet and Minitwitter), `IRC` (RQ1), `user_study` (RQ4/auditing), `tutorial` (code of the tutorial), `unit` (basic examples)
-- The code of our case studies (`case_studies.zip`, RQ2-3)
-- The survey used in our user study (`user_study/`)
+- A VS Code extension for Lex syntax highlighting (`vscode/lex/`)
+- Documentation (`doc/`) and examples (`example/`)
 
-# Installation
-## VS Code Dev Container
-### Requirements:
-- [Docker](https://www.docker.com/)
-- [VS Code](https://code.visualstudio.com/)
-    - [Remote Explorer](https://marketplace.visualstudio.com/items?itemName=ms-vscode.remote-explorer) extension (In VS Code, press`ctrl` + `shift` + `x`, then search for "Remote Explorer" and install the extension)
+## Installation
 
-### Using Lex with devcontainer
-#### Setting up the devcontainr
-- Open this repository in VS Code
-- Press `ctrl`+`shift`+`p` and search for "remote explorer: Focus on Dev Containers View"
+Lex supports two setup options:
 
-![alt text](images/remote-explorer-focus-view.png)
+1. Local install
+2. Docker
 
-- Inside the window pane that appeared click on the button to open the current folder in a dev container
+### Option 1: Local install
 
-![alt text](images/remote-explorer-panel.png)
+Requirements:
+- [opam](https://opam.ocaml.org/doc/Install.html)
+- OCaml 4.13.1
+- [dune](https://dune.build/)
 
-- This might take a few minutes to set up the container
-
-#### Start using the devcontainer
-See the [setting-up-the-environment](#setting-up-the-environment) section for instructions on how to set up the vscode environemnt and install the Lex-language extension
-
-Refer to the [usage](#usage) chapter for further instructions on using Lex
-
-## Build from source
-### requirements
-- [Ocaml](https://ocaml.org/docs/installing-ocaml)
-- MFOTL library
-
-To setup the MFOTL library, update the submodules:
-```bash
-git clone git@github.com:runtime-enforcement/whyenf.git
-git submodule update --init
-```
-
-Set the Ocaml version:
+From the repository root:
 
 ```bash
-opam switch create 4.14.0
+git submodule update --init --recursive
+opam switch create 4.13.1 || true
 eval $(opam env)
-```
-Install project dependencies:
-```bash
-opam install . --deps-only
-eval $(opam env)
-```
-
-Optionally install a language server (for development only):
-```bash
-opam install ocaml-lsp-server ocamlformat
-```
-
-
-To build the project run the following command:
-```bash
+opam install -y dune core_unix menhir=20250912 xml-light ppx_jane calendar z3 pyml=20250807 alcotest
 dune build
 ```
 
-# Usage
-## Setting up the environment
+Optional (install CLI globally in current switch):
 
-To install the VS Code extension for syntax highlighting in `.lex` files, run:
+```bash
+opam install . -y
+```
+
+### Option 2: Docker
+
+Requirements:
+- [Docker](https://www.docker.com/)
+
+From the repository root:
+
+```bash
+git submodule update --init --recursive
+docker build -t lex:latest .
+```
+
+Open an interactive shell in the prepared environment:
+
+```bash
+docker run --rm -it lex:latest
+```
+
+## Usage
+
+From the repository root:
+
+```bash
+dune exec -- ./bin/main.exe <path/to/.lex file> [-mode (mfotl|doc)]
+```
+
+Example:
+
+```bash
+dune exec -- ./bin/main.exe example/unit/hello.lex
+```
+
+### Test-compile examples for evaluation formalizations
+
+Targets:
+- `evaluation/01_formalization/gdpr.lex`
+- `evaluation/01_formalization/minitwit_gdpr.rex`
+
+#### Local
+
+```bash
+# 1) gdpr.lex
+./_build/default/bin/main.exe evaluation/01_formalization/gdpr.lex -o /tmp/gdpr_eval01
+ls -lh /tmp/gdpr_eval01.sig /tmp/gdpr_eval01.mfotl
+
+# 2) minitwit_gdpr.rex
+./_build/default/bin/main.exe evaluation/01_formalization/minitwit_gdpr.rex -o /tmp/minitwit_eval01
+ls -lh /tmp/minitwit_eval01.sig /tmp/minitwit_eval01.mfotl
+```
+
+#### Docker
+
+Compile directly from the mounted repository:
+
+```bash
+docker run --rm -v "$PWD:/workspace" lex:latest sh -lc '
+	dune exec -- ./bin/main.exe /workspace/evaluation/01_formalization/gdpr.lex -o /tmp/gdpr_eval01 && \
+	dune exec -- ./bin/main.exe /workspace/evaluation/01_formalization/minitwit_gdpr.rex -o /tmp/minitwit_eval01 && \
+	ls -lh /tmp/gdpr_eval01.sig /tmp/gdpr_eval01.mfotl /tmp/minitwit_eval01.sig /tmp/minitwit_eval01.mfotl
+'
+```
+
+Both commands were validated in Docker:
+- `gdpr_eval01.mfotl` and `gdpr_eval01.sig` were generated successfully
+- `minitwit_eval01.mfotl` and `minitwit_eval01.sig` were generated successfully
+
+`-mode doc` compiles a Lex program to a human-readable HTML file.
+
+To install the VS Code extension for `.lex` syntax highlighting:
+
 ```bash
 code --install-extension vscode/lex/lex-0.0.1.vsix
 ```
-
-To build and package the extension again see the [README](vscode/lex/README.md) in the vscode/lex directory
-
-## Without installing Lex
-From the root directory of this repository, run:
-```bash
-./bin/main.exe <path/to/.lex file> [-mode (mfotl|doc)]
-```
-`-mode doc` will compile a lex program to a human readable html file.
-
-e.g.
-```bash
-./bin/main.exe examples/unit/hello.lex
-```
-
-## With installation
-Alternatively, Lex can be installed using either opam or dune:
-In the root directory of this repository, run:
-
-```bash
-# using opam
-opam install .
-# using dune
-dune biuld
-dune install
-```
-Then you can run lex from anywhere in your terminal:
-```bash
-lex <path/to/.lex file> [-mode (mfotl|doc)]
-```
-Use `lex -help` to get more information about the usage of lex.
 

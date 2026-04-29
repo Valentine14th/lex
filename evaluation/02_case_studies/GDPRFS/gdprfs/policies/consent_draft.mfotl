@@ -1,0 +1,1 @@
+ALWAYS (FORALL fid, exUid. Use(fid, "marketing") IMPLIES ((NOT Revoke(exUid, "marketing")) SINCE (Consent(exUid, "marketing"))))

@@ -1,0 +1,38 @@
+events:
+  - name: Consent
+    fields: [uid, purpose]
+    state_change: consented
+    category: consent
+  - name: Revoke
+    fields: [uid, purpose]
+    state_change: revoked
+    category: consent
+  - name: SpecialConsent
+    fields: [uid, purpose, spCat]
+    state_change: special_consented
+    category: special_consent
+  - name: RevokeSpecialConsent
+    fields: [uid, purpose, spCat]
+    state_change: special_revoked
+    category: special_consent
+  - name: RequestAccess
+    fields: [uid]
+    state_change: access_requested
+    category: request
+  - name: RequestErasure
+    fields: [uid, fid]
+    state_change: erasure_requested
+    category: request
+  - name: RequestRectification
+    fields: [uid, fid_old, fid_new]
+    state_change: rectification_requested
+    category: request
+
+state_to_event:
+  consented: Consent
+  revoked: Revoke
+  special_consented: SpecialConsent
+  special_revoked: RevokeSpecialConsent
+  access_requested: RequestAccess
+  erasure_requested: RequestErasure
+  rectification_requested: RequestRectification

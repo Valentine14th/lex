@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}My Statistics{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="mb-4"><i class="bi bi-bar-chart me-2"></i>My Statistics</h2>
+
+    <!-- Posting activity -->
+    <h5 class="mb-3">Posting Activity</h5>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-primary">{{ twit_count }}</h3>
+                <small class="text-body-secondary">Total Twits</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-success">{{ twit_last_30 }}</h3>
+                <small class="text-body-secondary">Last 30 days</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-info">{{ twit_last_7 }}</h3>
+                <small class="text-body-secondary">Last 7 days</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-secondary">{{ followers_count }} / {{ following_count }}</h3>
+                <small class="text-body-secondary">Followers / Following</small>
+            </div></div>
+        </div>
+    </div>
+
+    <!-- Engagement -->
+    <h5 class="mb-3">Engagement</h5>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-danger">{{ likes_received }}</h3>
+                <small class="text-body-secondary">Likes Received</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-danger">{{ likes_given }}</h3>
+                <small class="text-body-secondary">Likes Given</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-warning">{{ replies_received }} / {{ replies_given }}</h3>
+                <small class="text-body-secondary">Replies In / Out</small>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-success">{{ reposts_received }}</h3>
+                <small class="text-body-secondary">Reposts</small>
+            </div></div>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <h5 class="mb-3">Direct Messages</h5>
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-primary">{{ dm_sent }}</h3>
+                <small class="text-body-secondary">Sent</small>
+            </div></div>
+        </div>
+        <div class="col-sm-6">
+            <div class="card text-center"><div class="card-body">
+                <h3 class="text-primary">{{ dm_received }}</h3>
+                <small class="text-body-secondary">Received</small>
+            </div></div>
+        </div>
+    </div>
+
+    <!-- Daily activity trend -->
+    {% if daily_posts %}
+    <h5 class="mb-3">Daily Activity (30 days)</h5>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex align-items-end gap-1" style="height:120px;">
+                {% for day in daily_posts %}
+                <div class="flex-fill bg-primary rounded-top" title="{{ day.day|date:'M d' }}: {{ day.count }}"
+                     style="height:{{ day.count }}0%; min-height:4px; max-height:100%;"></div>
+                {% endfor %}
+            </div>
+            <div class="d-flex justify-content-between mt-1">
+                <small class="text-body-secondary">{{ daily_posts.0.day|date:"M d" }}</small>
+                <small class="text-body-secondary">{{ daily_posts|last }}</small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- My top pages -->
+    {% if my_top_pages %}
+    <h5 class="mb-3">My Most Visited Pages</h5>
+    <div class="card mb-4">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Page</th><th class="text-end">Visits</th></tr></thead>
+                <tbody>
+                    {% for page in my_top_pages %}
+                    <tr>
+                        <td><code>{{ page.path }}</code></td>
+                        <td class="text-end">{{ page.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Top twits -->
+    {% if top_twits %}
+    <h5 class="mb-3">Top Twits by Likes</h5>
+    {% for twit in top_twits %}
+    <div class="card tweet-card">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <p class="mb-0">{{ twit.content }}</p>
+                <small class="text-body-secondary"><i class="bi bi-clock"></i> {{ twit.posted_on }}</small>
+            </div>
+            <span class="badge bg-danger-subtle text-danger">
+                <i class="bi bi-heart-fill"></i> {{ twit.like_count }}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}

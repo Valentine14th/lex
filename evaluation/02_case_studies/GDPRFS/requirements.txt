@@ -1,0 +1,35 @@
+# GDPRFS – Python dependencies
+# Install with: pip install -r requirements.txt
+# (Activate the virtual environment first: source .gdprfs-venv/bin/activate)
+
+# FUSE Python bindings (requires libfuse-dev system package)
+# Install system dep first: apt install -y libfuse-dev fuse
+fuse-python>=1.0.9
+
+# Web framework + FUSE daemon services
+flask>=3.0
+flask-sqlalchemy>=3.1
+requests>=2.31
+
+# ORM
+sqlalchemy>=2.0
+
+# Data validation + AI
+pydantic>=2
+pydantic-ai>=0.1
+openai>=1.0
+
+# Document processing (Art 16 rectification, LLM content analysis)
+python-docx>=1.1
+odfpy>=1.4
+pypdf>=4.0
+pdfminer.six>=20221105
+reportlab>=4.0
+
+# Data handling
+pandas>=2.0
+openpyxl>=3.1
+python-Levenshtein>=0.25
+
+# Benchmark / testing utilities
+matplotlib>=3.8

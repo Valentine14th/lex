@@ -1,0 +1,8 @@
+ALWAYS (FORALL fid, exUid, inUid, p, reason.
+    (
+        (Use(fid, exUid)) AND (NOT StopSession(inUid)) SINCE (StartSession(inUid, p, reason))
+    )
+    IMPLIES (
+        (NOT Revoke(exUid, p)) SINCE (Consent(exUid, p))
+    )
+)

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}Messages{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-envelope me-2"></i>Messages</h2>
+        <a href="{% url 'send_message' %}" class="btn btn-primary">
+            <i class="bi bi-pencil-square me-1"></i>New Message
+        </a>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#received">
+                <i class="bi bi-inbox me-1"></i>Received ({{ received|length }})
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sent-tab">
+                <i class="bi bi-send me-1"></i>Sent ({{ sent|length }})
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="received">
+            {% for msg in received %}
+            <div class="card tweet-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-1">
+                        <strong><i class="bi bi-person"></i> {{ msg.sender }}</strong>
+                        <small class="text-body-secondary"><i class="bi bi-clock"></i> {{ msg.created_at }}</small>
+                    </div>
+                    <p class="mb-0">{{ msg.content }}</p>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-body-secondary py-4">
+                <p>No messages received.</p>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="tab-pane fade" id="sent-tab">
+            {% for msg in sent %}
+            <div class="card tweet-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-1">
+                        <strong><i class="bi bi-person"></i> To: {{ msg.recipient }}</strong>
+                        <small class="text-body-secondary"><i class="bi bi-clock"></i> {{ msg.created_at }}</small>
+                    </div>
+                    <p class="mb-0">{{ msg.content }}</p>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-body-secondary py-4">
+                <p>No messages sent.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

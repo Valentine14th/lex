@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+{% block title %}Request Erasure{% endblock %}
+{% block content %}
+<div class="container" style="max-width:700px;">
+    <h2 class="mb-2"><i class="bi bi-trash me-2"></i>Request Erasure (Art.&nbsp;17)</h2>
+    <p class="text-body-secondary">You have the right to obtain the erasure of personal data concerning you (right to be forgotten).</p>
+
+    <div class="alert alert-info">
+        <h5 class="alert-heading"><i class="bi bi-info-circle me-1"></i>What gets deleted?</h5>
+        <p class="mb-2">If you choose <strong>"Delete ALL my data"</strong>, the following will be permanently removed:</p>
+        <ul class="mb-2">
+            <li><strong>All your twits</strong>, replies, and reposts</li>
+            <li><strong>All your likes</strong></li>
+            <li><strong>All your direct messages</strong> (sent and received)</li>
+            <li><strong>Your follow relationships</strong> (followers and following)</li>
+            <li><strong>Your consent records</strong> and GDPR notifications</li>
+            <li><strong>Ad interaction data</strong> (impressions, clicks)</li>
+            <li><strong>Activity &amp; statistics data</strong> (page visits, logs)</li>
+            <li>Your <strong>name and email</strong> will be cleared from your profile</li>
+        </ul>
+        <p class="mb-0 small"><strong>Note:</strong> Your username and account will remain so you can still log in, but all personal data will be erased. To delete a single item instead, choose the specific option below.</p>
+    </div>
+
+    <div class="card border-danger">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="gdpr_request_id" value="{{ gdpr_request_id }}">
+                {{ form|bootstrap }}
+                <button type="submit" class="btn btn-danger mt-3">
+                    <i class="bi bi-trash me-1"></i>Request Erasure
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-body py-3">
+            <p class="small text-body-secondary mb-0">
+                <i class="bi bi-clock me-1"></i>Your request will be processed by the enforcement engine.
+                You will be notified once the deletion is complete.
+                You can track your request on the <a href="{% url 'gdpr_my_requests' %}">My Requests</a> page.
+            </p>
+        </div>
+    </div>
+
+    <a href="{% url 'gdpr_dashboard' %}" class="btn btn-link mt-3 p-0"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+{% endblock %}

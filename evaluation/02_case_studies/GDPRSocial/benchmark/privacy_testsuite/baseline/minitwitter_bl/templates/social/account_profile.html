@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="card">
+        <div class="card-body text-center">
+            <div class="user-avatar mx-auto mb-3" style="width:80px;height:80px;font-size:2rem;">
+                <i class="bi bi-person"></i>
+            </div>
+            <h3>{{ user.first_name }} {{ user.last_name }}</h3>
+            <p class="text-body-secondary">@{{ user.username }}</p>
+            <p class="text-body-secondary">{{ user.email }}</p>
+            <hr>
+            <a href="{% url 'my_twits' %}" class="btn btn-outline-primary me-2">
+                <i class="bi bi-pencil-square me-1"></i>My Twits
+            </a>
+            <a href="{% url 'following_list' %}" class="btn btn-outline-primary me-2">
+                <i class="bi bi-people me-1"></i>Following
+            </a>
+            <a href="{% url 'user_stats' %}" class="btn btn-outline-info">
+                <i class="bi bi-bar-chart me-1"></i>My Stats
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
