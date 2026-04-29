@@ -2,8 +2,8 @@
 opam-version: "2.0"
 synopsis: "Compiling the law into logic"
 description: "Compiling the law into logic"
-maintainer: ["François Hublet" "Jonas Degelo"]
-authors: ["François Hublet" "Jonas Degelo"]
+maintainer: ["Anonymous"]
+authors: ["Anonymous"]
 license: "LICENSE"
 doc: "https://url/to/documentation"
 depends: [

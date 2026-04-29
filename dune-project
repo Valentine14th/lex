@@ -6,9 +6,9 @@
 
 (generate_opam_files true)
 
-(authors "François Hublet" "Jonas Degelo")
+(authors "Anonymous")
 
-(maintainers "François Hublet" "Jonas Degelo")
+(maintainers "Anonymous")
 
 (license LICENSE)
 

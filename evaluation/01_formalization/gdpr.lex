@@ -1,9 +1,9 @@
 law "GDPR"
 
 note "This is a draft formalization of GDPR Articles 5-10, 12-22, 30, 45(1), 46(1), 49"
-note "Author: François Hublet"
-note "Date: 3 Oct 2025"
-note "Status: Untested"
+note "Author: XXXX"
+note "Date: 29 April 2026"
+note "Status: Tested"
 
 import formex GDPR
 
