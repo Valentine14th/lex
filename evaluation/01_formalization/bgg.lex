@@ -90,7 +90,7 @@ rule "principle"
     beurteilt(g, b)
   oblige
     zulaessig(g, b)
-  transparently enforceable suppressing beurteilt
+  transparently enforceable suppressing condition[0]
 
 paragraph "1"
 point "a"

@@ -490,6 +490,8 @@ preds:
 pred:
   | IDENT LPA pred_terms RPA
     { app (fst $1 +> $4) (snd $1) $3 }
+  | IDENT LPA pred_terms RPA EQ atomic
+    { app (fst $1 +> $6.pos) (snd $1) ($3 @ [$6]) }
 
 %inline interval_opt:
   | INTERVAL

@@ -123,4 +123,4 @@ rule "test"
     amount_excluded_from_gross_income(i) = a
   oblige
     print_amount_excluded_from_gross_income(i, a)
-  transparently enforceable causing print_amount_excluded_from_gross_income
+  transparently enforceable causing effects
