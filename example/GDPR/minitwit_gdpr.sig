@@ -25,7 +25,6 @@ IsNecessaryForSpecialMedicalReasons(a: string)
 IsNecessaryForSubstantialPublicInterest(a: string)
 IsNecessaryForVitalInterests(a: string, ds': string, v: string)
 IsPortabilityRequest(rq: string)+
-IsRecipientRequest(rq: string, d: string)
 IsRestrictionRequest(rq: string, d: string, p: string)
 IsSpecialData(d: string, sp: string)
 IsStatutoryContractualRequirement(de: string, ds: string, d: string, r: string)+
@@ -51,12 +50,14 @@ RelatesToCriminalConvictionsOrOffences(d: string)
 RequestAccess(user: string, request: string)
 RequestErasure(user: string, data: string, request: string)
 RequestObjection(user: string, purpose: string, de: string, request: string)
+RequestRecipientInformation(user: string, request: string)
 RequestRectification(user: string, data: string, data': string, request: string)
 RequestResponse(ds: string, rq: string, rs: string)+
 Revoke(user: string, purpose: string)-
 Send(entity: string, data: string)
 SendFile(entity: string, file: string)+
 SpecialConsent(user: string, purpose: string, sp: string)-
+SpecialRevoke(user: string, purpose: string, sp: string)
 SpecifiesNewController(rq: string, c': string)
 TP(t: int)
 Write(id: string, owner: string, activity: string, purpose: string, user: string)-

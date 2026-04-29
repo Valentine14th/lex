@@ -68,14 +68,14 @@ suppressable predicate HasPurpose
     p : purpose
 
 internal predicate CompatibleWithPurpose
-    """Data processing activity {a} is compatible with purpose {p}, taking into account ... (see Art. 6(4))"""
-    a : activity
-    p : purpose
+    """Purpose {p'} is compatible with purpose {p}, taking into account ... (see Art. 6(4))"""
+    p' : purpose
+    p  : purpose
 
 observable predicate IsCompatibleWithPurpose
-    """Data processing activity {a} is compatible with purpose {p}"""
-    a : activity
-    p : purpose
+    """Purpose {p'} is compatible with purpose {p}"""
+    p' : purpose
+    p  : purpose
 
 observable predicate IsSpecified
     """Purpose {p} is specified"""
@@ -90,8 +90,8 @@ observable predicate IsLegitimate
     p : purpose
 
 observable predicate IsArchival
-    """Activity {a} is one of the activities described in Article 89(1)"""
-    a : activity
+    """Purpose {p} is one of the purposes described in Article 89(1)"""
+    p : purpose
 
 observable predicate IsAdequate
     """Data {d} is adequate in relation to purpose {p}"""
@@ -108,8 +108,8 @@ observable predicate IsLimitedToWhatIsNecessary
     d : data
     p : purpose
 
-observable predicate IsAccurate
-    """Data {d} is accurate in relation to purpose {p}"""
+observable predicate IsInaccurate
+    """Data {d} is inaccurate in relation to purpose {p}"""
     d : data
     p : purpose
 
@@ -202,8 +202,9 @@ rule "purpose_limitation"
     whenever
         DataProcessing(pr, co, a, d)
         PersonalData(d, ds)
+        HasPurpose(a, p)
     oblige
-        EXISTS c, p. CompatibleWithPurpose(a, p) AND ONCE (DataProcessing(pr, co, c, d) AND IsCollection(c, ds) AND HasPurpose(c, p))
+        ONCE (EXISTS col_pr, col_co, c, col_ds, col_p. DataProcessing(col_pr, col_co, c, d) AND IsCollection(c, col_ds) AND HasPurpose(c, col_p) AND CompatibleWithPurpose(p, col_p))
     transparently enforceable suppressing condition[0]
 
 rule "general_purpose"
@@ -214,9 +215,9 @@ rule "general_purpose"
   
 rule "archiving_purpose"
     whenever
-        IsArchival(a)
+        IsArchival(p)
     constitute
-        CompatibleWithPurpose(a, "Archiving")
+        CompatibleWithPurpose(p, "Archiving")
 
 point "c"
 
@@ -238,13 +239,13 @@ rule "accurate_and_up_to_date"
         DataProcessing(pr, co, a, d)
         HasPurpose(a, p)
     oblige
-        IsAccurate(d, p)
+        NOT IsInaccurate(d, p)
         IsUpToDate(d, p)
     transparently enforceable suppressing condition[0]
 
 rule "accuracy_deletion"
     whenever
-        NOT IsAccurate(d, p)
+        IsInaccurate(d, p)
         EXISTS c, ds'. ONCE (DataProcessing(pr, co, c, d) AND IsCollection(c, ds') AND HasPurpose(c, p))
     oblige
         (NOT UndueDataDelay(d)) UNTIL (Delete(d) OR EXISTS d'. Rectify(d, d'))
@@ -264,7 +265,7 @@ rule "temporal_storage_limitation"
 
 rule "storage_limitation_exception"
     whenever
-        IsArchival(a) AND TechnicalAndOrganisationalMeasures(a) AND JustifiesStorage(a, d)
+        EXISTS p. HasPurpose(a, p) AND IsArchival(p) AND TechnicalAndOrganisationalMeasures(a) AND JustifiesStorage(a, d)
     except
         rule "temporal_storage_limitation"
 
@@ -628,6 +629,13 @@ suppressable event GiveSpecialConsent
     c : entity
     sp : special_data_category
 
+observable event WithdrawSpecialConsent
+    """Data subject {ds} revokes  consent to processor {c} to use data of special category {sp} for purpose {p}."""
+    ds : data_subject
+    p : purpose
+    c : entity
+    sp : special_data_category
+													
 observable predicate IsNecessaryForEmploymentLaw
     """Processing activity {a} is necessary for the purposes of carrying out the obligations and exercising specific rights of the
        controller or of the data subject in the field of employment and social security and social protection law in so far as
@@ -749,7 +757,7 @@ rule "special_data_consent_exception"
         IsSpecialData(d, sp)
         PersonalData(d, ds)
         DataProcessing(pr, c, a, d)
-        NOT (EXISTS p. HasPurpose(a, p) AND NOT (ONCE GiveSpecialConsent(ds, p, c, sp)))
+        NOT (EXISTS p. HasPurpose(a, p) AND NOT ((NOT WithdrawSpecialConsent(ds, p, c, sp)) SINCE GiveSpecialConsent(ds, p, c, sp)))
     except
         paragraph "1"
 
@@ -758,7 +766,7 @@ rule "special_data_consent_valid"
         IsSpecialData(d, sp)
         PersonalData(d, ds)
         DataProcessing(pr, c, a, d)
-        NOT (EXISTS p. HasPurpose(a, p) AND NOT (ONCE GiveSpecialConsent(ds, p, c, sp)))
+        NOT (EXISTS p. HasPurpose(a, p) AND NOT ((NOT WithdrawSpecialConsent(ds, p, c, sp)) SINCE GiveSpecialConsent(ds, p, c, sp)))
     constitute
         IsLawful(a, "9(2)(a)")
 
@@ -1462,6 +1470,7 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
+        ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds))
         NOT ONCE (EXISTS co, pr'. DataProcessing(pr', c, co, d) AND IsCollection(co, ds) AND HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
@@ -1769,7 +1778,8 @@ rule
         DataProcessing(pr, c, a, d)
         PersonalData(d, ds)
         HasPurpose(a, p)
-        ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND NOT HasPurpose(co, p))
+        ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds))
+        NOT ONCE (EXISTS pr', co. DataProcessing(pr', c, co, d) AND IsIndirectCollection(co, d, ds) AND HasPurpose(co, p))
     oblige
         ONCE (EXISTS de, re. Inform(c, ds, de) AND Contains(de, re) AND IsNewPurpose(re, p))
     transparently enforceable suppressing condition[0]
@@ -2318,9 +2328,13 @@ causable observable event NotifyOfRestriction
     p : purpose
 
 observable event IsRecipientRequest
-    """Request {rq} is a request for information about the recipients to whom data {d} have been disclosed."""
+    """Request {rq} is a request for information about the recipients to whom data has been disclosed."""
     rq : request
-    d : data
+
+causable observable predicate IsEffectiveRecipient
+    """Declaration {de} declares effective recipient {e}"""
+    de : declaration
+    e : entity
     
 rule "notify_rectification"
     whenever
@@ -2348,12 +2362,11 @@ rule "notify_restriction"
 
 rule "access_request_recipient"
     whenever
-        ONCE (Request(ds, rq, c) AND IsRecipientRequest(rq, d))
+        ONCE (Request(ds, rq, c) AND IsRecipientRequest(rq))
         RequestResponse(ds, rq, rs)
-        EXISTS pr, a. (ONCE DataProcessing(pr, c, a, d) AND PersonalData(d, ds))
-        ONCE Share(c, e, d)
+        ONCE (EXISTS d. Share(c, e, d) AND PersonalData(d, ds))
     oblige
-        EXISTS de. Contains(rs, de) AND IsRecipient(de, e)
+        EXISTS de. Contains(rs, de) AND IsEffectiveRecipient(de, e)
     transparently enforceable causing effects
 
 article "20" "Right to data portability"

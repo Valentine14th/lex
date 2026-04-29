@@ -51,6 +51,12 @@ suppressable event SpecialConsent
     purpose : purpose
     sp      : special_data_category
 
+observable event SpecialRevoke
+    """User {user} revokes consent for their data of special data category {sp} to be used for purpose {purpose}."""
+    user    : user_id
+    purpose : purpose
+    sp      : special_data_category
+
 observable event ContestAccuracy
     """User {user} challenges the accuracy of data {data}, claiming that it should be {data'} instead."""
     user    : user_id
@@ -73,6 +79,11 @@ observable event RequestErasure
     """User {user} requests erasure to their data {data} via request {request}."""
     user    : user_id
     data    : data_id
+    request : request_id
+
+observable event RequestRecipientInformation
+    """User {user} requests information about recipients of their data via request {request}."""
+    user    : user_id
     request : request_id
 
 causable observable event Declaration
@@ -418,7 +429,7 @@ assume true IsTransfer
 assume true IsTransferBasis
     """Irrelevant since no transfers are taking place."""
     
-assume true IsUnableToConsent
+assume false IsUnableToConsent
     """When creating an account, users must self-certify that they are physically and legally able to consent."""
 
 assume true ReportLastResortTransfer
@@ -473,12 +484,9 @@ note "### Refinement to system events ###"
 
 rule "r_IsCompatibleWithPurpose"
     whenever
-        a = "post_twit" OR a = "view_Twit" or a = "edit_Twit" OR a = "view_User" OR a = "edit_PageVisit" OR a = "view_PageVisit" OR a = "view_AdImpression" OR a = "edit_AdImpression"
+        (p = "service" AND p' = "service") OR (p = "personalized_ad" AND p' = "personalized_ad") OR (p = "statistics" AND p' = "statistics")
     refine
-        IsCompatibleWithPurpose(a, "service")
-        IsCompatibleWithPurpose(a, "personalized_ad")
-        IsCompatibleWithPurpose(a, "statistics")
-
+        IsCompatibleWithPurpose(p, p')
 
 rule "r_AutomatedDecision"
     """The only form of automated decision-making / profiling taking place concerns the selection of personalized ads. Otherwise, no profiling occurs."""
@@ -531,6 +539,12 @@ rule "r_GiveSpecialConsent"
     refine
         GiveSpecialConsent(ds, p, "GDPRSocial, Inc.", sp)
 
+rule "r_WithdrawSpecialConsent"
+    whenever
+        SpecialRevoke(ds, p, sp)
+    refine
+        WithdrawSpecialConsent(ds, p, "GDPRSocial, Inc.", sp)
+	
 rule "r_IsRectificationRequest"
     whenever
         RequestRectification(ds, d, d', rq)
@@ -596,12 +610,12 @@ rule "r_IsAccessRequest"
         Request(ds, rq, "GDPRSocial, Inc.")
         IsAccessRequest(rq)
 
-rule "r_IsAccurate"
+rule "r_IsInAccurate"
     """Data is assumed to be accurate unless their owner has contested its accuracy."""
     whenever
-        NOT ONCE (EXISTS ds, d', rq. RequestRectification(ds, d, d', rq))
+        RequestRectification(ds, d, d', rq)
     refine
-        IsAccurate(d, p)
+        IsInaccurate(d, p)
 
 rule "r_IsAutomatedDecision"
     whenever
@@ -707,6 +721,14 @@ rule "r_IsDirectTransmissionFeasible"
     refine
         IsDirectTransmissionFeasible("GDPRSocial, Inc.", x)
 
+rule "r_IsEffectiveRecipient"
+    whenever
+        Declaration(d)
+        HasText(d, "<h6>Recipients of your personal data</h6><p>Your personal data has been shared with the following entity: " + string_of_entity(e) + ".</p>")
+        NoteEntity(e)	
+    refine
+        IsEffectiveRecipient(d, e)
+
 rule "r_IsIdentityOfControllerOrRepresentative"
     whenever
         Declaration(d)
@@ -809,6 +831,13 @@ rule "r_IsRecipientCategory"
         NoteEntity(e)
     refine
         IsRecipientCategory(d, e)
+
+rule "r_IsRecipientRequest"
+    whenever
+        RequestRecipientInformation(ds, rq)
+    refine
+        Request(ds, rq, "GDPRSocial, Inc.")
+        IsRecipientRequest(rq)
 
 function string_of_data(
     d : data_id
@@ -931,8 +960,8 @@ rule "r_WithdrawConsent"
 
 rule "r_accuracy_deletion_new"
     whenever
-        NOT IsAccurate(d, p)
-        EXISTS c, ds'. ONCE (DataProcessing(pr, co, c, d) AND IsCollection(c, ds') AND HasPurpose(c, p))
+        IsInaccurate(d, p)
+        ONCE (EXISTS c, ds'. DataProcessing(pr, co, c, d) AND IsCollection(c, ds') AND HasPurpose(c, p))
     oblige
         (NOT UndueDataDelay(d)) UNTIL Delete(d)
     transparently enforceable causing effects
@@ -943,6 +972,21 @@ replace
     by
         rule "r_accuracy_deletion_new"
 
+rule "r_portability_new"
+    whenever
+        ONCE (Request(ds, rq, c) AND IsPortabilityRequest(rq) AND SpecifiesNewController(rq, c'))
+        RequestResponse(ds, rq, rs)
+        ContainsData(rs, f)
+    oblige
+        Transmit(c, c', f)
+    enforceable causing effects
+
+replace
+    strengthen
+        article "20" paragraph "2"
+    by
+        rule "r_portability_new"
+
 note "### Not refined ###"
 	        
 # Contains
@@ -950,7 +994,7 @@ note "### Not refined ###"
 # Delete
 # HasCategory
 # Inform
-# IsCategory
+# Category
 # IsConsentRequest
 # IsErasureRequest
 # IsFurtherCopy
@@ -963,10 +1007,6 @@ note "### Not refined ###"
 # IsNecessaryForSpecialMedicalReasons
 # IsNecessaryForSubstantialPublicInterest
 # IsNecessaryForVitalInterests
-# IsPortabilityRequest
-# IsRecipientRequest
-# IsRectificationRequest
-# IsRestrictionRequest
 # IsSpecialData
 # LiftRestriction
 # RelatesToCriminalConvictionsOrOffences
