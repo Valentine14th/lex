@@ -7,3 +7,24 @@ services:
       - "8000:8000"
     volumes:
       - ./log:/app/log
+      - ./policies:/app/policies
+
+  benchmark:
+    build:
+      context: ..
+      dockerfile: GDPRSocial/Dockerfile
+    volumes:
+      - ./policies:/app/policies
+      - ./output:/app/output
+    entrypoint: ["bash", "benchmark/privacy_testsuite/run_benchmark.sh"]
+    command:
+      - gdpr
+      - /opt/whyenf/enfguard
+      - --instrlib
+      - /app/instrlib
+      - --formula
+      - /app/policies/minitwit_gdpr.mfotl
+      - --sig
+      - /app/policies/minitwit_gdpr.sig
+      - --output-dir
+      - /app/output
