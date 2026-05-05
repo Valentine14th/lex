@@ -51,6 +51,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --formula)
             FORMULA_VAL="${2:?--formula requires a path or directory}"
+            FORMULA_VAL="${FORMULA_VAL%/}"   # strip trailing slash
             if [[ -d "$FORMULA_VAL" ]]; then
                 FORMULA_DIR="$FORMULA_VAL"
                 mapfile -t _mfotl_files < <(ls "$FORMULA_VAL"/*.mfotl 2>/dev/null | sort)
@@ -65,7 +66,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --sig)
-            SIG_ARG="-sig ${2:?--sig requires a comma-separated list of paths}"
+            SIG_ARG="-sig ${2%/}"
             shift 2
             ;;
         --output-dir)
@@ -81,7 +82,7 @@ done
 
 # If --formula was a directory and --sig was not given, auto-detect .sig files from same dir.
 if [[ -n "$FORMULA_DIR" && -z "$SIG_ARG" ]]; then
-    mapfile -t _sig_files < <(ls "$FORMULA_DIR"/*.sig 2>/dev/null | sort)
+    mapfile -t _sig_files < <(ls "${FORMULA_DIR}"/*.sig 2>/dev/null | sort)
     if [[ ${#_sig_files[@]} -gt 0 ]]; then
         SIG_LIST=$(IFS=,; echo "${_sig_files[*]}")
         SIG_ARG="-sig ${SIG_LIST}"
@@ -100,6 +101,28 @@ python3 benchmark/privacy_testsuite/prepare_databases.py
 echo ""
 echo "══════════════════════════════════════════════════════════"
 echo "  Step 2 – Running benchmark  (policy=${POLICY})"
+echo "══════════════════════════════════════════════════════════"
+echo "  Enforcer:  ${EXE:-<none (baseline)>}"
+if [[ -n "${INSTRLIB_ARG}" ]]; then
+    _instrlib_path="${INSTRLIB_ARG#-i }"
+    echo "  Instrlib:  ${_instrlib_path}"
+    if [[ ! -e "${_instrlib_path}" ]]; then
+        echo "  ERROR: instrlib path does not exist inside the container: ${_instrlib_path}" >&2
+        exit 1
+    fi
+else
+    echo "  Instrlib:  <default (baked into image)>"
+fi
+if [[ -n "${FORMULA_ARG}" ]]; then
+    echo "  Formula(s):"
+    IFS=',' read -ra _flist <<< "${FORMULA_ARG#-formula }"
+    for _f in "${_flist[@]}"; do echo "             $_f"; done
+else
+    echo "  Formula:   <default>"
+fi
+if [[ -n "${SIG_ARG}" ]]; then
+    echo "  Sig(s):    ${SIG_ARG#-sig }"
+fi
 echo "══════════════════════════════════════════════════════════"
 python3 benchmark/privacy_testsuite/privacy_test.py minitwitter \
     -f "${OUTPUT_DIR}" \

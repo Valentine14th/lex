@@ -18,6 +18,7 @@ Each scenario is measured under every combination of:
 """
 
 import os
+import re
 import signal
 import shutil
 import sqlite3
@@ -47,8 +48,15 @@ TIMELINE_URL    = f"{BASE}/"
 POST_TWEET_URL  = f"{BASE}/post/twit/"
 DELETE_TWEET_URL = f"{BASE}/twit/delete/"          # + <uuid>/
 ACCESS_URL      = f"{BASE}/gdpr/request/access/"
-NOTIFICATIONS_URL = f"{BASE}/gdpr/notifications/"
-CONSENT_URL     = f"{BASE}/gdpr/consent/"
+NOTIFICATIONS_URL    = f"{BASE}/gdpr/notifications/"
+CONSENT_URL          = f"{BASE}/gdpr/consent/"
+SPEC_CONSENT_URL     = f"{BASE}/gdpr/consent/special/"
+FOLLOW_URL           = f"{BASE}/search/user/"
+LIKE_URL             = f"{BASE}/twit/"              # + <uuid>/like/
+SEND_MSG_URL         = f"{BASE}/messages/send/"
+RECTIFICATION_URL    = f"{BASE}/gdpr/request/rectification/"
+ERASURE_URL          = f"{BASE}/gdpr/request/erasure/"
+OBJECTION_URL        = f"{BASE}/gdpr/request/objection/"
 
 # ── Constants ────────────────────────────────────────────────────────────
 CONFIGS        = [(1, 100), (10, 1000), (100, 10000)]   # (users, tweets)
@@ -111,12 +119,39 @@ class Scenario:
         return self._user_session(randint(0, self.u - 1))
 
     def _pick_random_tweet_id(self):
-        """Return a random tweet UUID from the live database."""
+        """Return a random tweet UUID (hyphenated) from the live database."""
         db = sqlite3.connect(self.database)
         ids = [r[0] for r in db.execute(
             "SELECT id FROM twitt_twit ORDER BY RANDOM() LIMIT 1").fetchall()]
         db.close()
-        return ids[0] if ids else None
+        if not ids:
+            return None
+        # Django stores UUIDs as 32-char hex without hyphens in SQLite;
+        # normalise so the value matches Django's <uuid:pk> URL converter.
+        try:
+            return str(uuid.UUID(ids[0]))
+        except ValueError:
+            return ids[0]
+
+    def _pick_random_other_user_pk(self, exclude_username):
+        """Return the PK of a random user that is not exclude_username."""
+        db = sqlite3.connect(self.database)
+        rows = [r[0] for r in db.execute(
+            "SELECT id FROM twitt_user WHERE username != ? ORDER BY RANDOM() LIMIT 1",
+            (exclude_username,)).fetchall()]
+        db.close()
+        return rows[0] if rows else None
+
+    @staticmethod
+    def _extract_hidden(html, field_name):
+        """Extract a hidden <input> value from an HTML page."""
+        m = re.search(
+            rf'name="{re.escape(field_name)}"[^>]*value="([^"]+)"'
+            rf'|value="([^"]+)"[^>]*name="{re.escape(field_name)}"',
+            html)
+        if m:
+            return m.group(1) or m.group(2)
+        return ""
 
     # ── lifecycle ────────────────────────────────────────────────────
     def initialize(self, config):
@@ -159,9 +194,9 @@ class Scenario:
             sleep(0.2)
 
     def continue_(self):
-        """Between repeated measurements – for erase_tweet we must restore."""
-        if self.sc == "erase_tweet":
-            # The tweet we deleted is gone; restore DB and restart server
+        """Between repeated measurements – restore DB for destructive scenarios."""
+        if self.sc in ("erase_tweet", "request_erasure"):
+            # Data may have been deleted; restore DB and restart server
             self.proc.kill()
             self.proc.wait()
             self._log_fh.close()
@@ -208,6 +243,20 @@ class Scenario:
                 return self._run_give_consent(result_base)
             elif self.sc == "revoke_consent":
                 return self._run_revoke_consent(result_base)
+            elif self.sc == "follow_user":
+                return self._run_follow_user(result_base)
+            elif self.sc == "like_tweet":
+                return self._run_like_tweet(result_base)
+            elif self.sc == "send_message":
+                return self._run_send_message(result_base)
+            elif self.sc == "special_consent":
+                return self._run_special_consent(result_base)
+            elif self.sc == "request_rectification":
+                return self._run_request_rectification(result_base)
+            elif self.sc == "request_erasure":
+                return self._run_request_erasure(result_base)
+            elif self.sc == "request_objection":
+                return self._run_request_objection(result_base)
         except requests.exceptions.RequestException as e:
             print(f"Request error in {self.sc}: {e}")
             return None
@@ -241,11 +290,16 @@ class Scenario:
                 return None
             # Log in as the author of that tweet
             db = sqlite3.connect(self.database)
-            author_id = db.execute(
-                "SELECT author_id FROM twitt_twit WHERE id=?", (twit_id,)
-            ).fetchone()[0]
+            # SQLite stores UUIDs without hyphens; strip them for the query
+            twit_id_raw = twit_id.replace("-", "")
+            row = db.execute(
+                "SELECT author_id FROM twitt_twit WHERE id=? OR id=?",
+                (twit_id, twit_id_raw)
+            ).fetchone()
+            author_id_raw = row[0]
             username = db.execute(
-                "SELECT username FROM twitt_user WHERE id=?", (author_id,)
+                "SELECT username FROM twitt_user WHERE id=? OR id=?",
+                (author_id_raw, author_id_raw.replace("-", ""))
             ).fetchone()[0]
             db.close()
 
@@ -300,6 +354,142 @@ class Scenario:
             assert r.status_code == 302, f"revoke_consent failed: {r.status_code}"
             return {**base, "t": r.elapsed.total_seconds()}
 
+    def _run_follow_user(self, base):
+        """POST a follow (triggers input enforcement for FollowUserView)."""
+        with Task("run", 'Scenario "follow_user"'):
+            sender_i = randint(0, self.u - 1)
+            sender_username = f"user{sender_i}"
+            # Pick a user that sender is not already following
+            db = sqlite3.connect(self.database)
+            row = db.execute("""
+                SELECT u.id FROM twitt_user u
+                WHERE u.username != ?
+                  AND u.id NOT IN (
+                      SELECT f.following_id FROM twitt_follow f
+                      JOIN twitt_user fu ON fu.id = f.follower_id
+                      WHERE fu.username = ?
+                  )
+                ORDER BY RANDOM() LIMIT 1
+            """, (sender_username, sender_username)).fetchone()
+            db.close()
+            if row is None:
+                print(f"follow_user: {sender_username} already follows everyone")
+                return None
+            target_pk = row[0]
+            s = self._user_session(sender_i)
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(FOLLOW_URL, data={
+                "pk": target_pk,
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"follow_user failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_like_tweet(self, base):
+        """POST a like on a random tweet (triggers Read enforcement event)."""
+        with Task("run", 'Scenario "like_tweet"'):
+            twit_id = self._pick_random_tweet_id()
+            if twit_id is None:
+                print("No tweets to like")
+                return None
+            s = self._random_user_session()
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(f"{LIKE_URL}{twit_id}/like/", data={
+                "csrfmiddlewaretoken": csrf,
+                "next": "/",
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"like_tweet failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_send_message(self, base):
+        """POST a direct message (triggers Write/Collect enforcement events)."""
+        with Task("run", 'Scenario "send_message"'):
+            sender_i = randint(0, self.u - 1)
+            s = self._user_session(sender_i)
+            recipient_pk = self._pick_random_other_user_pk(f"user{sender_i}")
+            if recipient_pk is None:
+                print("No other users for send_message")
+                return None
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(SEND_MSG_URL, data={
+                "recipient": recipient_pk,
+                "content": "Hello, this is a benchmark message.",
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"send_message failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_special_consent(self, base):
+        """POST special consent for a data category (triggers SpecialConsent event)."""
+        with Task("run", 'Scenario "special_consent"'):
+            s = self._random_user_session()
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(SPEC_CONSENT_URL, data={
+                "purpose": "statistics",
+                "special_category": "health",
+                "submit": "true",
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"special_consent failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_request_rectification(self, base):
+        """GET + POST rectification request (triggers RequestRectification + Rectify causation)."""
+        with Task("run", 'Scenario "request_rectification"'):
+            s = self._random_user_session()
+            # GET creates the GDPRRequest and embeds its ID in the form
+            r_get = s.get(RECTIFICATION_URL)
+            assert r_get.ok, f"request_rectification GET failed: {r_get.status_code}"
+            rq_id = self._extract_hidden(r_get.text, "gdpr_request_id")
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(RECTIFICATION_URL, data={
+                "field": "User.first_name",
+                "object_id": "",
+                "new_data": "Alice",
+                "gdpr_request_id": rq_id,
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"request_rectification POST failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_request_erasure(self, base):
+        """GET + POST erasure request for a random tweet (triggers RequestErasure + Delete causation)."""
+        with Task("run", 'Scenario "request_erasure"'):
+            twit_id = self._pick_random_tweet_id()
+            if twit_id is None:
+                print("No tweets for request_erasure")
+                return None
+            s = self._random_user_session()
+            r_get = s.get(ERASURE_URL)
+            assert r_get.ok, f"request_erasure GET failed: {r_get.status_code}"
+            rq_id = self._extract_hidden(r_get.text, "gdpr_request_id")
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(ERASURE_URL, data={
+                "scope": "Twit",
+                "object_id": str(twit_id),
+                "gdpr_request_id": rq_id,
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"request_erasure POST failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_request_objection(self, base):
+        """GET + POST objection request (triggers RequestObjection event)."""
+        with Task("run", 'Scenario "request_objection"'):
+            s = self._random_user_session()
+            r_get = s.get(OBJECTION_URL)
+            assert r_get.ok, f"request_objection GET failed: {r_get.status_code}"
+            rq_id = self._extract_hidden(r_get.text, "gdpr_request_id")
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(OBJECTION_URL, data={
+                "purpose": "statistics",
+                "reason": "I object to processing for analytics purposes.",
+                "gdpr_request_id": rq_id,
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"request_objection POST failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
 
 # =========================================================================
 #  Application
@@ -337,7 +527,7 @@ class Application:
         with Task("minitwit.stop", "Evaluation finished"):
             pass
 
-    def scenarios(self, policy):
+    def scenarios(self, policy, config=None):
         with Task("minitwit.scenarios", "Building scenario list"):
             cmd = list(self._base_cmd)
             env = dict(self._env)
@@ -345,18 +535,32 @@ class Application:
                 env["INSTRLIB_FORMULA"] = self._formula_override if self._formula_override else f"policies/{policy}.mfotl"
                 env["INSTRLIB_SIG"] = self._sig_override if self._sig_override else "policies/consent.sig"
 
+            u = config[0] if config is not None else 1
+
+            # Scenarios that require at least 2 users in the database.
+            _MULTI_USER = {"follow_user", "send_message"}
+
             scenario_names = [
                 "timeline",
                 "post_tweet",
                 #"erase_tweet",
+                "follow_user",
+                "like_tweet",
+                "send_message",
                 "right_to_info",
                 "privacy_notices",
                 "give_consent",
                 "revoke_consent",
+                "special_consent",
+                "request_rectification",
+                "request_erasure",
+                "request_objection",
             ]
 
             scenarios = []
             for sc_name in scenario_names:
+                if sc_name in _MULTI_USER and u < 2:
+                    continue
                 for consent in CONSENT_LEVELS:
                     scenarios.append(
                         Scenario(sc_name, cmd, self.database, policy, consent,

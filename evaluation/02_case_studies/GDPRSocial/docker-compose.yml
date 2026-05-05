@@ -16,6 +16,8 @@ services:
     volumes:
       - ./policies:/app/policies
       - ./output:/app/output
+      - ./instrlib:/app/instrlib
+      - ./instrlib_filter:/app/instrlib_filter
     entrypoint: ["bash", "benchmark/privacy_testsuite/run_benchmark.sh"]
     command:
       - gdpr

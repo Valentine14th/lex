@@ -126,27 +126,54 @@ App access:
 
 ### 4) Run benchmark (Docker)
 
-To keep benchmark results on the host, mount a local output folder:
+The preferred way is via Docker Compose, which pre-configures all volume mounts
+(`./policies`, `./output`, `./instrlib`, `./instrlib_filter`).
+
+**Default run** (uses the `command` defined in `docker-compose.yml`):
 
 ```bash
-mkdir -p output
-
-# Enforced benchmark:
-docker run --rm -it \
-  -v "$(pwd)/output:/app/output" \
-  gdprsocial:latest \
-  bash benchmark/privacy_testsuite/run_benchmark.sh gdpr /opt/whyenf/enfguard
-
-# Un-instrumented baseline (no enforcer argument needed):
-docker run --rm -it \
-  -v "$(pwd)/output:/app/output" \
-  gdprsocial:latest \
-  bash benchmark/privacy_testsuite/run_benchmark.sh baseline
+docker compose run --rm benchmark
 ```
 
-Expected runtime is around 5–7 minutes per run.
+**Override arguments per run** — any arguments after the service name replace
+the `command` entirely:
+
+```bash
+# Single formula
+docker compose run --rm benchmark gdpr /opt/whyenf/enfguard \
+  --instrlib /app/instrlib \
+  --formula /app/policies/minitwit_gdpr.mfotl \
+  --sig /app/policies/minitwit_gdpr.sig \
+  --output-dir /app/output
+
+# Formula directory (all .mfotl files used, .sig files auto-detected)
+docker compose run --rm benchmark gdpr /opt/whyenf/enfguard \
+  --instrlib /app/instrlib \
+  --formula /app/policies/split/
+
+# Different instrlib version
+docker compose run --rm benchmark gdpr /opt/whyenf/enfguard \
+  --instrlib /app/instrlib_filter \
+  --formula /app/policies/split/
+
+# Un-instrumented baseline (no enforcer argument)
+docker compose run --rm benchmark baseline \
+  --output-dir /app/output
+```
+
+**Available in-container paths** (all bind-mounted from host):
+
+| Container path        | Host path           |
+|-----------------------|---------------------|
+| `/app/policies/`      | `./policies/`       |
+| `/app/output/`        | `./output/`         |
+| `/app/instrlib/`      | `./instrlib/`       |
+| `/app/instrlib_filter/` | `./instrlib_filter/` |
+
+Changes to any of these on the host are reflected immediately — no rebuild needed.
 Results are written to `./output/minitwitter_<timestamp>/` on the host.
-Run both policies and compare latencies to measure enforcement overhead.
+
+Expected runtime is around 5–7 minutes per run.
 
 ## Notes
 

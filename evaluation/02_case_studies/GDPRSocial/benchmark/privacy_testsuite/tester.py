@@ -23,8 +23,9 @@ class Tester:
         app = self.App()
         app.start(self.policy, self.exe, self.instrlib, formula=self.formula, sig=self.sig)
         configs = app.configurations()
-        scenarios = app.scenarios(self.policy)
-        cs = [(config, scenario) for config in configs for scenario in scenarios]
+        cs = [(config, scenario)
+              for config in configs
+              for scenario in app.scenarios(self.policy, config=config)]
         for (config, scenario) in tqdm(cs):
             scenario.initialize(config)
             for _ in range(N):
