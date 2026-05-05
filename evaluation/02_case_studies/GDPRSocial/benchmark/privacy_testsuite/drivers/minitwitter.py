@@ -312,15 +312,24 @@ class Application:
     # Default enforcer path matching the project Makefile (ENFGUARD ?= ~/Git/whyenf/enfguard)
     enfguard_exe = str(Path.home() / "Git" / "whyenf" / "enfguard")
 
-    def start(self, policy, exe):
+    def start(self, policy, exe, instrlib=None, formula=None, sig=None):
         self.policy = policy
         self.is_baseline = (policy == "baseline")
         self._project_root = _BASELINE_ROOT if self.is_baseline else _PROJECT_ROOT
         self.database = str(self._project_root / "db.sqlite3")
         self._base_cmd = list(self.app_cmd)
         self._env = dict(os.environ)
+        self._formula_override = formula
+        self._sig_override = sig
         if not self.is_baseline:
             self._env["INSTRLIB_EXE"] = exe if exe else self.enfguard_exe
+        if instrlib is not None:
+            instrlib_path = Path(instrlib).resolve()
+            # Prepend the parent directory so `import instrlib` finds this version.
+            existing_pythonpath = self._env.get("PYTHONPATH", "")
+            self._env["PYTHONPATH"] = (
+                str(instrlib_path.parent) + (":" + existing_pythonpath if existing_pythonpath else "")
+            )
         with Task("minitwit.start", "Preparing evaluation"):
             pass   # DB preparation is per-snapshot, handled in Scenario.initialize
 
@@ -333,8 +342,8 @@ class Application:
             cmd = list(self._base_cmd)
             env = dict(self._env)
             if not self.is_baseline and policy and policy != "uninstrumented":
-                env["INSTRLIB_FORMULA"] = f"policies/{policy}.mfotl"
-                env["INSTRLIB_SIG"] = "policies/consent.sig"
+                env["INSTRLIB_FORMULA"] = self._formula_override if self._formula_override else f"policies/{policy}.mfotl"
+                env["INSTRLIB_SIG"] = self._sig_override if self._sig_override else "policies/consent.sig"
 
             scenario_names = [
                 "timeline",

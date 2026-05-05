@@ -1,0 +1,9 @@
+services:
+  gdprsocial:
+    build:
+      context: ..
+      dockerfile: GDPRSocial/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./log:/app/log

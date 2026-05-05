@@ -16,6 +16,17 @@ from typing import Any, Dict, List
 
 from instrlib.event import Event
 from instrlib.pdp import EnfGuard
+try:
+    from instrlib.pdp import MultiPDP
+    _MULTI_PDP_AVAILABLE = True
+except ImportError:
+    _MULTI_PDP_AVAILABLE = False
+
+try:
+    from instrlib.logger import MultiLogger
+    _MULTI_LOGGER_AVAILABLE = True
+except ImportError:
+    _MULTI_LOGGER_AVAILABLE = False
 from instrlib.logger import Logger
 from instrlib.pep import InstrumentationMapping, PEP
 from instrlib.schema import Schema
@@ -510,7 +521,46 @@ schema.add('TP',                    [int])
 #  PDP
 # =========================================================================
 
-pdp = EnfGuard(INSTRLIB_EXE, INSTRLIB_SIG, INSTRLIB_FORMULA, log_file=INSTRLIB_LOG, func=INSTRLIB_FUNC, state_file=INSTRLIB_STATE)
+_formulas = [f.strip() for f in INSTRLIB_FORMULA.split(',') if f.strip()]
+_sigs = [s.strip() for s in INSTRLIB_SIG.split(',') if s.strip()]
+
+# Expand a single directory to all .mfotl / .sig files within it.
+import glob as _glob
+if len(_formulas) == 1 and os.path.isdir(_formulas[0]):
+    _dir = _formulas[0]
+    _formulas = sorted(_glob.glob(os.path.join(_dir, '*.mfotl')))
+    if not _formulas:
+        raise RuntimeError(f"[Enforcer] No .mfotl files found in directory: {_dir}")
+    # Always prefer .sig files found in the formula directory over the default.
+    _dir_sigs = sorted(_glob.glob(os.path.join(_dir, '*.sig')))
+    if _dir_sigs:
+        _sigs = _dir_sigs
+if len(_sigs) == 1 and os.path.isdir(_sigs[0]):
+    _dir = _sigs[0]
+    _sigs = sorted(_glob.glob(os.path.join(_dir, '*.sig')))
+    if not _sigs:
+        raise RuntimeError(f"[Enforcer] No .sig files found in directory: {_dir}")
+
+def _sig_for(idx: int) -> str:
+    """Return the signature file for formula index idx, falling back to the last one."""
+    if idx < len(_sigs):
+        return _sigs[idx]
+    return _sigs[-1] if _sigs else INSTRLIB_SIG
+
+if _MULTI_PDP_AVAILABLE and len(_formulas) > 1:
+    print(f"[Enforcer] Multi-enforcer mode: {len(_formulas)} formulas detected")
+    pdp = MultiPDP(log_file=INSTRLIB_LOG)
+    for _idx, _formula in enumerate(_formulas):
+        _name = os.path.splitext(os.path.basename(_formula))[0]
+        pdp.add_enforcer(name=_name, exe=INSTRLIB_EXE, sig=_sig_for(_idx), formula=_formula)
+else:
+    if len(_formulas) > 1:
+        print(f"[Enforcer] Warning: multiple formulas specified but MultiPDP not available; using first formula only")
+    print(f"[Enforcer] Single enforcer mode: {_formulas[0]}")
+    try:
+        pdp = EnfGuard(INSTRLIB_EXE, _sig_for(0), _formulas[0], log_file=INSTRLIB_LOG, func=INSTRLIB_FUNC, state_file=INSTRLIB_STATE)
+    except TypeError:
+        pdp = EnfGuard(INSTRLIB_EXE, _sig_for(0), _formulas[0], log_file=INSTRLIB_LOG)
 
 
 # =========================================================================
@@ -823,4 +873,7 @@ pep = PEP(
 #  LOGGER
 # =========================================================================
 
-logger = Logger(pep, schema, pdp)
+if _MULTI_PDP_AVAILABLE and _MULTI_LOGGER_AVAILABLE and isinstance(pdp, MultiPDP):
+    logger = MultiLogger(pep, schema, pdp)
+else:
+    logger = Logger(pep, schema, pdp)

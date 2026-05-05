@@ -17,6 +17,8 @@ if __name__ == '__main__':
     policy = None
     sig = None
     exe = None
+    instrlib = None
+    formula = None
 
     for i in range(2, len(sys.argv), 2):
         if sys.argv[i] == '-o':
@@ -34,9 +36,15 @@ if __name__ == '__main__':
             bs = sys.argv[i+1]
         if sys.argv[i] == '-e':
             exe = sys.argv[i+1]
+        if sys.argv[i] == '-i':
+            instrlib = sys.argv[i+1]
+        if sys.argv[i] == '-formula':
+            formula = sys.argv[i+1]
+        if sys.argv[i] == '-sig':
+            sig = sys.argv[i+1]
             
             
-    t = Tester(sys.argv[1], baseline.Application, Reporter, folder, policy, exe)
+    t = Tester(sys.argv[1], baseline.Application, Reporter, folder, policy, exe, instrlib, formula=formula, sig=sig)
 
     if will_test:
         t.test(folder=folder)

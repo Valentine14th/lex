@@ -18,7 +18,7 @@ COPY GDPRSocial/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY GDPRSocial /app
-RUN rm -f /app/instrlib
+RUN rm -rf /app/instrlib
 COPY instrlib /app/instrlib
 COPY --from=enfflash /opt/whyenf/enfguard /opt/whyenf/enfguard
 COPY --from=enfflash /usr/local/bin/enfflash /usr/local/bin/enfflash

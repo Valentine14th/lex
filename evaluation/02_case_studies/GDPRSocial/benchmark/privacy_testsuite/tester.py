@@ -6,7 +6,7 @@ class Tester:
 
     DEFAULT_N = 20
     
-    def __init__(self, title, App, Reporter, root_folder, policy, exe):
+    def __init__(self, title, App, Reporter, root_folder, policy, exe, instrlib=None, formula=None, sig=None):
         self.App = App
         self.Reporter = Reporter
         self.title = title
@@ -14,11 +14,14 @@ class Tester:
         self.reporter = None
         self.policy = policy
         self.exe = exe
+        self.instrlib = instrlib
+        self.formula = formula
+        self.sig = sig
         
     def test(self, N=DEFAULT_N, folder=None):
         data = []
         app = self.App()
-        app.start(self.policy, self.exe)
+        app.start(self.policy, self.exe, self.instrlib, formula=self.formula, sig=self.sig)
         configs = app.configurations()
         scenarios = app.scenarios(self.policy)
         cs = [(config, scenario) for config in configs for scenario in scenarios]
