@@ -3,7 +3,7 @@
 # run_benchmark.sh — Prepare databases then run the full performance benchmark.
 #
 # Usage:
-#   ./benchmark/privacy_testsuite/run_benchmark.sh <policy> [<enfguard_exe>] [--instrlib <path>] [--formula <path>] [--sig <path>] [--output-dir <path>]
+#   ./benchmark/privacy_testsuite/run_benchmark.sh <policy> [<enfguard_exe>] [--instrlib <path>] [--formula <path>] [--sig <path>] [--output-dir <path>] [--run-label <name>]
 #
 # For enforced policies supply the enfguard executable:
 #   ./benchmark/privacy_testsuite/run_benchmark.sh gdpr /opt/whyenf/enfguard
@@ -26,7 +26,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # → miniTwitter_gdpr/
 
-POLICY="${1:?Usage: $0 <policy> [<enfguard_exe>] [--instrlib <path>] [--formula <path>] [--sig <path>]}"
+POLICY="${1:?Usage: $0 <policy> [<enfguard_exe>] [--instrlib <path>] [--formula <path>] [--sig <path>] [--output-dir <path>] [--run-label <name>]}"
 
 # EXE is only required for enforced policies.
 if [[ "${POLICY}" == "baseline" ]]; then
@@ -43,6 +43,7 @@ FORMULA_ARG=""
 SIG_ARG=""
 FORMULA_DIR=""
 OUTPUT_DIR_OVERRIDE=""
+RUN_LABEL=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --instrlib)
@@ -73,6 +74,10 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_DIR_OVERRIDE="${2:?--output-dir requires a path}"
             shift 2
             ;;
+        --run-label)
+            RUN_LABEL="${2:?--run-label requires a value}"
+            shift 2
+            ;;
         *)
             echo "Unknown argument: $1" >&2
             exit 1
@@ -89,7 +94,12 @@ if [[ -n "$FORMULA_DIR" && -z "$SIG_ARG" ]]; then
     fi
 fi
 
-OUTPUT_DIR="$(realpath "${OUTPUT_DIR_OVERRIDE:-output}")"
+OUTPUT_ROOT="$(realpath "${OUTPUT_DIR_OVERRIDE:-output}")"
+if [[ -n "${RUN_LABEL}" ]]; then
+    OUTPUT_DIR="${OUTPUT_ROOT}/${RUN_LABEL}"
+else
+    OUTPUT_DIR="${OUTPUT_ROOT}"
+fi
 mkdir -p "${OUTPUT_DIR}"
 echo "  Output directory: ${OUTPUT_DIR}"
 
