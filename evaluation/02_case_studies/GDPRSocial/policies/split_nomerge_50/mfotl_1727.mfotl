@@ -1,0 +1,13 @@
+LET DataProcessing(_p176 : string, _p177 : string, _p178 : string, _p179 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p179, ds, _p178, p, ds')) ∨:L (∃ds'. Write(_p179, ds, _p178, p, ds')) ∨:L Collect(_p178, _p179, ds, p)) ∧:L ((_p177) = "GDPRSocial, Inc.")) ∧:L ((_p176) = "GDPRSocial, Inc.") IN
+LET Disclose(_p172 : string, _p173 : string) = ∃a. ∃ds. ∃p. Read(_p172, ds, a, p, _p173) IN
+LET DisproportionateEffortToInform(_p366 : string, _p367 : string, _p368 : string) = ⊥ IN
+LET HasIntendedAutomatedDecision(_p157 : string, _p158 : string) = ∃a. ∃ds. Collect(a, _p157, ds, "personalized_ad") ∧ ((_p158) = "We use the content of the page shown to the user to display personalized advertisement") IN
+LET IsAutomatedDecision(_p137 : string)+ = Declaration(_p137) ∧:L HasText(_p137, "<h6>Automated decision-making</h6><p>We use the content of your latest posts to display personalized advertisement. No human review is involved in this decision.</p>") IN
+LET IsCollection(_p132 : string, _p133 : string) = ∃d. ∃p. Collect(_p132, d, _p133, p) IN
+LET IsReasonablePeriod(_p302 : int, _p303 : int) = ⊥ IN
+LET IsReception(_p300 : string, _p301 : string) = ⊥ IN
+LET UseForCommunication(_p211 : string, _p212 : string) = ⊥ IN
+LET IsIndirectCollection(_p36 : string, _p37 : string, _p38 : string) = (∃c. ∃e. ∃pr. (DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsReception(_p36, e)) ∨ (∃c. ∃ds'. ∃pr. ((DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsCollection(_p36, ds')) ∧ ((_p38 <> ds') = 1)) IN
+LET Exception96(a : string, c : string, ds : string) = DisproportionateEffortToInform(c, ds, a) IN
+LET CanDelayInform(_p39 : string, _p40 : string, _p41 : string) = ∃d. ∃pr. ∃t. ∃t'. (((((⧫[0s,∞) (DataProcessing(pr, _p39, _p41, d) ∧ TP(t)) ∧ IsIndirectCollection(_p41, d, _p40)) ∧ TP(t')) ∧ IsReasonablePeriod(t, t')) ∧ ¬UseForCommunication(d, _p40)) ∧ ¬(∃ds'. Disclose(d, ds') ∧ ((_p40 <> ds') = 1))) ∧ ¬Exception96(_p41, _p39, _p40) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1727:1-1734:45"}{∀a. ∀c. ∀ds. (∃d. ∃de. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsIndirectCollection(a, d, ds)) ∧ HasIntendedAutomatedDecision(d, de)) ∧ ¬Exception96(a, c, ds)) →:R CanDelayInform(c, ds, a) U[0s,1M]:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsAutomatedDecision(re))}

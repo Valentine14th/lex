@@ -1,0 +1,11 @@
+LET DataProcessing(_p176 : string, _p177 : string, _p178 : string, _p179 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p179, ds, _p178, p, ds')) ∨:L (∃ds'. Write(_p179, ds, _p178, p, ds')) ∨:L Collect(_p178, _p179, ds, p)) ∧:L ((_p177) = "GDPRSocial, Inc.")) ∧:L ((_p176) = "GDPRSocial, Inc.") IN
+LET HasPurpose(_p153 : string, _p154 : string)- = ∃d. ∃ds. (∃ds'. Read(d, ds, _p153, _p154, ds')) ∨:L (∃ds'. Write(d, ds, _p153, _p154, ds')) ∨:L Collect(_p153, d, ds, _p154) IN
+LET IsAccessRequest(_p143 : string) = ∃ds. RequestAccess(ds, _p143) IN
+LET IsPurposeOfProcessing(_p113 : string, _p114 : string)+ = (((Declaration(_p113) ∧:L ((_p114) = "service" →:R HasText(_p113, "<h6>Processing for strictly necessary purposes</h6><p>We process your data to provide GDPRSocial's essential functionality.</p>"))) ∧:R ((_p114) = "personalized_ad" →:R HasText(_p113, "<h6>Processing for advertisement purposes</h6><p>We process your data to show you personalized advertisement.</p>"))) ∧:R ((_p114) = "statistics" →:R HasText(_p113, "<h6>Processing for statistical purposes</h6><p>We process your data to generate website statistics and analytics.</p>"))) ∧:R NotePurpose(_p114) IN
+LET RefuseRequest(_p286 : string, _p287 : string, _p288 : string)- = ⊥ IN
+LET Request(_p140 : string, _p141 : string, _p142 : string) = (∃d. ∃d'. (ContestAccuracy(_p140, d, d') ∧ ((_p142) = "GDPRSocial, Inc.")) ∧ ((_p141) = "")) ∨ (∃d. ∃d'. RequestRectification(_p140, d, d', _p141) ∧ ((_p142) = "GDPRSocial, Inc.")) ∨ (∃d. RequestErasure(_p140, d, _p141) ∧ ((_p142) = "GDPRSocial, Inc.")) ∨ RequestAccess(_p140, _p141) ∧ ((_p142) = "GDPRSocial, Inc.") IN
+LET RequestExtension(_p282 : string, _p283 : string)- = ⊥ IN
+LET UndueDelay(_p273 : string) = ⊤ IN
+LET Exception49(c : string, ds : string, rq : string) = ⧫[0s,∞) Request(ds, rq, c) ∧ RefuseRequest(c, rq, ds) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1843:1-1850:45"}{∀p. ∀rs. (∃c. ∃ds. ∃rq. (⧫[0s,∞) (Request(ds, rq, c) ∧ IsAccessRequest(rq)) ∧ RequestResponse(ds, rq, rs)) ∧ (∃pr. ∃a. ∃d. ⧫[0s,∞) (DataProcessing(pr, c, a, d) ∧ PersonalData(d, ds) ∧ HasPurpose(a, p)))) →:R (∃de. Contains(rs, de) ∧:L IsPurposeOfProcessing(de, p))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1001:1-1006:45"}{∀c. ∀ds. ∀rq. Request(ds, rq, c) ∧ ¬Exception49(c, ds, rq) →:R ¬UndueDelay(rq) U[0s,1M]:R (∃rs. RequestResponse(ds, rq, rs)) ∨:L RequestExtension(c, rq)}

@@ -1,0 +1,13 @@
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET Disclose(_p179 : string, _p180 : string) = ∃a. ∃ds. ∃p. Read(_p179, ds, a, p, _p180) IN
+LET DisproportionateEffortToInform(_p373 : string, _p374 : string, _p375 : string) = ⊥ IN
+LET HasIntendedRecipientCategory(_p158 : string, _p159 : string) = ⊥ ∨ (∃a. ∃ds. Collect(a, _p158, ds, "statistics") ∧ ((_p159) = "Analytics, Inc.")) IN
+LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
+LET IsReasonablePeriod(_p309 : int, _p310 : int) = ⊥ IN
+LET IsReception(_p307 : string, _p308 : string) = ⊥ IN
+LET IsRecipientCategory(_p103 : string, _p104 : string)+ = (Declaration(_p103) ∧:L HasText(_p103, "<h6>Categories of recipients</h6><p>We intend to share your personal data with the following categories of entities: " ^ string_of_entity(_p104) ^ ".</p>")) ∧:R NoteEntity(_p104) IN
+LET UseForCommunication(_p218 : string, _p219 : string) = ⊥ IN
+LET IsIndirectCollection(_p36 : string, _p37 : string, _p38 : string) = (∃c. ∃e. ∃pr. (DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsReception(_p36, e)) ∨ (∃c. ∃ds'. ∃pr. ((DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsCollection(_p36, ds')) ∧ ((_p38 <> ds') = 1)) IN
+LET Exception96(a : string, c : string, ds : string) = DisproportionateEffortToInform(c, ds, a) IN
+LET CanDelayInform(_p39 : string, _p40 : string, _p41 : string) = ∃d. ∃pr. ∃t. ∃t'. (((((⧫[0s,∞) (DataProcessing(pr, _p39, _p41, d) ∧ TP(t)) ∧ IsIndirectCollection(_p41, d, _p40)) ∧ TP(t')) ∧ IsReasonablePeriod(t, t')) ∧ ¬UseForCommunication(d, _p40)) ∧ ¬(∃ds'. Disclose(d, ds') ∧ ((_p40 <> ds') = 1))) ∧ ¬Exception96(_p41, _p39, _p40) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1587:1-1594:45"}{∀a. ∀c. ∀ds. ∀rc. (∃d. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsIndirectCollection(a, d, ds)) ∧ HasIntendedRecipientCategory(d, rc)) ∧ ¬Exception96(a, c, ds)) →:R CanDelayInform(c, ds, a) U[0s,1M]:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsRecipientCategory(re, rc))}

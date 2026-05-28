@@ -1,0 +1,9 @@
+LET DataProcessing(_p176 : string, _p177 : string, _p178 : string, _p179 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p179, ds, _p178, p, ds')) ∨:L (∃ds'. Write(_p179, ds, _p178, p, ds')) ∨:L Collect(_p178, _p179, ds, p)) ∧:L ((_p177) = "GDPRSocial, Inc.")) ∧:L ((_p176) = "GDPRSocial, Inc.") IN
+LET HasSecurityMeasuresDeclaration(_p149 : string, _p150 : string) = ⊤ ∧ ((_p150) = "GDPRSocial, Inc. implements the following technical and organisational security measures: (1) all web traffic is served over HTTPS/TLS; (2) user passwords are stored using Django's PBKDF2-SHA256 hashing with per-user salts; (3) CSRF protection is enforced on all state-changing requests; (4) access control ensures users can only modify their own data; (5) the proactive GDPR enforcement engine automatically prevents policy-violating data processing at runtime; (6) personal data deletion is available on demand via the right-to-erasure mechanism.") IN
+LET IsOccasionalProcessing(_p312 : string) = ⊥ IN
+LET IsRiskyProcessing(_p299 : string) = ⊥ IN
+LET IsSME(_p92 : string) = ⊤ ∧ ((_p92) = "GDPRSocial, Inc.") IN
+LET Record(_p68 : string, _p69 : string, _p70 : string, _p71 : string, _p72 : string)+ = ActivityRecord(_p70, _p71, _p72) IN
+LET Exception164(a : string, c : string, d' : string, pr : string) = (IsRiskyProcessing(a) ∧ ¬IsOccasionalProcessing(a)) ∧ (DataProcessing(pr, c, a, d') ∧ ((∃sp. IsSpecialData(d', sp)) ∨ RelatesToCriminalConvictionsOrOffences(d'))) IN
+LET Exception163(c : string, pr : string) = (IsSME(c) ∧ IsSME(pr)) ∧ ¬(∃a. ∃d'. Exception164(a, c, d', pr)) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2763:1-2770:45"}{∀a. ∀c. ∀de. ∀pr. (∃d. ∃ds. ((DataProcessing(pr, c, a, d) ∧ PersonalData(d, ds)) ∧ HasSecurityMeasuresDeclaration(a, de)) ∧ ¬Exception163(c, pr)) →:R Record(pr, c, a, "SecurityMeasures", string_of_declaration(de))}

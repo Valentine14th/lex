@@ -1,0 +1,6 @@
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET HasPurpose(_p156 : string, _p157 : string)- = ∃d. ∃ds. (∃ds'. Read(d, ds, _p156, _p157, ds')) ∨:L (∃ds'. Write(d, ds, _p156, _p157, ds')) ∨:L Collect(_p156, d, ds, _p157) IN
+LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
+LET IsInaccurate(_p144 : string, _p145 : string) = ∃d'. ∃ds. ∃rq. RequestRectification(ds, _p144, d', rq) IN
+LET UndueDataDelay(_p281 : string) = ⊤ IN
+□[0s,∞) {"../Lex/example/GDPR/minitwit_gdpr.rex:961:1-967:45"}{∀d. (∃co. ∃p. ∃pr. IsInaccurate(d, p) ∧ ⧫[0s,∞) (∃c. ∃ds'. DataProcessing(pr, co, c, d) ∧ IsCollection(c, ds') ∧ HasPurpose(c, p))) →:R ¬UndueDataDelay(d) U[0s,0s]:R Delete(d)}
