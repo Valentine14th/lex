@@ -59,7 +59,7 @@ ERASURE_URL          = f"{BASE}/gdpr/request/erasure/"
 OBJECTION_URL        = f"{BASE}/gdpr/request/objection/"
 
 # ── Constants ────────────────────────────────────────────────────────────
-CONFIGS        = [(1, 100), (10, 1000), (100, 10000)]   # (users, tweets)
+CONFIGS        = [(1, 100), (10, 1000), (100, 10000)]   # (users, tweets) (1000, 10000)
 CONSENT_LEVELS = ["none"]#, "statistics", "statistics_ads"]
 
 
@@ -245,6 +245,8 @@ class Scenario:
                 return self._run_revoke_consent(result_base)
             elif self.sc == "follow_user":
                 return self._run_follow_user(result_base)
+            elif self.sc == "search_user":
+                return self._run_search_user(result_base)
             elif self.sc == "like_tweet":
                 return self._run_like_tweet(result_base)
             elif self.sc == "send_message":
@@ -383,6 +385,14 @@ class Scenario:
                 "csrfmiddlewaretoken": csrf,
             }, allow_redirects=False)
             assert r.status_code == 302, f"follow_user failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_search_user(self, base):
+        """GET user search/list page."""
+        with Task("run", 'Scenario "search_user"'):
+            s = self._random_user_session()
+            r = s.get(FOLLOW_URL)
+            assert r.ok, f"search_user failed: {r.status_code}"
             return {**base, "t": r.elapsed.total_seconds()}
 
     def _run_like_tweet(self, base):
@@ -545,6 +555,7 @@ class Application:
                 "post_tweet",
                 #"erase_tweet",
                 "follow_user",
+                #"search_user",
                 "like_tweet",
                 "send_message",
                 "right_to_info",
