@@ -7,6 +7,8 @@ from time import time, sleep
 import datetime
 import re
 import json
+import os
+import shutil
 from typing import Any, List, Dict, Set, Tuple, Union
 
 from instrlib.timer import Timer
@@ -28,6 +30,7 @@ class PDP(ABC):
         self.timer            : Timer          = Timer()
         self.termination_flag : Event          = Event()
         self.read_queue       : Queue          = Queue()
+        self.cpu_core         : int     | None = None
         
     @abstractmethod
     def ts_bytes(self, stm : str, tsp : Union[float, None] = None, flag_q : bool = False) -> bytes:
@@ -66,8 +69,17 @@ class PDP(ABC):
     def start_threads(self) -> None:
         cmd = self.command()
 
+        preexec_fn = None
+        if self.cpu_core is not None and hasattr(os, "sched_setaffinity"):
+            cpu_core = self.cpu_core
+
+            def _pin_to_cpu() -> None:
+                os.sched_setaffinity(0, {cpu_core})
+
+            preexec_fn = _pin_to_cpu
+
         print(' '.join(cmd))
-        self.ocaml_proc    = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+        self.ocaml_proc    = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=STDOUT, preexec_fn=preexec_fn)
 
         self.timer_thread  = Thread(target=self.run_timer_thread)
         self.writer_thread = Thread(target=self.run_writer_thread)
@@ -81,11 +93,20 @@ class PDP(ABC):
 class EnfGuard(PDP):
 
     def __init__(self, exe : str, sig : str, formula : str, *args, **kwargs):
+        cpu_core = kwargs.pop('cpu_core', None)
         super(EnfGuard, self).__init__(*args, **kwargs)
         self.exe     : str = exe
         self.sig     : str = sig
         self.formula : str = formula
         self.allowed_events : Set[str] = self._parse_signature_file(sig)
+        self.cpu_core : int | None = int(cpu_core) if cpu_core is not None else None
+        if self.cpu_core is None:
+            env_cpu = os.getenv("INSTRLIB_PIN_CPU")
+            if env_cpu is not None and env_cpu.strip() != "":
+                try:
+                    self.cpu_core = int(env_cpu.strip())
+                except ValueError:
+                    print(f"[EnfGuard] Warning: invalid INSTRLIB_PIN_CPU='{env_cpu}', ignoring")
     
     def _parse_signature_file(self, sig_path : str) -> Set[str]:
         """
@@ -307,12 +328,36 @@ class MultiPDP:
         self.enforcers : List[Tuple[str, PDP]] = []  # List of (name, pdp) tuples
         self.log_file = log_file
         self.pep : PEP | None = None
+        self.pinned_cpus : List[int] = self._discover_pinned_cpus()
+
+    def _discover_pinned_cpus(self) -> List[int]:
+        raw = os.getenv("INSTRLIB_PIN_CPUS", "")
+        if raw.strip() != "":
+            try:
+                return [int(cpu.strip()) for cpu in raw.split(',') if cpu.strip() != ""]
+            except ValueError:
+                print(f"[MultiPDP] Warning: invalid INSTRLIB_PIN_CPUS='{raw}', ignoring")
+
+        if hasattr(os, "sched_getaffinity"):
+            return sorted(os.sched_getaffinity(0))
+
+        cpu_count = os.cpu_count()
+        if cpu_count is None:
+            return []
+        return list(range(cpu_count))
         
     def add_enforcer(self, name : str, exe : str, sig : str, formula : str) -> None:
         """Add a new enforcer with the given name and configuration"""
-        pdp = EnfGuard(name=name, exe=exe, sig=sig, formula=formula, log_file=self.log_file)
+        cpu_core : int | None = None
+        if self.pinned_cpus:
+            cpu_core = self.pinned_cpus[len(self.enforcers) % len(self.pinned_cpus)]
+
+        pdp = EnfGuard(name=name, exe=exe, sig=sig, formula=formula, log_file=self.log_file, cpu_core=cpu_core)
         self.enforcers.append((name, pdp))
-        print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula}")
+        if cpu_core is None:
+            print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula}")
+        else:
+            print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula} (cpu={cpu_core})")
     
     def start_threads(self) -> None:
         """Start all enforcers in parallel"""

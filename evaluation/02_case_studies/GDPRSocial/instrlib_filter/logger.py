@@ -243,6 +243,9 @@ class MultiLogger(BaseLogger):
         super().__init__(pep, schema, cache_timeout)
         self.multi_pdp : MultiPDP = multi_pdp
         self.multi_pdp.pep = pep
+        self._sup_enc_sets : Dict[str, Set[Tuple[Any, ...]]] = {}
+        self._cau_enc_sets : Dict[str, Set[Tuple[Any, ...]]] = {}
+        self.event_to_enforcers : Dict[str, List[Tuple[str, PDP]]] = {}
         
         # Per-enforcer state
         self.enforcers_state : Dict[str, Dict] = {}
@@ -254,12 +257,29 @@ class MultiLogger(BaseLogger):
                 'cau_enc': {},
                 'write_prio': pdp.write_prio,
                 'timer': pdp.timer,
-                'cache': {}
+                'cache': {},
+                'pdp': pdp,
             }
+
+            allowed_events = getattr(pdp, 'allowed_events', None)
+            if allowed_events is None and hasattr(pdp, 'accepts_event'):
+                allowed_events = [event_name for event_name in self.schema.mapping if pdp.accepts_event(event_name)]
+            if allowed_events is not None:
+                for event_name in allowed_events:
+                    if event_name not in self.event_to_enforcers:
+                        self.event_to_enforcers[event_name] = []
+                    self.event_to_enforcers[event_name].append((name, pdp))
+
+    def _materialize_aggregated_encodings(self) -> None:
+        """Convert internal set-based aggregation to list form for downstream consumers."""
+        self.sup_enc = {name: list(args_set) for name, args_set in self._sup_enc_sets.items()}
+        self.cau_enc = {name: list(args_set) for name, args_set in self._cau_enc_sets.items()}
     
     def _reset(self):
         """Reset aggregated state and per-enforcer state"""
         super()._reset()
+        self._sup_enc_sets = {}
+        self._cau_enc_sets = {}
         # Also reset per-enforcer state
         for name in self.enforcers_state:
             self.enforcers_state[name]['sup_events'] = set()
@@ -292,18 +312,23 @@ class MultiLogger(BaseLogger):
         # Broadcast to all enforcers in parallel
         enf_queues : Dict[str, Queue] = {}
         enf_events : Dict[str, threading.Event] = {}
-        
-        for name, pdp in self.multi_pdp.get_all_enforcers():
-            # Filter events based on this enforcer's signature file
-            filtered_events = [event for event in events if pdp.accepts_event(event.name)]
-            
-            # Skip if no events for this enforcer
+
+        events_by_enforcer : Dict[str, List[Event]] = {}
+        for ev in events:
+            for name, _ in self.event_to_enforcers.get(ev.name, []):
+                if name not in events_by_enforcer:
+                    events_by_enforcer[name] = []
+                events_by_enforcer[name].append(ev)
+
+        for name, filtered_events in events_by_enforcer.items():
             if not filtered_events:
                 continue
+
+            state = self.enforcers_state[name]
+            pdp = state['pdp']
             
             all_events = ' '.join(map(str, filtered_events))
-            
-            state = self.enforcers_state[name]
+
             singleQueue = Queue()
             enf_queues[name] = singleQueue
             
@@ -328,6 +353,8 @@ class MultiLogger(BaseLogger):
             enf_cau_flag, enf_sup_flag = self.get_command_from_enforcer(name, singleQueue)
             cau_flag = cau_flag or enf_cau_flag
             sup_flag = sup_flag or enf_sup_flag
+
+        self._materialize_aggregated_encodings()
         
         event.set()
         result = (cau_flag, sup_flag, self.cau_events, self.sup_events)
@@ -359,23 +386,20 @@ class MultiLogger(BaseLogger):
     def parse_event(self, name : str, args : Tuple[str, ...], cmd : str, enforcer_name : str) -> None:
         """Parse event and update both per-enforcer and aggregated state"""
         args_tuple = self.parse_args(name, args)
+        state = self.enforcers_state[enforcer_name]
         
         if cmd == 'Suppress':
             if name in self.pep.sup_event_map:
                 # Update aggregated state
-                if name not in self.sup_enc:
-                    self.sup_enc[name] = [args_tuple]
-                else:
-                    if args_tuple not in self.sup_enc[name]:  # Avoid duplicates
-                        self.sup_enc[name].append(args_tuple)
+                if name not in self._sup_enc_sets:
+                    self._sup_enc_sets[name] = set()
+                self._sup_enc_sets[name].add(args_tuple)
                 self.sup_events.add(name)
                 
                 # Update per-enforcer state
-                state = self.enforcers_state[enforcer_name]
                 if name not in state['sup_enc']:
-                    state['sup_enc'][name] = [args_tuple]
-                else:
-                    state['sup_enc'][name].append(args_tuple)
+                    state['sup_enc'][name] = set()
+                state['sup_enc'][name].add(args_tuple)
                 state['sup_events'].add(name)
             else:
                 raise Exception(f'No suppression handler defined for suppressed event {name}')
@@ -383,19 +407,15 @@ class MultiLogger(BaseLogger):
         if cmd == 'Cause':
             if name in self.pep.cau_event_map:
                 # Update aggregated state
-                if name not in self.cau_enc:
-                    self.cau_enc[name] = [args_tuple]
-                else:
-                    if args_tuple not in self.cau_enc[name]:  # Avoid duplicates
-                        self.cau_enc[name].append(args_tuple)
+                if name not in self._cau_enc_sets:
+                    self._cau_enc_sets[name] = set()
+                self._cau_enc_sets[name].add(args_tuple)
                 self.cau_events.add(name)
                 
                 # Update per-enforcer state
-                state = self.enforcers_state[enforcer_name]
                 if name not in state['cau_enc']:
-                    state['cau_enc'][name] = [args_tuple]
-                else:
-                    state['cau_enc'][name].append(args_tuple)
+                    state['cau_enc'][name] = set()
+                state['cau_enc'][name].add(args_tuple)
                 state['cau_events'].add(name)
             else:
                 raise Exception(f'No causation handler defined for caused event {name}')
