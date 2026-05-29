@@ -20,7 +20,7 @@ services:
       - ./benchmark/privacy_testsuite/drivers/minitwitter.py:/app/benchmark/privacy_testsuite/drivers/minitwitter.py
       - ./benchmark/privacy_testsuite/tester.py:/app/benchmark/privacy_testsuite/tester.py
       - ./benchmark/privacy_testsuite/prepare_databases.py:/app/benchmark/privacy_testsuite/prepare_databases.py
-      - ./instrlib:/app/instrlib
+      - ./instrlib_filter:/app/instrlib
     entrypoint: ["bash", "benchmark/privacy_testsuite/run_benchmark.sh"]
     command:
       - gdpr
