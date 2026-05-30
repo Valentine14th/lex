@@ -208,7 +208,7 @@ def writer(enforcer : PDP, log_file : Union[str, None]) -> None:
         tsp = event.tsp
         (flag, innerqueue, stm) = event.event_tuple
         if event.expects_response:
-            enforcer.read_queue.put(TimedTuple(tsp, (flag, innerqueue, stm)))
+            enforcer.read_queue.put(TimedTuple(tsp, (flag, innerqueue, stm), batch_id=event.batch_id))
         assert enforcer.ocaml_proc is not None
         if enforcer.ocaml_proc.poll() is None:
             try:
@@ -218,8 +218,7 @@ def writer(enforcer : PDP, log_file : Union[str, None]) -> None:
                 assert enforcer.ocaml_proc.stdin is not None
                 enforcer.ocaml_proc.stdin.write(stm)
                 enforcer.ocaml_proc.stdin.flush()
-                bid = f" batch_id={event.batch_id}" if event.batch_id is not None else ""
-                _print("writer", enforcer.name, f"Sent to enforcer:{bid} {stm.decode()}")
+                _print("writer", enforcer.name, f"Sent to enforcer: {stm.decode()}")
             except Exception as e:
                 _print("writer", enforcer.name, f"Error: {e}")
     _print("writer", enforcer.name, "Terminated")
@@ -249,10 +248,11 @@ def reader(enforcer : PDP) -> None:
             assert enforcer.ocaml_proc.stdout is not None
             msg = getstm(enforcer.ocaml_proc)
             if msg is not None:
-                _print("reader", enforcer.name, f"Received from enforcer: {msg}")
                 event = enforcer.read_queue.get()
+                bid = f" batch_id={event.batch_id}" if event.batch_id is not None else ""
+                _print("reader", enforcer.name, f"Received from enforcer:{bid} {msg}")
                 (flag, innerqueue, order_msg) = event.event_tuple
-                _print("reader", enforcer.name, f"Matching request: {order_msg.decode()}")
+                _print("reader", enforcer.name, f"Matching request:{bid} {order_msg.decode()}")
                 small_queue : Queue = Queue()
                 small_queue.put(msg)
                 innerqueue.put(small_queue)
