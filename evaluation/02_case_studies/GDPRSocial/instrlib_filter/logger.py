@@ -252,6 +252,7 @@ class MultiLogger(BaseLogger):
         self.last_partition_merge_ms : Dict[str, float] = {}
         self.last_slowest_partition : Union[None, Tuple[str, float]] = None
         self.last_slowest_wait_partition : Union[None, Tuple[str, float]] = None
+        self._batch_id : int = 0
         
         # Per-enforcer state
         self.enforcers_state : Dict[str, Dict] = {}
@@ -313,6 +314,8 @@ class MultiLogger(BaseLogger):
         Returns: (cau_flag, sup_flag, cau_events, sup_events)
         """
         ts = time()
+        self._batch_id += 1
+        batch_id = self._batch_id
         events = list(set(events))
         
         # Check cache (use first enforcer's cache for simplicity)
@@ -349,7 +352,7 @@ class MultiLogger(BaseLogger):
                 tsp = state['timer'].current_time
                 event_flag = threading.Event()
                 enf_events[name] = event_flag
-                item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm))
+                item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm), batch_id=batch_id)
                 state['write_prio'].put(item)
         
         # Wait for all enforcers to respond
@@ -372,7 +375,7 @@ class MultiLogger(BaseLogger):
             _print(
                 "reader",
                 "multi",
-                f"[MultiLoggerTiming] wait_batch partitions={len(self.last_partition_wait_ms)} "
+                f"[MultiLoggerTiming] wait_batch batch_id={batch_id} partitions={len(self.last_partition_wait_ms)} "
                 f"slowest={slow_wait_label}:{slow_wait_ms:.3f}ms waits=[{wait_timings}]",
             )
         
@@ -402,7 +405,7 @@ class MultiLogger(BaseLogger):
             _print(
                 "reader",
                 "multi",
-                f"[MultiLoggerTiming] merge_batch partitions={len(self.last_partition_merge_ms)} "
+                f"[MultiLoggerTiming] merge_batch batch_id={batch_id} partitions={len(self.last_partition_merge_ms)} "
                 f"slowest={slow_label}:{slow_ms:.3f}ms timings=[{timings}]",
             )
 

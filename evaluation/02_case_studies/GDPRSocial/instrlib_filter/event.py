@@ -86,10 +86,11 @@ class Functional(Event):
 
 class TimedTuple:
 
-    def __init__(self, tsp : float, event_tuple : Tuple[Any, ...], expects_response : bool = True):
+    def __init__(self, tsp : float, event_tuple : Tuple[Any, ...], expects_response : bool = True, batch_id : int | None = None):
         self.tsp              = tsp
         self.event_tuple      = event_tuple
         self.expects_response = expects_response
+        self.batch_id         = batch_id
 
     def __lt__(self, other : "TimedTuple") -> bool:
         return self.tsp < other.tsp

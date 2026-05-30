@@ -218,7 +218,8 @@ def writer(enforcer : PDP, log_file : Union[str, None]) -> None:
                 assert enforcer.ocaml_proc.stdin is not None
                 enforcer.ocaml_proc.stdin.write(stm)
                 enforcer.ocaml_proc.stdin.flush()
-                _print("writer", enforcer.name, f"Sent to enforcer: {stm.decode()}")
+                bid = f" batch_id={event.batch_id}" if event.batch_id is not None else ""
+                _print("writer", enforcer.name, f"Sent to enforcer:{bid} {stm.decode()}")
             except Exception as e:
                 _print("writer", enforcer.name, f"Error: {e}")
     _print("writer", enforcer.name, "Terminated")
