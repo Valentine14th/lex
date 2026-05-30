@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
+import os
 from queue import Queue
 from random import random
 import threading
-from time import time
+from time import time, perf_counter
 from typing import Tuple, List, Set, Union, Dict, Any
 
-from instrlib.pdp import PDP
+from instrlib.pdp import PDP, _print
 from instrlib.event import *
 from instrlib.pep import PEP
 from instrlib.schema import Schema
@@ -246,6 +247,11 @@ class MultiLogger(BaseLogger):
         self._sup_enc_sets : Dict[str, Set[Tuple[Any, ...]]] = {}
         self._cau_enc_sets : Dict[str, Set[Tuple[Any, ...]]] = {}
         self.event_to_enforcers : Dict[str, List[Tuple[str, PDP]]] = {}
+        self.partition_label_by_enforcer : Dict[str, str] = {}
+        self.last_partition_wait_ms : Dict[str, float] = {}
+        self.last_partition_merge_ms : Dict[str, float] = {}
+        self.last_slowest_partition : Union[None, Tuple[str, float]] = None
+        self.last_slowest_wait_partition : Union[None, Tuple[str, float]] = None
         
         # Per-enforcer state
         self.enforcers_state : Dict[str, Dict] = {}
@@ -260,6 +266,12 @@ class MultiLogger(BaseLogger):
                 'cache': {},
                 'pdp': pdp,
             }
+
+            formula_path = getattr(pdp, 'formula', None)
+            if isinstance(formula_path, str) and formula_path.strip() != "":
+                self.partition_label_by_enforcer[name] = os.path.basename(formula_path)
+            else:
+                self.partition_label_by_enforcer[name] = f"{name}.mfotl"
 
             allowed_events = getattr(pdp, 'allowed_events', None)
             if allowed_events is None and hasattr(pdp, 'accepts_event'):
@@ -341,18 +353,58 @@ class MultiLogger(BaseLogger):
                 state['write_prio'].put(item)
         
         # Wait for all enforcers to respond
+        self.last_partition_wait_ms = {}
+        self.last_slowest_wait_partition = None
         for name, event_flag in enf_events.items():
+            wait_start = perf_counter()
             event_flag.wait()
+            wait_ms = (perf_counter() - wait_start) * 1000.0
+            self.last_partition_wait_ms[name] = wait_ms
+
+        if self.last_partition_wait_ms:
+            slow_wait_name, slow_wait_ms = max(self.last_partition_wait_ms.items(), key=lambda kv: kv[1])
+            self.last_slowest_wait_partition = (slow_wait_name, slow_wait_ms)
+            wait_timings = ", ".join(
+                f"{self.partition_label_by_enforcer.get(name, name)}={ms:.3f}ms"
+                for name, ms in sorted(self.last_partition_wait_ms.items(), key=lambda kv: kv[1], reverse=True)
+            )
+            slow_wait_label = self.partition_label_by_enforcer.get(slow_wait_name, slow_wait_name)
+            _print(
+                "reader",
+                "multi",
+                f"[MultiLoggerTiming] wait_batch partitions={len(self.last_partition_wait_ms)} "
+                f"slowest={slow_wait_label}:{slow_wait_ms:.3f}ms waits=[{wait_timings}]",
+            )
         
         # Aggregate responses using OR logic
         self._reset()
         cau_flag = False
         sup_flag = False
+        self.last_partition_merge_ms = {}
+        self.last_slowest_partition = None
         
         for name, singleQueue in enf_queues.items():
+            part_start = perf_counter()
             enf_cau_flag, enf_sup_flag = self.get_command_from_enforcer(name, singleQueue)
+            part_ms = (perf_counter() - part_start) * 1000.0
+            self.last_partition_merge_ms[name] = part_ms
             cau_flag = cau_flag or enf_cau_flag
             sup_flag = sup_flag or enf_sup_flag
+
+        if self.last_partition_merge_ms:
+            slow_name, slow_ms = max(self.last_partition_merge_ms.items(), key=lambda kv: kv[1])
+            self.last_slowest_partition = (slow_name, slow_ms)
+            timings = ", ".join(
+                f"{self.partition_label_by_enforcer.get(name, name)}={ms:.3f}ms"
+                for name, ms in sorted(self.last_partition_merge_ms.items(), key=lambda kv: kv[1], reverse=True)
+            )
+            slow_label = self.partition_label_by_enforcer.get(slow_name, slow_name)
+            _print(
+                "reader",
+                "multi",
+                f"[MultiLoggerTiming] merge_batch partitions={len(self.last_partition_merge_ms)} "
+                f"slowest={slow_label}:{slow_ms:.3f}ms timings=[{timings}]",
+            )
 
         self._materialize_aggregated_encodings()
         
