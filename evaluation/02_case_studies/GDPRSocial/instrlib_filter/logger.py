@@ -12,6 +12,18 @@ from instrlib.pep import PEP
 from instrlib.schema import Schema
 
 
+class TimedCompletionEvent(threading.Event):
+    """Event that records the perf_counter timestamp at completion."""
+
+    def __init__(self):
+        super().__init__()
+        self.done_perf: float | None = None
+
+    def set(self):
+        self.done_perf = perf_counter()
+        super().set()
+
+
 class BaseLogger(ABC):
     """
     Abstract base class for Logger and MultiLogger with shared functionality.
@@ -326,7 +338,8 @@ class MultiLogger(BaseLogger):
         
         # Broadcast to all enforcers in parallel
         enf_queues : Dict[str, Queue] = {}
-        enf_events : Dict[str, threading.Event] = {}
+        enf_events : Dict[str, TimedCompletionEvent] = {}
+        enf_enqueue_perf : Dict[str, float] = {}
 
         events_by_enforcer : Dict[str, List[Event]] = {}
         for ev in events:
@@ -350,18 +363,24 @@ class MultiLogger(BaseLogger):
             with state['timer'].current_time_lock:
                 stm = pdp.ts_bytes(all_events, state['timer'].current_time, flag_q)
                 tsp = state['timer'].current_time
-                event_flag = threading.Event()
+                event_flag = TimedCompletionEvent()
                 enf_events[name] = event_flag
                 item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm), batch_id=batch_id)
                 state['write_prio'].put(item)
+                enf_enqueue_perf[name] = perf_counter()
         
         # Wait for all enforcers to respond
         self.last_partition_wait_ms = {}
         self.last_slowest_wait_partition = None
         for name, event_flag in enf_events.items():
-            wait_start = perf_counter()
             event_flag.wait()
-            wait_ms = (perf_counter() - wait_start) * 1000.0
+
+            enqueue_perf = enf_enqueue_perf.get(name)
+            done_perf = event_flag.done_perf
+            if isinstance(enqueue_perf, float) and isinstance(done_perf, float):
+                wait_ms = max(0.0, (done_perf - enqueue_perf) * 1000.0)
+            else:
+                wait_ms = 0.0
             self.last_partition_wait_ms[name] = wait_ms
 
         if self.last_partition_wait_ms:
