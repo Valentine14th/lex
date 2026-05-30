@@ -129,6 +129,7 @@ class Logger(BaseLogger):
         self.timer = self.pdp.timer
         self.cache : Dict[Tuple[Event, ...], Tuple[float, Tuple[bool, bool, Set[str], Set[str]]]]
         self.cache = {}
+        self._batch_id : int = 0
     
     def extend_mapping(self, pep : PEP) -> None:
         super().extend_mapping(pep)
@@ -178,6 +179,8 @@ class Logger(BaseLogger):
         if cached is not None:
             event.set()
             return cached
+        self._batch_id += 1
+        batch_id = self._batch_id
         events = list(set(events))
         self.check_type(events)
         all_events = ' '.join(map(str, events))        
@@ -188,10 +191,19 @@ class Logger(BaseLogger):
             stm = self.pdp.ts_bytes((all_events), self.timer.current_time, flag_q)
             tsp = self.timer.current_time
             event_flag = threading.Event()
+            enqueue_perf = perf_counter()
             item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm))
             self.write_prio.put(item)
         event_flag.wait()
-        cau_flag, sup_flag = self.get_command(cau_flag, sup_flag, singleQueue)    
+        wait_ms = (perf_counter() - enqueue_perf) * 1000.0
+        merge_start = perf_counter()
+        cau_flag, sup_flag = self.get_command(cau_flag, sup_flag, singleQueue)
+        merge_ms = (perf_counter() - merge_start) * 1000.0
+        _print(
+            "reader",
+            self.pdp.name,
+            f"[LoggerTiming] single_batch batch_id={batch_id} ts={tsp} wait_ms={wait_ms:.3f} merge_ms={merge_ms:.3f}",
+        )
         event.set()
         result = (cau_flag, sup_flag, self.cau_events, self.sup_events)
         self.cache_update(events, ts, result) # cache the result
