@@ -4,6 +4,7 @@ Performance-benchmark driver for miniTwitter_gdpr.
 Scenarios
 ---------
   timeline          – GET the home timeline
+    own_tweets        – GET  /accounts/twit/  (current user's tweets)
   post_tweet        – POST a new tweet
   erase_tweet       – DELETE a specific tweet  (via /twit/delete/<uuid>/)
   right_to_info     – GET  /gdpr/request/access/  (Art. 15 access request)
@@ -45,6 +46,7 @@ _BASELINE_ROOT = _SUITE_DIR / "baseline" / "minitwitter_bl"  # stripped copy (no
 BASE            = "http://127.0.0.1:8000"
 LOGIN_URL       = f"{BASE}/accounts/login/"
 TIMELINE_URL    = f"{BASE}/"
+OWN_TWEETS_URL  = f"{BASE}/accounts/twit/"
 POST_TWEET_URL  = f"{BASE}/post/twit/"
 DELETE_TWEET_URL = f"{BASE}/twit/delete/"          # + <uuid>/
 ACCESS_URL      = f"{BASE}/gdpr/request/access/"
@@ -231,6 +233,8 @@ class Scenario:
         try:
             if self.sc == "timeline":
                 return self._run_timeline(result_base)
+            elif self.sc == "own_tweets":
+                return self._run_own_tweets(result_base)
             elif self.sc == "post_tweet":
                 return self._run_post_tweet(result_base)
             elif self.sc == "erase_tweet":
@@ -268,6 +272,13 @@ class Scenario:
         with Task("run", 'Scenario "timeline"'):
             s = self._random_user_session()
             r = s.get(TIMELINE_URL)
+            assert r.ok
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_own_tweets(self, base):
+        with Task("run", 'Scenario "own_tweets"'):
+            s = self._random_user_session()
+            r = s.get(OWN_TWEETS_URL)
             assert r.ok
             return {**base, "t": r.elapsed.total_seconds()}
 
