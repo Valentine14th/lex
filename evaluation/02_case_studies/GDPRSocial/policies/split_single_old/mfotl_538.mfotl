@@ -1,0 +1,3 @@
+LET GiveConsent(_p176 : string, _p177 : string, _p178 : string)- = (Consent(_p176, _p177) ∨:L (∃sp. SpecialConsent(_p176, _p177, sp))) ∧:L ((_p178) = "GDPRSocial, Inc.") IN
+LET IsRightToWithdrawConsent(_p94 : string)+ = Declaration(_p94) ∧:L HasText(_p94, "<h6>Right to withdraw consent</h6><p>You have the right to withdraw consent for processing your data at any time.</p>") IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:538:1-543:45"}{∀c. ∀ds. (∃p. GiveConsent(ds, p, c)) →:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsRightToWithdrawConsent(re))}

@@ -1,7 +1,6 @@
 Collect(activity: string, data: string, owner: string, purpose: string)-
 Contains(de: string, de2: string)+
 Declaration(de: string)+
-HasIntendedRecipient(d: string, e: string)
 HasText(de: string, text: string)+
 Inform(c: string, ds: string, de: string)+
 NoteEntity(e: string)+

@@ -1,0 +1,11 @@
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET HasIntendedAutomatedDecision(_p160 : string, _p161 : string) = ∃a. ∃ds. Collect(a, _p160, ds, "personalized_ad") ∧ ((_p161) = "We use the content of the page shown to the user to display personalized advertisement") IN
+LET IsAccessRequest(_p146 : string) = ∃ds. RequestAccess(ds, _p146) IN
+LET IsAutomatedDecision(_p143 : string)+ = Declaration(_p143) ∧:L HasText(_p143, "<h6>Automated decision-making</h6><p>We use the content of your latest posts to display personalized advertisement. No human review is involved in this decision.</p>") IN
+LET RefuseRequest(_p293 : string, _p294 : string, _p295 : string)- = ⊥ IN
+LET Request(_p99 : string, _p100 : string, _p101 : string) = (∃d. ∃d'. (ContestAccuracy(_p99, d, d') ∧ ((_p101) = "GDPRSocial, Inc.")) ∧ ((_p100) = "")) ∨ (∃d. ∃d'. RequestRectification(_p99, d, d', _p100) ∧ ((_p101) = "GDPRSocial, Inc.")) ∨ (∃d. RequestErasure(_p99, d, _p100) ∧ ((_p101) = "GDPRSocial, Inc.")) ∨ RequestAccess(_p99, _p100) ∧ ((_p101) = "GDPRSocial, Inc.") ∨ RequestRecipientInformation(_p99, _p100) ∧ ((_p101) = "GDPRSocial, Inc.") IN
+LET RequestExtension(_p289 : string, _p290 : string)- = ⊥ IN
+LET UndueDelay(_p280 : string) = ⊤ IN
+LET Exception49(c : string, ds : string, rq : string) = ⧫[0s,∞) Request(ds, rq, c) ∧ RefuseRequest(c, rq, ds) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1957:1-1964:45"}{∀rs. (∃c. ∃de. ∃ds. ∃rq. (⧫[0s,∞) (Request(ds, rq, c) ∧ IsAccessRequest(rq)) ∧ RequestResponse(ds, rq, rs)) ∧ (∃pr. ∃a. ∃d. ⧫[0s,∞) (DataProcessing(pr, c, a, d) ∧ PersonalData(d, ds) ∧ HasIntendedAutomatedDecision(d, de)))) →:R (∃de. Contains(rs, de) ∧:L IsAutomatedDecision(de))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1009:1-1014:45"}{∀c. ∀ds. ∀rq. Request(ds, rq, c) ∧ ¬Exception49(c, ds, rq) →:R ¬UndueDelay(rq) U[0s,1M]:R (∃rs. RequestResponse(ds, rq, rs)) ∨:L RequestExtension(c, rq)}

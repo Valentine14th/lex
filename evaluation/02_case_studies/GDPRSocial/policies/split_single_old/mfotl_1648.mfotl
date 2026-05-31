@@ -1,12 +1,13 @@
 LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
 LET Disclose(_p179 : string, _p180 : string) = ∃a. ∃ds. ∃p. Read(_p179, ds, a, p, _p180) IN
 LET DisproportionateEffortToInform(_p373 : string, _p374 : string, _p375 : string) = ⊥ IN
+LET HasStorageCriteria(_p150 : string, _p151 : string) = ⊤ ∧ ((_p151) = "Your data is stored until you delete your account") IN
 LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
 LET IsReasonablePeriod(_p309 : int, _p310 : int) = ⊥ IN
 LET IsReception(_p307 : string, _p308 : string) = ⊥ IN
-LET IsRecipient(_p105 : string, _p106 : string)+ = (Declaration(_p105) ∧:L HasText(_p105, "<h6>Recipients of your personal data</h6><p>We intend to share your personal data with the following entity: " ^ string_of_entity(_p106) ^ ".</p>")) ∧:R NoteEntity(_p106) IN
+LET IsStorageCriteria(_p90 : string, _p91 : string)+ = (Declaration(_p90) ∧:L HasText(_p90, "<h6>Storage criteria</h6><p>The criteria used to determine the period for which your personal data will be stored are: " ^ string_of_criteria(_p91) ^ ".</p>")) ∧:R NoteCriteria(_p91) IN
 LET UseForCommunication(_p218 : string, _p219 : string) = ⊥ IN
 LET IsIndirectCollection(_p36 : string, _p37 : string, _p38 : string) = (∃c. ∃e. ∃pr. (DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsReception(_p36, e)) ∨ (∃c. ∃ds'. ∃pr. ((DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsCollection(_p36, ds')) ∧ ((_p38 <> ds') = 1)) IN
 LET Exception96(a : string, c : string, ds : string) = DisproportionateEffortToInform(c, ds, a) IN
 LET CanDelayInform(_p39 : string, _p40 : string, _p41 : string) = ∃d. ∃pr. ∃t. ∃t'. (((((⧫[0s,∞) (DataProcessing(pr, _p39, _p41, d) ∧ TP(t)) ∧ IsIndirectCollection(_p41, d, _p40)) ∧ TP(t')) ∧ IsReasonablePeriod(t, t')) ∧ ¬UseForCommunication(d, _p40)) ∧ ¬(∃ds'. Disclose(d, ds') ∧ ((_p40 <> ds') = 1))) ∧ ¬Exception96(_p41, _p39, _p40) IN
-□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1578:1-1585:45"}{∀a. ∀c. ∀ds. ∀e. (∃d. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsIndirectCollection(a, d, ds)) ∧ HasIntendedRecipient(d, e)) ∧ ¬Exception96(a, c, ds)) →:R CanDelayInform(c, ds, a) U[0s,1M]:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsRecipient(re, e))}
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1648:1-1655:45"}{∀a. ∀c. ∀cr. ∀ds. (∃d. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsIndirectCollection(a, d, ds)) ∧ HasStorageCriteria(d, cr)) ∧ ¬Exception96(a, c, ds)) →:R CanDelayInform(c, ds, a) U[0s,1M]:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsStorageCriteria(re, cr))}

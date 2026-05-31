@@ -1,0 +1,8 @@
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET IsOccasionalProcessing(_p319 : string) = ⊥ IN
+LET IsRiskyProcessing(_p306 : string) = ⊥ IN
+LET IsSME(_p92 : string) = ⊤ ∧ ((_p92) = "GDPRSocial, Inc.") IN
+LET Record(_p68 : string, _p69 : string, _p70 : string, _p71 : string, _p72 : string)+ = ActivityRecord(_p70, _p71, _p72) IN
+LET Exception164(a : string, c : string, d' : string, pr : string) = (IsRiskyProcessing(a) ∧ ¬IsOccasionalProcessing(a)) ∧ (DataProcessing(pr, c, a, d') ∧ ((∃sp. IsSpecialData(d', sp)) ∨ RelatesToCriminalConvictionsOrOffences(d'))) IN
+LET Exception163(c : string, pr : string) = (IsSME(c) ∧ IsSME(pr)) ∧ ¬(∃a. ∃d'. Exception164(a, c, d', pr)) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2728:1-2735:45"}{∀a. ∀c. ∀e. ∀pr. (∃d. ∃ds. ((DataProcessing(pr, c, a, d) ∧ PersonalData(d, ds)) ∧ HasIntendedRecipient(d, e)) ∧ ¬Exception163(c, pr)) →:R Record(pr, c, a, "Recipient", string_of_entity(e))}

@@ -1,0 +1,23 @@
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET HasInaccuracy(_p167 : string) = ∃d'. ∃ds. ∃rq. RequestRectification(ds, _p167, d', rq) IN
+LET IsAccessRequest(_p146 : string) = ∃ds. RequestAccess(ds, _p146) IN
+LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
+LET IsDSSource(_p132 : string, _p133 : string)+ = (Declaration(_p132) ∧:L HasText(_p132, "<h6>Source of your personal data</h6><p>We have collected this personal data from " ^ string_of_ds(_p133) ^ ".</p>")) ∧:R NoteDS(_p133) IN
+LET IsEffectiveRecipient(_p123 : string, _p124 : string)+ = (Declaration(_p123) ∧:L HasText(_p123, "<h6>Recipients of your personal data</h6><p>Your personal data has been shared with the following entity: " ^ string_of_entity(_p124) ^ ".</p>")) ∧:R NoteEntity(_p124) IN
+LET IsReception(_p307 : string, _p308 : string) = ⊥ IN
+LET IsRecipientRequest(_p102 : string) = ∃ds. RequestRecipientInformation(ds, _p102) IN
+LET IsRectificationRequest(_p164 : string, _p165 : string, _p166 : string) = ∃ds. RequestRectification(ds, _p165, _p166, _p164) IN
+LET NotifyOfRectification(_p81 : string, _p82 : string, _p83 : string, _p84 : string)+ = NotifyRectification(_p82, _p83, _p84) IN
+LET RefuseRequest(_p293 : string, _p294 : string, _p295 : string)- = ⊥ IN
+LET Request(_p99 : string, _p100 : string, _p101 : string) = (∃d. ∃d'. (ContestAccuracy(_p99, d, d') ∧ ((_p101) = "GDPRSocial, Inc.")) ∧ ((_p100) = "")) ∨ (∃d. ∃d'. RequestRectification(_p99, d, d', _p100) ∧ ((_p101) = "GDPRSocial, Inc.")) ∨ (∃d. RequestErasure(_p99, d, _p100) ∧ ((_p101) = "GDPRSocial, Inc.")) ∨ RequestAccess(_p99, _p100) ∧ ((_p101) = "GDPRSocial, Inc.") ∨ RequestRecipientInformation(_p99, _p100) ∧ ((_p101) = "GDPRSocial, Inc.") IN
+LET RequestExtension(_p289 : string, _p290 : string)- = ⊥ IN
+LET Share(_p65 : string, _p66 : string, _p67 : string) = Send(_p66, _p67) ∧ ((_p65) = "GDPRSocial, Inc.") IN
+LET UndueDataDelay(_p281 : string) = ⊤ IN
+LET UndueDelay(_p280 : string) = ⊤ IN
+LET IsIndirectCollection(_p36 : string, _p37 : string, _p38 : string) = (∃c. ∃e. ∃pr. (DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsReception(_p36, e)) ∨ (∃c. ∃ds'. ∃pr. ((DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsCollection(_p36, ds')) ∧ ((_p38 <> ds') = 1)) IN
+LET IsObligedToRectify(_p42 : string, _p43 : string, _p44 : string) = ∃ds. ∃rq. ∃rs. ((⧫[0s,∞) (Request(ds, rq, _p42) ∧ IsRectificationRequest(rq, _p43, _p44)) ∧ RequestResponse(ds, rq, rs)) ∧ (∃pr. ∃a. ∃d. ⧫[0s,∞) (DataProcessing(pr, _p42, a, d) ∧ PersonalData(d, ds)))) ∧ HasInaccuracy(_p43) IN
+LET Exception49(c : string, ds : string, rq : string) = ⧫[0s,∞) Request(ds, rq, c) ∧ RefuseRequest(c, rq, ds) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2363:1-2370:45"}{∀e. ∀rs. (∃c. ∃ds. ∃rq. (⧫[0s,∞) (Request(ds, rq, c) ∧ IsRecipientRequest(rq)) ∧ RequestResponse(ds, rq, rs)) ∧ ⧫[0s,∞) (∃d. Share(c, e, d) ∧ PersonalData(d, ds))) →:R (∃de. Contains(rs, de) ∧:L IsEffectiveRecipient(de, e))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1009:1-1014:45"}{∀c. ∀ds. ∀rq. Request(ds, rq, c) ∧ ¬Exception49(c, ds, rq) →:R ¬UndueDelay(rq) U[0s,1M]:R (∃rs. RequestResponse(ds, rq, rs)) ∨:L RequestExtension(c, rq)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1946:1-1953:45"}{∀ds'. ∀rs. (∃c. ∃ds. ∃rq. (⧫[0s,∞) (Request(ds, rq, c) ∧ IsAccessRequest(rq)) ∧ RequestResponse(ds, rq, rs)) ∧ (∃pr. ∃a. ∃d. ⧫[0s,∞) DataProcessing(pr, c, a, d) ∧ IsIndirectCollection(a, d, ds) ∧ IsCollection(a, ds') ∧ ((ds <> ds') = 1))) →:R (∃de. Contains(rs, de) ∧:L IsDSSource(de, ds'))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2339:1-2345:45"}{∀c. ∀d. ∀d'. ∀e. IsObligedToRectify(c, d, d') ∧ ⧫[0s,∞) Share(c, e, d) →:R ¬UndueDataDelay(d) U[0s,0s]:R NotifyOfRectification(c, e, d, d')}

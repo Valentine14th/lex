@@ -1,0 +1,124 @@
+LET AuthorizeConsent(_p379 : string, _p380 : string, _p381 : string, _p382 : string) = ⊥ IN
+LET AutomatedDecision(_p192 : string, _p193 : string, _p194 : string, _p195 : string) = ∃ds. (Read(_p193, ds, _p192, "personalized_ad", _p194) ∨ Write(_p193, ds, _p192, "personalized_ad", _p194)) ∧ ((_p195) = "We use the content of the page shown to the user to display personalized advertisement") IN
+LET CheckNotChild(_p190 : string, _p191 : string) = ⊤ ∧ ((_p190) = "GDPRSocial, Inc.") IN
+LET ConcernsCriminalRegister(_p376 : string) = ⊥ IN
+LET ContestsAccuracy(_p187 : string, _p188 : string, _p189 : string) = ∃ds. ContestAccuracy(ds, _p188, _p189) ∧ ((_p187) = "") IN
+LET DataIsNecessaryForJudicialClaims(_p275 : string) = ⊤ IN
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET DemonstrateOverridingCompellingGrounds(_p271 : string, _p272 : string, _p273 : string, _p274 : string) = ⊥ IN
+LET DisproportionateEffortToInform(_p373 : string, _p374 : string, _p375 : string) = ⊥ IN
+LET EndContract(_p372 : int) = ⊥ IN
+LET GiveConsent(_p176 : string, _p177 : string, _p178 : string)- = (Consent(_p176, _p177) ∨:L (∃sp. SpecialConsent(_p176, _p177, sp))) ∧:L ((_p178) = "GDPRSocial, Inc.") IN
+LET GiveSpecialConsent(_p172 : string, _p173 : string, _p174 : string, _p175 : string) = SpecialConsent(_p172, _p173, _p175) ∧ ((_p174) = "GDPRSocial, Inc.") IN
+LET HasInaccuracy(_p167 : string) = ∃d'. ∃ds. ∃rq. RequestRectification(ds, _p167, d', rq) IN
+LET HasIntendedAutomatedDecision(_p160 : string, _p161 : string) = ∃a. ∃ds. Collect(a, _p160, ds, "personalized_ad") ∧ ((_p161) = "We use the content of the page shown to the user to display personalized advertisement") IN
+LET HasPhilosophicalAim(_p366 : string) = ⊥ IN
+LET HasPoliticalAim(_p365 : string) = ⊥ IN
+LET HasPurpose(_p156 : string, _p157 : string)- = ∃d. ∃ds. (∃ds'. Read(d, ds, _p156, _p157, ds')) ∨:L (∃ds'. Write(d, ds, _p156, _p157, ds')) ∨:L Collect(_p156, d, ds, _p157) IN
+LET HasRegularContact(_p154 : string, _p155 : string) = ⊤ ∧ ((_p155) = "GDPRSocial, Inc.") IN
+LET HasReligiousAim(_p364 : string) = ⊥ IN
+LET HasStorageCriteria(_p150 : string, _p151 : string) = ⊤ ∧ ((_p151) = "Your data is stored until you delete your account") IN
+LET HasStoragePeriod(_p265 : string, _p266 : int) = ⊥ IN
+LET HasTradeUnionAim(_p361 : string) = ⊥ IN
+LET HoldParentalResponsibility(_p263 : string, _p264 : string) = ⊥ IN
+LET ImplementFundamentalRightsSafeguards(_p359 : string, _p360 : string) = ⊥ IN
+LET IsAbleToDemonstrateConsent(_p147 : string, _p148 : string, _p149 : string) = (⧫[0s,∞) Consent(_p148, _p149) ∨ (∃sp. ⧫[0s,∞) SpecialConsent(_p148, _p149, sp))) ∧ ((_p147) = "GDPRSocial, Inc.") IN
+LET IsArchival(_p356 : string) = ⊥ IN
+LET IsAutomatedDecisionMakingPurpose(_p142 : string) = ⊤ ∧ ((_p142) = "personalized_ad") IN
+LET IsChild(_p262 : string) = ⊥ IN
+LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
+LET IsCompatibleWithPurpose(_p196 : string, _p197 : string) = ((_p196) = "service") ∧ ((_p197) = "service") ∨ ((_p196) = "personalized_ad") ∧ ((_p197) = "personalized_ad") ∨ ((_p196) = "statistics") ∧ ((_p197) = "statistics") IN
+LET IsContractParty(_p351 : string, _p352 : int) = ⊥ IN
+LET IsDirectMarketing(_p127 : string) = (_p127) = "personalized_ad" IN
+LET IsExplicit(_p252 : string) = ⊤ IN
+LET IsFair(_p212 : string) = ⊤ IN
+LET IsInaccurate(_p144 : string, _p145 : string) = ∃d'. ∃ds. ∃rq. RequestRectification(ds, _p144, d', rq) IN
+LET IsLegitimate(_p116 : string) = (_p116) = "service" ∨ (_p116) = "personalized_ad" ∨ (_p116) = "statistics" IN
+LET IsLegitimateActivity(_p249 : string, _p250 : string) = ⊥ IN
+LET IsMember(_p331 : string, _p332 : string) = ⊥ IN
+LET IsNecessaryForArchivalPurposes(_p330 : string) = ⊥ IN
+LET IsNecessaryForContract(_p328 : string, _p329 : int) = ⊥ IN
+LET IsNecessaryForEmploymentLaw(_p327 : string) = ⊥ IN
+LET IsNecessaryForLegitimateInterest(_p110 : string, _p111 : string, _p112 : string) = ∃d. ∃ds. ∃p. ((((∃ds'. Read(d, ds, _p110, p, ds')) ∨ (∃ds'. Write(d, ds, _p110, p, ds')) ∨ Collect(_p110, d, ds, p)) ∧ ((p) = "service")) ∧ ((_p112) = "Providing the service and performing GDPRSocial's normal operations.")) ∧ ((_p111) = "GDPRSocial, Inc.") IN
+LET IsNewPurpose(_p215 : string, _p216 : string) = ⊤ IN
+LET IsNonProfit(_p325 : string) = ⊥ IN
+LET IsOfferOfInformationSocietyServices(_p248 : string) = ⊤ IN
+LET IsOutsideDisclosure(_p313 : string, _p314 : string, _p315 : string) = ⊤ IN
+LET IsOverriddenByDataSubjectInterests(_p107 : string, _p108 : string, _p109 : string) = ∃a. ∃d. ∃p. ((∃ds'. Read(d, _p109, a, p, ds')) ∨ (∃ds'. Write(d, _p109, a, p, ds')) ∨ Collect(a, d, _p109, p)) ∧ ¬((p) = "service") IN
+LET IsPerformanceOfPublicAuthorityTask(_p312 : string) = ⊥ IN
+LET IsPublicAuthority(_p318 : string) = ⊥ IN
+LET IsReception(_p307 : string, _p308 : string) = ⊥ IN
+LET IsRectificationRequest(_p164 : string, _p165 : string, _p166 : string) = ∃ds. RequestRectification(ds, _p165, _p166, _p164) IN
+LET IsRestrictionToBeLifted(_p96 : string, _p97 : string, _p98 : string) = ((Declaration(_p96) ∧ HasText(_p96, "<h6>Lifting of processing restriction</h6><p>The restriction on the processing of data " ^ string_of_data(_p97) ^ ", imposed in response to request " ^ string_of_request(_p98) ^ ", is to be lifted. Processing of the concerned data may resume from this point.</p>")) ∧ NoteData(_p97)) ∧ NoteRequest(_p98) IN
+LET IsSpecialAuthorizedCriminalProcessing(_p305 : string) = ⊥ IN
+LET IsSpecified(_p234 : string) = ⊤ IN
+LET IsStorage(_p214 : string) = ⊥ IN
+LET IsSubjectToProfessionalSecrecy(_p303 : string) = ⊥ IN
+LET IsTransparent(_p210 : string, _p211 : string) = ⊤ IN
+LET IsUnableToConsent(_p229 : string) = ⊥ IN
+LET IsUpToDate(_p198 : string, _p199 : string) = ⊤ IN
+LET MakePublic(_p297 : string, _p298 : string) = ⊥ IN
+LET NotifyOfRestriction(_p77 : string, _p78 : string, _p79 : string, _p80 : string)+ = NotifyRestriction(_p78, _p79, _p80) IN
+LET Object(_p73 : string, _p74 : string, _p75 : string, _p76 : string) = ∃rq. RequestObjection(_p73, _p75, _p76, rq) ∧ ((_p74) = "GDPRSocial, Inc.") IN
+LET PrepareContract(_p296 : int) = ⊥ IN
+LET RefuseRequest(_p293 : string, _p294 : string, _p295 : string)- = ⊥ IN
+LET Request(_p99 : string, _p100 : string, _p101 : string) = (∃d. ∃d'. (ContestAccuracy(_p99, d, d') ∧ ((_p101) = "GDPRSocial, Inc.")) ∧ ((_p100) = "")) ∨ (∃d. ∃d'. RequestRectification(_p99, d, d', _p100) ∧ ((_p101) = "GDPRSocial, Inc.")) ∨ (∃d. RequestErasure(_p99, d, _p100) ∧ ((_p101) = "GDPRSocial, Inc.")) ∨ RequestAccess(_p99, _p100) ∧ ((_p101) = "GDPRSocial, Inc.") ∨ RequestRecipientInformation(_p99, _p100) ∧ ((_p101) = "GDPRSocial, Inc.") IN
+LET RequestExtension(_p289 : string, _p290 : string)- = ⊥ IN
+LET Share(_p65 : string, _p66 : string, _p67 : string) = Send(_p66, _p67) ∧ ((_p65) = "GDPRSocial, Inc.") IN
+LET StartContract(_p287 : int) = ⊥ IN
+LET UndueDataDelay(_p281 : string) = ⊤ IN
+LET UndueDelay(_p280 : string) = ⊤ IN
+LET WithdrawConsent(_p59 : string, _p60 : string, _p61 : string) = Revoke(_p59, _p60) ∧ ((_p61) = "GDPRSocial, Inc.") IN
+LET WithdrawSpecialConsent(_p168 : string, _p169 : string, _p170 : string, _p171 : string) = SpecialRevoke(_p168, _p169, _p171) ∧ ((_p170) = "GDPRSocial, Inc.") IN
+LET Exception34(a : string) = IsNecessaryForJudicialClaims(a) IN
+LET Exception35(a : string) = IsNecessaryForSubstantialPublicInterest(a) IN
+LET Exception38(a : string, pi : string) = IsNecessaryForPublicInterest(a, pi) ∧ IsHealthRelated(pi) IN
+LET CompatibleWithPurpose(_p30 : string, _p31 : string) = IsArchival(_p30) ∧ ((_p31) = "Archiving") ∨ IsCompatibleWithPurpose(_p30, _p31) IN
+LET IsIndirectCollection(_p36 : string, _p37 : string, _p38 : string) = (∃c. ∃e. ∃pr. (DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsReception(_p36, e)) ∨ (∃c. ∃ds'. ∃pr. ((DataProcessing(pr, c, _p36, _p37) ∧ PersonalData(_p37, _p38)) ∧ IsCollection(_p36, ds')) ∧ ((_p38 <> ds') = 1)) IN
+LET IsObligedToRectify(_p42 : string, _p43 : string, _p44 : string) = ∃ds. ∃rq. ∃rs. ((⧫[0s,∞) (Request(ds, rq, _p42) ∧ IsRectificationRequest(rq, _p43, _p44)) ∧ RequestResponse(ds, rq, rs)) ∧ (∃pr. ∃a. ∃d. ⧫[0s,∞) (DataProcessing(pr, _p42, a, d) ∧ PersonalData(d, ds)))) ∧ HasInaccuracy(_p43) IN
+LET Scope22(a : string, c : string, d : string, ds : string, p : string, pr : string) = (DataProcessing(pr, c, a, d) ∧ PersonalData(d, ds)) ∧ (¬WithdrawConsent(ds, p, c) S[0s,∞) GiveConsent(ds, p, c)) IN
+LET Exception24(a : string, ds : string) = IsOfferOfInformationSocietyServices(a) ∧ IsChild(ds) IN
+LET Exception28(a : string, c : string, d : string, ds : string, pr : string, sp : string) = ((IsSpecialData(d, sp) ∧ PersonalData(d, ds)) ∧ DataProcessing(pr, c, a, d)) ∧ ¬(∃p. HasPurpose(a, p) ∧ ¬(¬WithdrawSpecialConsent(ds, p, c, sp) S[0s,∞) GiveSpecialConsent(ds, p, c, sp))) IN
+LET Exception30(a : string) = IsNecessaryForEmploymentLaw(a) IN
+LET Exception31(a : string, ds : string, ds' : string, v : string) = IsNecessaryForVitalInterests(a, ds', v) ∧ IsUnableToConsent(ds) IN
+LET Exception32(a : string, c : string, ds : string) = ((((ImplementFundamentalRightsSafeguards(a, ds) ∧ IsLegitimateActivity(a, c)) ∧ IsNonProfit(c)) ∧ (HasPoliticalAim(c) ∨ HasPhilosophicalAim(c) ∨ HasReligiousAim(c) ∨ HasTradeUnionAim(c))) ∧ (⧫[0s,∞) IsMember(ds, c) ∨ HasRegularContact(ds, c))) ∧ ¬(∃d. IsOutsideDisclosure(a, c, d)) IN
+LET Exception33(d : string, ds : string) = ⧫[0s,∞) MakePublic(ds, d) IN
+LET Exception39(a : string) = IsNecessaryForArchivalPurposes(a) IN
+LET Scope40(c : string, pr : string) = IsSubjectToProfessionalSecrecy(c) ∧ IsSubjectToProfessionalSecrecy(pr) IN
+LET Scope41(a : string, c : string, d : string, pr : string) = DataProcessing(pr, c, a, d) ∧ (RelatesToCriminalConvictionsOrOffences(d) → IsPublicAuthority(c) ∨ IsSpecialAuthorizedCriminalProcessing(a)) IN
+LET Scope42(a : string, c : string, d : string, pr : string) = DataProcessing(pr, c, a, d) ∧ (ConcernsCriminalRegister(a) → IsPublicAuthority(c)) IN
+LET Exception49(c : string, ds : string, rq : string) = ⧫[0s,∞) Request(ds, rq, c) ∧ RefuseRequest(c, rq, ds) IN
+LET Exception96(a : string, c : string, ds : string) = DisproportionateEffortToInform(c, ds, a) IN
+LET Exception139(a : string, c : string, d : string, de : string, ds : string, p : string, pr : string) = (DataProcessing(pr, c, a, d) ∧ HasPurpose(a, p)) ∧ (¬DemonstrateOverridingCompellingGrounds(c, ds, p, de) S[0s,∞) Object(ds, c, p, de)) IN
+LET Exception141(a : string, c : string, d : string, de : string, ds : string, p : string, pr : string) = (((DataProcessing(pr, c, a, d) ∧ HasPurpose(a, p)) ∧ PersonalData(d, ds)) ∧ IsDirectMarketing(p)) ∧ ⧫[0s,∞) Object(ds, c, p, de) IN
+LET Exception145(a : string, c : string, d : string, pi : string, pr : string) = DataProcessing(pr, c, a, d) ∧ IsNecessaryForPublicInterest(a, pi) IN
+LET IsActiveObjection(_p47 : string, _p48 : string, _p49 : string, _p50 : string) = (⧫[0s,∞) Object(_p47, _p48, "Archiving", _p50) ∧ ¬(∃a. ∃d. ∃pi. ∃pr. Exception145(a, _p48, d, pi, pr))) ∧ ((_p49) = "Archiving") ∨ ⧫[0s,∞) Object(_p47, _p48, _p49, _p50) ∧ IsDirectMarketing(_p49) ∨ ¬DemonstrateOverridingCompellingGrounds(_p48, _p47, _p49, _p50) S[0s,∞) Object(_p47, _p48, _p49, _p50) IN
+LET Exception37(a : string) = IsNecessaryForSpecialMedicalReasons(a) ∧ (∃c. ∃pr. Scope40(c, pr)) IN
+LET Exception143(a : string, c : string, d : string, de : string, ds : string, pr : string) = (((DataProcessing(pr, c, a, d) ∧ PersonalData(d, ds)) ∧ HasPurpose(a, "Archiving")) ∧ ⧫[0s,∞) Object(ds, c, "Archiving", de)) ∧ ¬(∃pi. Exception145(a, c, d, pi, pr)) IN
+LET Restricted(_p45 : string, _p46 : string) = (∃c. ∃de. ∃ds. PersonalData(_p45, ds) ∧ IsActiveObjection(ds, c, _p46, de)) ∨ (∃c. ∃ds. ∃rq. ¬LiftRestriction(c, _p45, rq) S[0s,∞) Request(ds, rq, c) ∧ IsRestrictionRequest(rq, _p45, _p46) ∧ DataIsNecessaryForJudicialClaims(_p45)) ∨ (∃c. ∃d'. ∃ds. ∃rq. ∃rs. ⧫[0s,∞) (Request(ds, rq, c) ∧ IsRestrictionRequest(rq, _p45, _p46) ∧ ContestsAccuracy(rq, _p45, d')) ∧ (¬(∃d''. Rectify(_p45, d'')) S[0s,∞) RequestResponse(ds, rq, rs) ∨ ¬(⧫[0s,∞) LiftRestriction(c, _p45, rq)))) IN
+LET Exception19(a : string, c : string) = ((((IsPublicAuthority(c) ∧ IsPerformanceOfPublicAuthorityTask(a)) ∧ ¬(∃d. ∃de. ∃ds. ∃p. ∃pr. Exception141(a, c, d, de, ds, p, pr))) ∧ ¬(∃d. ∃de. ∃ds. ∃pr. Exception143(a, c, d, de, ds, pr))) ∧ (∃d. ∃pr. Scope41(a, c, d, pr))) ∧ (∃d. ∃pr. Scope42(a, c, d, pr)) IN
+LET Exception18(d : string, ds : string, e : string, i : string) = ((((((PersonalData(d, ds) ∧ IsOverriddenByDataSubjectInterests(e, i, ds)) ∧ ¬(∃a. ∃c. Exception19(a, c))) ∧ ¬(∃a. ∃c. ∃de. ∃p. ∃pr. Exception139(a, c, d, de, ds, p, pr))) ∧ ¬(∃a. ∃c. ∃de. ∃p. ∃pr. Exception141(a, c, d, de, ds, p, pr))) ∧ ¬(∃a. ∃c. ∃de. ∃pr. Exception143(a, c, d, de, ds, pr))) ∧ (∃a. ∃c. ∃pr. Scope41(a, c, d, pr))) ∧ (∃a. ∃c. ∃pr. Scope42(a, c, d, pr)) IN
+LET IsLawful(_p32 : string, _p33 : string) = IsNecessaryForSubstantialPublicInterest(_p32) ∧ ((_p33) = "9(2)(g)") ∨ (∃c. ∃d. ∃ds. ∃pr. ∃sp. (((IsSpecialData(d, sp) ∧ PersonalData(d, ds)) ∧ DataProcessing(pr, c, _p32, d)) ∧ ¬(∃p. HasPurpose(_p32, p) ∧ ¬(¬WithdrawSpecialConsent(ds, p, c, sp) S[0s,∞) GiveSpecialConsent(ds, p, c, sp)))) ∧ ((_p33) = "9(2)(a)")) ∨ (∃c. ∃d. ∃ds. ∃p. ∃pr. ((((DataProcessing(pr, c, _p32, d) ∧ PersonalData(d, ds)) ∧ ⧫[0s,∞) (∃ds2. HoldParentalResponsibility(ds2, ds) ∧ GiveConsent(ds2, p, c) ∨ GiveConsent(ds, p, c) ∧ ⧫[0s,∞) (HoldParentalResponsibility(ds2, ds) ∧ AuthorizeConsent(ds2, ds, p, c)))) ∧ IsOfferOfInformationSocietyServices(_p32)) ∧ IsChild(ds)) ∧ ((_p33) = "8(1)")) ∨ (∃c. ∃d. ∃e. ∃i. ∃pr. ((((((((DataProcessing(pr, c, _p32, d) ∧ IsNecessaryForLegitimateInterest(_p32, e, i)) ∧ ¬(∃ds. Exception18(d, ds, e, i))) ∧ ¬Exception19(_p32, c)) ∧ ¬(∃de. ∃ds. ∃p. Exception139(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. ∃ds. ∃p. Exception141(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. ∃ds. Exception143(_p32, c, d, de, ds, pr))) ∧ Scope41(_p32, c, d, pr)) ∧ Scope42(_p32, c, d, pr)) ∧ ((_p33) = "6(1)(f)")) ∨ (∃c. ∃d. ∃ds. ∃pr. (((((((DataProcessing(pr, c, _p32, d) ∧ PersonalData(d, ds)) ∧ ((∃pi. IsNecessaryForPublicInterest(_p32, pi)) ∨ IsPerformanceOfPublicAuthorityTask(_p32) ∧ IsPublicAuthority(c))) ∧ ¬(∃de. ∃p. Exception139(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. ∃p. Exception141(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. Exception143(_p32, c, d, de, ds, pr))) ∧ Scope41(_p32, c, d, pr)) ∧ Scope42(_p32, c, d, pr)) ∧ ((_p33) = "6(1)(e)")) ∨ (∃c. ∃d. ∃ds. ∃ds'. ∃pr. ∃v. ((((((DataProcessing(pr, c, _p32, d) ∧ PersonalData(d, ds)) ∧ IsNecessaryForVitalInterests(_p32, ds', v)) ∧ ¬(∃de. ∃p. Exception141(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. Exception143(_p32, c, d, de, ds, pr))) ∧ Scope41(_p32, c, d, pr)) ∧ Scope42(_p32, c, d, pr)) ∧ ((_p33) = "6(1)(d)")) ∨ (∃c. ∃d. ∃ds. ∃l. ∃pr. ((((((DataProcessing(pr, c, _p32, d) ∧ PersonalData(d, ds)) ∧ IsNecessaryForLegalObligation(_p32, l)) ∧ ¬(∃de. ∃p. Exception141(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. Exception143(_p32, c, d, de, ds, pr))) ∧ Scope41(_p32, c, d, pr)) ∧ Scope42(_p32, c, d, pr)) ∧ ((_p33) = "6(1)(c)")) ∨ (∃c. ∃co. ∃d. ∃ds. ∃pr. ((((((((DataProcessing(pr, c, _p32, d) ∧ PersonalData(d, ds)) ∧ (¬EndContract(co) S[0s,∞) PrepareContract(co) ∨ StartContract(co))) ∧ ⧫[0s,∞) (StartContract(co) ∧ IsContractParty(ds, co))) ∧ IsNecessaryForContract(_p32, co)) ∧ ¬(∃de. ∃p. Exception141(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. Exception143(_p32, c, d, de, ds, pr))) ∧ Scope41(_p32, c, d, pr)) ∧ Scope42(_p32, c, d, pr)) ∧ ((_p33) = "6(1)(b)")) ∨ (∃c. ∃d. ∃ds. ∃pr. ((((((((DataProcessing(pr, c, _p32, d) ∧ PersonalData(d, ds)) ∧ ¬(∃p. HasPurpose(_p32, p) ∧ ¬(⧫[0s,∞) GiveConsent(ds, p, c)))) ∧ ¬Exception24(_p32, ds)) ∧ ¬(∃de. ∃p. Exception141(_p32, c, d, de, ds, p, pr))) ∧ ¬(∃de. Exception143(_p32, c, d, de, ds, pr))) ∧ (∃p. Scope22(_p32, c, d, ds, p, pr))) ∧ Scope41(_p32, c, d, pr)) ∧ Scope42(_p32, c, d, pr)) ∧ ((_p33) = "6(1)(a)")) IN
+LET Exception150(a : string) = IsLawful(a, "9(2)(a)") ∨ IsLawful(a, "9(2)(g)") IN
+LET Exception149(a : string, d : string, ds : string, sp : string) = ((PersonalData(d, ds) ∧ IsSpecialData(d, sp)) ∧ ImplementFundamentalRightsSafeguards(a, ds)) ∧ ¬Exception150(a) IN
+LET Exception147(a : string, c : string, co : int, d : string, ds : string, pr : string) = (((DataProcessing(pr, c, a, d) ∧ IsNecessaryForContract(a, co)) ∧ (¬EndContract(co) S[0s,∞) PrepareContract(co) ∨ StartContract(co))) ∧ ⧫[0s,∞) (StartContract(co) ∧ IsContractParty(ds, co))) ∧ ¬(∃sp. Exception149(a, d, ds, sp)) IN
+LET Exception148(a : string, c : string, d : string, ds : string, p : string, pr : string) = ((DataProcessing(pr, c, a, d) ∧ (¬WithdrawConsent(ds, p, c) S[0s,∞) GiveConsent(ds, p, c))) ∧ IsAutomatedDecisionMakingPurpose(p)) ∧ ¬(∃sp. Exception149(a, d, ds, sp)) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:184:1-190:54"}{∀a. (∃c. ∃d. ∃ds. ∃pr. DataProcessing(pr, c, a, d) ∧:L PersonalData(d, ds)) →:L (∃p. HasPurpose(a, p))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:192:1-199:54"}{∀p. (∃a. HasPurpose(a, p)) →:L (IsSpecified(p) ∧ IsExplicit(p)) ∧ IsLegitimate(p)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:237:1-244:54"}{∀d. ∀p. (∃a. ∃co. ∃pr. DataProcessing(pr, co, a, d) ∧:L HasPurpose(a, p)) →:L ¬IsInaccurate(d, p) ∧ IsUpToDate(d, p)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:482:1-489:54"}{∀c. ∀ds. ∀p. (∃a. ∃d. ∃pr. (DataProcessing(pr, c, a, d) ∧:L PersonalData(d, ds)) ∧:L ⧫[0s,∞) GiveConsent(ds, p, c)) →:L IsAbleToDemonstrateConsent(c, ds, p)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:601:1-607:54"}{∀c. ∀ds. (∃p. GiveConsent(ds, p, c) ∧:L ¬(⧫[0s,∞) (∃ds2. HoldParentalResponsibility(ds2, ds) ∧ AuthorizeConsent(ds2, ds, p, c)))) →:L CheckNotChild(c, ds)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1290:1-1297:54"}{∀d. (∃a. ∃c. ∃ds. ∃pr. (DataProcessing(pr, c, a, d) ∧:L IsCollection(a, ds)) ∧:L PersonalData(d, ds)) →:L (∃t. HasStoragePeriod(d, t)) ∨ (∃cr. HasStorageCriteria(d, cr))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1441:1-1448:54"}{∀d. ∀de. (∃a. ∃c. ∃ds. ∃pr. (DataProcessing(pr, c, a, d) ∧:L PersonalData(d, ds)) ∧:L AutomatedDecision(a, d, ds, de)) →:L ⧫[0s,∞) HasIntendedAutomatedDecision(d, de)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2305:1-2310:52"}{∀c. ∀d. ∀rq. LiftRestriction(c, d, rq) →:L ⧫[0s,∞) (∃ds. ∃de. ∃re. Inform(c, ds, de) ∧ Contains(de, re) ∧ IsRestrictionToBeLifted(re, d, rq))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/minitwit_gdpr.rex:797:1-804:54"}{∀c. ∀d. ∀ds. ∀p. (∃a. ((∃pr. DataProcessing(pr, c, a, d)) ∧:L PersonalData(d, ds)) ∧:L HasPurpose(a, p)) →:L ⧫[0s,∞) (∃co. ∃pr'. DataProcessing(pr', c, co, d) ∧ IsCollection(co, ds) ∧ HasPurpose(co, p))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:201:1-208:54"}{∀d. ∀p. (∃a. ∃co. ∃ds. ∃pr. (DataProcessing(pr, co, a, d) ∧:L PersonalData(d, ds)) ∧:L HasPurpose(a, p)) →:L ⧫[0s,∞) (∃col_pr. ∃col_co. ∃c. ∃col_ds. ∃col_p. DataProcessing(col_pr, col_co, c, d) ∧ IsCollection(c, col_ds) ∧ HasPurpose(c, col_p) ∧ CompatibleWithPurpose(p, col_p))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1009:1-1014:45"}{∀c. ∀ds. ∀rq. Request(ds, rq, c) ∧ ¬Exception49(c, ds, rq) →:R ¬UndueDelay(rq) U[0s,1M]:R (∃rs. RequestResponse(ds, rq, rs)) ∨:L RequestExtension(c, rq)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1614:1-1620:54"}{∀d. (∃a. ∃c. ∃ds. ∃pr. (DataProcessing(pr, c, a, d) ∧:L IsIndirectCollection(a, d, ds)) ∧:L ¬Exception96(a, c, ds)) →:L (∃t. HasStoragePeriod(d, t)) ∨ (∃cr. HasStorageCriteria(d, cr))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1776:1-1785:54"}{∀c. ∀ds. ∀p. (∃a. ∃d. ∃pr. ((((DataProcessing(pr, c, a, d) ∧:L PersonalData(d, ds)) ∧:L HasPurpose(a, p)) ∧:L ⧫[0s,∞) (∃pr'. ∃co. DataProcessing(pr', c, co, d) ∧ IsIndirectCollection(co, d, ds))) ∧:L ¬(⧫[0s,∞) (∃pr'. ∃co. DataProcessing(pr', c, co, d) ∧ IsIndirectCollection(co, d, ds) ∧ HasPurpose(co, p)))) ∧:L ¬Exception96(a, c, ds)) →:L ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧ Contains(de, re) ∧ IsNewPurpose(re, p))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2037:1-2042:45"}{∀d. ∀d'. (∃c. IsObligedToRectify(c, d, d')) →:R ¬UndueDataDelay(d) U[0s,0s]:R Rectify(d, d')}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:742:1-749:54"}{(∃a. ∃c. ∃d. ∃ds. ∃pr. ∃sp. ((IsSpecialData(d, sp) ∧:R PersonalData(d, ds)) ∧:R DataProcessing(pr, c, a, d)) ∧:L (((((((((¬Exception28(a, c, d, ds, pr, sp) ∧ ¬Exception30(a)) ∧ ¬(∃ds'. ∃v. Exception31(a, ds, ds', v))) ∧ ¬Exception32(a, c, ds)) ∧ ¬Exception33(d, ds)) ∧ ¬Exception34(a)) ∧ ¬Exception35(a)) ∧ ¬Exception37(a)) ∧ ¬(∃pi. Exception38(a, pi))) ∧ ¬Exception39(a))) →:L ⊥}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2355:1-2361:45"}{∀c. ∀d. ∀e. ∀p. (Restricted(d, p) ∧ ¬(●[0s,∞) Restricted(d, p))) ∧ ⧫[0s,∞) Share(c, e, d) →:R ¬UndueDataDelay(d) U[0s,0s]:R NotifyOfRestriction(c, e, d, p)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:172:1-180:54"}{∀a. ∀ds. (∃c. ∃d. ∃p. DataProcessing(p, c, a, d) ∧:L PersonalData(d, ds)) →:L ((∃b. IsLawful(a, b)) ∧ IsFair(a)) ∧ IsTransparent(a, ds)}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2287:1-2295:54"}{∀a. (∃c. ∃d. ∃p. ∃pr. ((Restricted(d, p) ∧:R DataProcessing(pr, c, a, d)) ∧:L HasPurpose(a, p)) ∧:L ¬IsStorage(a)) →:L IsLawful(a, "6(1)(a)") ∨ IsLawful(a, "9(2)(a)") ∨ IsNecessaryForJudicialClaims(a) ∨ (∃e. IsNecessaryForProtectionOfRights(a, e)) ∨ (∃pi. IsNecessaryForImportantPublicInterest(a, pi))}
+∧:R □[0s,∞) {"../Lex/example/GDPR/gdpr.lex:2549:1-2555:54"}{∀a. ∀d. ∀ds. (∃c. ∃pr. (DataProcessing(pr, c, a, d) ∧:L PersonalData(d, ds)) ∧:L (¬(∃co. Exception147(a, c, co, d, ds, pr)) ∧ ¬(∃p. Exception148(a, c, d, ds, p, pr)))) →:L ¬(∃de. AutomatedDecision(a, d, ds, de))}

@@ -1,0 +1,5 @@
+LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
+LET HasIntendedRecipientCategory(_p158 : string, _p159 : string) = ⊥ ∨ (∃a. ∃ds. Collect(a, _p158, ds, "statistics") ∧ ((_p159) = "Analytics, Inc.")) IN
+LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
+LET IsRecipientCategory(_p103 : string, _p104 : string)+ = (Declaration(_p103) ∧:L HasText(_p103, "<h6>Categories of recipients</h6><p>We intend to share your personal data with the following categories of entities: " ^ string_of_entity(_p104) ^ ".</p>")) ∧:R NoteEntity(_p104) IN
+□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1217:1-1225:45"}{∀c. ∀ds. ∀rc. (∃a. ∃d. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsCollection(a, ds)) ∧ HasIntendedRecipientCategory(d, rc)) ∧ PersonalData(d, ds)) →:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsRecipientCategory(re, rc))}
