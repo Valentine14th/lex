@@ -16,6 +16,9 @@ from instrlib.pep import PEP
 from instrlib.handler_graph import max_element
 from instrlib.event import TimedTuple
 
+
+_DEBUG = os.getenv("INSTRLIB_DEBUG", "0") == "1"
+
 class PDP(ABC):
 
     def __init__(self, name : str = "enforcer", log_file : Union[str, None] = None):
@@ -78,7 +81,8 @@ class PDP(ABC):
 
             preexec_fn = _pin_to_cpu
 
-        print(' '.join(cmd))
+        if _DEBUG:
+            print(' '.join(cmd))
         self.ocaml_proc    = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=STDOUT, preexec_fn=preexec_fn)
 
         self.timer_thread  = Thread(target=self.run_timer_thread)
@@ -106,7 +110,8 @@ class EnfGuard(PDP):
                 try:
                     self.cpu_core = int(env_cpu.strip())
                 except ValueError:
-                    print(f"[EnfGuard] Warning: invalid INSTRLIB_PIN_CPU='{env_cpu}', ignoring")
+                    if _DEBUG:
+                        print(f"[EnfGuard] Warning: invalid INSTRLIB_PIN_CPU='{env_cpu}', ignoring")
     
     def _parse_signature_file(self, sig_path : str) -> Set[str]:
         """
@@ -125,11 +130,14 @@ class EnfGuard(PDP):
                     if '(' in line:
                         event_name = line.split('(')[0].strip()
                         allowed_events.add(event_name)
-            print(f"[EnfGuard] Parsed signature {sig_path}: {len(allowed_events)} events")
+            if _DEBUG:
+                print(f"[EnfGuard] Parsed signature {sig_path}: {len(allowed_events)} events")
         except FileNotFoundError:
-            print(f"[EnfGuard] Warning: Signature file not found: {sig_path}")
+            if _DEBUG:
+                print(f"[EnfGuard] Warning: Signature file not found: {sig_path}")
         except Exception as e:
-            print(f"[EnfGuard] Error parsing signature {sig_path}: {e}")
+            if _DEBUG:
+                print(f"[EnfGuard] Error parsing signature {sig_path}: {e}")
         return allowed_events
     
     def accepts_event(self, event_name : str) -> bool:
@@ -171,6 +179,8 @@ class EnfGuard(PDP):
     
 
 def _print(agent : str, name : str, msg : str) -> None:
+    if not _DEBUG:
+        return
     colors = {
         "black": "\033[30m",
         "red": "\033[31m",
@@ -193,7 +203,7 @@ def _print(agent : str, name : str, msg : str) -> None:
     agent_formatted = agent_with_name + (10 - len(agent_with_name)) * ' '
     formatted_msg = f"[{current_time}] [{agent_formatted}]: {msg}"
     color_code = colors.get(color.lower(), colors["reset"])
-    print(f"{color_code}{formatted_msg}{colors['reset']}", flush=True)
+    print(f"{color_code}{formatted_msg}{colors['reset']}")
 
 
 """
@@ -218,7 +228,8 @@ def writer(enforcer : PDP, log_file : Union[str, None]) -> None:
                 assert enforcer.ocaml_proc.stdin is not None
                 enforcer.ocaml_proc.stdin.write(stm)
                 enforcer.ocaml_proc.stdin.flush()
-                _print("writer", enforcer.name, f"Sent to enforcer: {stm.decode()}")
+                if _DEBUG:
+                    _print("writer", enforcer.name, f"Sent to enforcer: {stm.decode()}")
             except Exception as e:
                 _print("writer", enforcer.name, f"Error: {e}")
     _print("writer", enforcer.name, "Terminated")
@@ -238,7 +249,8 @@ def reader(enforcer : PDP) -> None:
             try:
                 return json.loads(msg)            
             except:
-                _print("reader", enforcer.name, f"Skipping non-JSON: {msg[:-1]}")
+                if _DEBUG:
+                    _print("reader", enforcer.name, f"Skipping non-JSON: {msg[:-1]}")
             output = proc.stdout.readline()
         return None
 
@@ -249,10 +261,11 @@ def reader(enforcer : PDP) -> None:
             msg = getstm(enforcer.ocaml_proc)
             if msg is not None:
                 event = enforcer.read_queue.get()
-                bid = f" batch_id={event.batch_id}" if event.batch_id is not None else ""
-                _print("reader", enforcer.name, f"Received from enforcer:{bid} {msg}")
                 (flag, innerqueue, order_msg) = event.event_tuple
-                _print("reader", enforcer.name, f"Matching request:{bid} {order_msg.decode()}")
+                if _DEBUG:
+                    bid = f" batch_id={event.batch_id}" if event.batch_id is not None else ""
+                    _print("reader", enforcer.name, f"Received from enforcer:{bid} {msg}")
+                    _print("reader", enforcer.name, f"Matching request:{bid} {order_msg.decode()}")
                 small_queue : Queue = Queue()
                 small_queue.put(msg)
                 innerqueue.put(small_queue)
@@ -337,7 +350,8 @@ class MultiPDP:
             try:
                 return [int(cpu.strip()) for cpu in raw.split(',') if cpu.strip() != ""]
             except ValueError:
-                print(f"[MultiPDP] Warning: invalid INSTRLIB_PIN_CPUS='{raw}', ignoring")
+                if _DEBUG:
+                    print(f"[MultiPDP] Warning: invalid INSTRLIB_PIN_CPUS='{raw}', ignoring")
 
         if hasattr(os, "sched_getaffinity"):
             return sorted(os.sched_getaffinity(0))
@@ -355,24 +369,27 @@ class MultiPDP:
 
         pdp = EnfGuard(name=name, exe=exe, sig=sig, formula=formula, log_file=self.log_file, cpu_core=cpu_core)
         self.enforcers.append((name, pdp))
-        if cpu_core is None:
-            print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula}")
-        else:
-            print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula} (cpu={cpu_core})")
+        if _DEBUG:
+            if cpu_core is None:
+                print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula}")
+            else:
+                print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula} (cpu={cpu_core})")
     
     def start_threads(self) -> None:
         """Start all enforcers in parallel"""
         if not self.enforcers:
             raise Exception("No enforcers added to MultiPDP")
         
-        print(f"[MultiPDP] Starting {len(self.enforcers)} enforcer(s)...")
+        if _DEBUG:
+            print(f"[MultiPDP] Starting {len(self.enforcers)} enforcer(s)...")
         for name, pdp in self.enforcers:
             # Set the pep for each enforcer
             if self.pep is not None:
                 pdp.pep = self.pep
             # Start threads for this enforcer
             pdp.start_threads()
-        print(f"[MultiPDP] All enforcers started successfully")
+        if _DEBUG:
+            print(f"[MultiPDP] All enforcers started successfully")
     
     def get_enforcer(self, name : str) -> Union[PDP, None]:
         """Get an enforcer by name"""

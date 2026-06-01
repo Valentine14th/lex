@@ -74,5 +74,4 @@ def max_element(graph : Dict[Tuple[str, ...], List[Tuple[str, ...]]], element : 
             for neigh in graph.get(p, []):
                 list_max.append(neigh)
     final_res : Set[str | Tuple[str, ...]] = {elem[0] if len(elem) == 1 else elem for elem in res}
-    print(final_res)
     return final_res

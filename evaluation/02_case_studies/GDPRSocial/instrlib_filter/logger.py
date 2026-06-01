@@ -1,28 +1,14 @@
 from abc import ABC, abstractmethod
-import os
 from queue import Queue
 from random import random
 import threading
-from time import time, perf_counter
+from time import time
 from typing import Tuple, List, Set, Union, Dict, Any
 
-from instrlib.pdp import PDP, _print
+from instrlib.pdp import PDP
 from instrlib.event import *
 from instrlib.pep import PEP
 from instrlib.schema import Schema
-
-
-class TimedCompletionEvent(threading.Event):
-    """Event that records the perf_counter timestamp at completion."""
-
-    def __init__(self):
-        super().__init__()
-        self.done_perf: float | None = None
-
-    def set(self):
-        self.done_perf = perf_counter()
-        super().set()
-
 
 class BaseLogger(ABC):
     """
@@ -129,7 +115,6 @@ class Logger(BaseLogger):
         self.timer = self.pdp.timer
         self.cache : Dict[Tuple[Event, ...], Tuple[float, Tuple[bool, bool, Set[str], Set[str]]]]
         self.cache = {}
-        self._batch_id : int = 0
     
     def extend_mapping(self, pep : PEP) -> None:
         super().extend_mapping(pep)
@@ -179,8 +164,6 @@ class Logger(BaseLogger):
         if cached is not None:
             event.set()
             return cached
-        self._batch_id += 1
-        batch_id = self._batch_id
         events = list(set(events))
         self.check_type(events)
         all_events = ' '.join(map(str, events))        
@@ -191,19 +174,10 @@ class Logger(BaseLogger):
             stm = self.pdp.ts_bytes((all_events), self.timer.current_time, flag_q)
             tsp = self.timer.current_time
             event_flag = threading.Event()
-            enqueue_perf = perf_counter()
             item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm))
             self.write_prio.put(item)
         event_flag.wait()
-        wait_ms = (perf_counter() - enqueue_perf) * 1000.0
-        merge_start = perf_counter()
         cau_flag, sup_flag = self.get_command(cau_flag, sup_flag, singleQueue)
-        merge_ms = (perf_counter() - merge_start) * 1000.0
-        _print(
-            "reader",
-            self.pdp.name,
-            f"[LoggerTiming] single_batch batch_id={batch_id} ts={tsp} wait_ms={wait_ms:.3f} merge_ms={merge_ms:.3f}",
-        )
         event.set()
         result = (cau_flag, sup_flag, self.cau_events, self.sup_events)
         self.cache_update(events, ts, result) # cache the result
@@ -270,42 +244,27 @@ class MultiLogger(BaseLogger):
         self.multi_pdp.pep = pep
         self._sup_enc_sets : Dict[str, Set[Tuple[Any, ...]]] = {}
         self._cau_enc_sets : Dict[str, Set[Tuple[Any, ...]]] = {}
-        self.event_to_enforcers : Dict[str, List[Tuple[str, PDP]]] = {}
-        self.partition_label_by_enforcer : Dict[str, str] = {}
-        self.last_partition_wait_ms : Dict[str, float] = {}
-        self.last_partition_merge_ms : Dict[str, float] = {}
-        self.last_slowest_partition : Union[None, Tuple[str, float]] = None
-        self.last_slowest_wait_partition : Union[None, Tuple[str, float]] = None
-        self._batch_id : int = 0
+        self.event_to_enforcers : Dict[str, Tuple[str, ...]] = {}
         
         # Per-enforcer state
         self.enforcers_state : Dict[str, Dict] = {}
         for name, pdp in self.multi_pdp.get_all_enforcers():
             self.enforcers_state[name] = {
-                'sup_events': set(),
-                'cau_events': set(),
-                'sup_enc': {},
-                'cau_enc': {},
                 'write_prio': pdp.write_prio,
                 'timer': pdp.timer,
-                'cache': {},
                 'pdp': pdp,
             }
-
-            formula_path = getattr(pdp, 'formula', None)
-            if isinstance(formula_path, str) and formula_path.strip() != "":
-                self.partition_label_by_enforcer[name] = os.path.basename(formula_path)
-            else:
-                self.partition_label_by_enforcer[name] = f"{name}.mfotl"
 
             allowed_events = getattr(pdp, 'allowed_events', None)
             if allowed_events is None and hasattr(pdp, 'accepts_event'):
                 allowed_events = [event_name for event_name in self.schema.mapping if pdp.accepts_event(event_name)]
             if allowed_events is not None:
                 for event_name in allowed_events:
-                    if event_name not in self.event_to_enforcers:
-                        self.event_to_enforcers[event_name] = []
-                    self.event_to_enforcers[event_name].append((name, pdp))
+                    existing = self.event_to_enforcers.get(event_name)
+                    if existing is None:
+                        self.event_to_enforcers[event_name] = (name,)
+                    else:
+                        self.event_to_enforcers[event_name] = existing + (name,)
 
     def _materialize_aggregated_encodings(self) -> None:
         """Convert internal set-based aggregation to list form for downstream consumers."""
@@ -313,16 +272,10 @@ class MultiLogger(BaseLogger):
         self.cau_enc = {name: list(args_set) for name, args_set in self._cau_enc_sets.items()}
     
     def _reset(self):
-        """Reset aggregated state and per-enforcer state"""
+        """Reset aggregated state"""
         super()._reset()
         self._sup_enc_sets = {}
         self._cau_enc_sets = {}
-        # Also reset per-enforcer state
-        for name in self.enforcers_state:
-            self.enforcers_state[name]['sup_events'] = set()
-            self.enforcers_state[name]['cau_events'] = set()
-            self.enforcers_state[name]['sup_enc'] = {}
-            self.enforcers_state[name]['cau_enc'] = {}
     
     def extend_mapping(self, pep : PEP) -> None:
         super().extend_mapping(pep)
@@ -337,37 +290,33 @@ class MultiLogger(BaseLogger):
         Events are filtered per enforcer based on their signature file.
         Returns: (cau_flag, sup_flag, cau_events, sup_events)
         """
-        ts = time()
-        self._batch_id += 1
-        batch_id = self._batch_id
         events = list(set(events))
-        
-        # Check cache (use first enforcer's cache for simplicity)
+
         if self.enforcers_state and random() < 0.01:
             self.clean_cache()
-        
+
         self.check_type(events)
-        
-        # Broadcast to all enforcers in parallel
+
         enf_queues : Dict[str, Queue] = {}
-        enf_events : Dict[str, TimedCompletionEvent] = {}
-        enf_enqueue_perf : Dict[str, float] = {}
+        enf_events : Dict[str, threading.Event] = {}
 
-        events_by_enforcer : Dict[str, List[Event]] = {}
+        # Build per-enforcer payloads in one pass, converting each event to string once.
+        event_chunks_by_enforcer : Dict[str, List[str]] = {}
         for ev in events:
-            for name, _ in self.event_to_enforcers.get(ev.name, []):
-                if name not in events_by_enforcer:
-                    events_by_enforcer[name] = []
-                events_by_enforcer[name].append(ev)
+            ev_str = str(ev)
+            for name in self.event_to_enforcers.get(ev.name, ()): 
+                chunks = event_chunks_by_enforcer.get(name)
+                if chunks is None:
+                    event_chunks_by_enforcer[name] = [ev_str]
+                else:
+                    chunks.append(ev_str)
 
-        for name, filtered_events in events_by_enforcer.items():
-            if not filtered_events:
-                continue
+        for name, event_chunks in event_chunks_by_enforcer.items():
 
             state = self.enforcers_state[name]
             pdp = state['pdp']
-            
-            all_events = ' '.join(map(str, filtered_events))
+
+            all_events = ' '.join(event_chunks)
 
             singleQueue = Queue()
             enf_queues[name] = singleQueue
@@ -375,70 +324,56 @@ class MultiLogger(BaseLogger):
             with state['timer'].current_time_lock:
                 stm = pdp.ts_bytes(all_events, state['timer'].current_time, flag_q)
                 tsp = state['timer'].current_time
-                event_flag = TimedCompletionEvent()
+                event_flag = threading.Event()
                 enf_events[name] = event_flag
-                item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm), batch_id=batch_id)
+                item = TimedTuple(tsp + 0.1, (event_flag, singleQueue, stm))
                 state['write_prio'].put(item)
-                enf_enqueue_perf[name] = perf_counter()
-        
+
         # Wait for all enforcers to respond
-        self.last_partition_wait_ms = {}
-        self.last_slowest_wait_partition = None
         for name, event_flag in enf_events.items():
             event_flag.wait()
-
-            enqueue_perf = enf_enqueue_perf.get(name)
-            done_perf = event_flag.done_perf
-            if isinstance(enqueue_perf, float) and isinstance(done_perf, float):
-                wait_ms = max(0.0, (done_perf - enqueue_perf) * 1000.0)
-            else:
-                wait_ms = 0.0
-            self.last_partition_wait_ms[name] = wait_ms
-
-        if self.last_partition_wait_ms:
-            slow_wait_name, slow_wait_ms = max(self.last_partition_wait_ms.items(), key=lambda kv: kv[1])
-            self.last_slowest_wait_partition = (slow_wait_name, slow_wait_ms)
-            wait_timings = ", ".join(
-                f"{self.partition_label_by_enforcer.get(name, name)}={ms:.3f}ms"
-                for name, ms in sorted(self.last_partition_wait_ms.items(), key=lambda kv: kv[1], reverse=True)
-            )
-            slow_wait_label = self.partition_label_by_enforcer.get(slow_wait_name, slow_wait_name)
-            _print(
-                "reader",
-                "multi",
-                f"[MultiLoggerTiming] wait_batch batch_id={batch_id} partitions={len(self.last_partition_wait_ms)} "
-                f"slowest={slow_wait_label}:{slow_wait_ms:.3f}ms waits=[{wait_timings}]",
-            )
         
-        # Aggregate responses using OR logic
         self._reset()
         cau_flag = False
         sup_flag = False
-        self.last_partition_merge_ms = {}
-        self.last_slowest_partition = None
-        
-        for name, singleQueue in enf_queues.items():
-            part_start = perf_counter()
-            enf_cau_flag, enf_sup_flag = self.get_command_from_enforcer(name, singleQueue)
-            part_ms = (perf_counter() - part_start) * 1000.0
-            self.last_partition_merge_ms[name] = part_ms
-            cau_flag = cau_flag or enf_cau_flag
-            sup_flag = sup_flag or enf_sup_flag
 
-        if self.last_partition_merge_ms:
-            slow_name, slow_ms = max(self.last_partition_merge_ms.items(), key=lambda kv: kv[1])
-            self.last_slowest_partition = (slow_name, slow_ms)
-            timings = ", ".join(
-                f"{self.partition_label_by_enforcer.get(name, name)}={ms:.3f}ms"
-                for name, ms in sorted(self.last_partition_merge_ms.items(), key=lambda kv: kv[1], reverse=True)
-            )
-            slow_label = self.partition_label_by_enforcer.get(slow_name, slow_name)
-            _print(
-                "reader",
-                "multi",
-                f"[MultiLoggerTiming] merge_batch batch_id={batch_id} partitions={len(self.last_partition_merge_ms)} "
-                f"slowest={slow_label}:{slow_ms:.3f}ms timings=[{timings}]",
-            )
+        parse_args = self.parse_args
+        sup_event_map = self.pep.sup_event_map
+        cau_event_map = self.pep.cau_event_map
+        sup_events = self.sup_events
+        cau_events = self.cau_events
+        sup_sets = self._sup_enc_sets
+        cau_sets = self._cau_enc_sets
+
+        for singleQueue in enf_queues.values():
+            while not singleQueue.empty():
+                stms = singleQueue.get()
+                while not stms.empty():
+                    msg = stms.get()
+                    for cau_event in msg.get("cause", ()): 
+                        name = cau_event["name"]
+                        if name not in cau_event_map:
+                            raise Exception(f'No causation handler defined for caused event {name}')
+                        args_tuple = parse_args(name, cau_event["args"])
+                        cau_flag = True
+                        cau_events.add(name)
+                        enc_set = cau_sets.get(name)
+                        if enc_set is None:
+                            cau_sets[name] = {args_tuple}
+                        else:
+                            enc_set.add(args_tuple)
+                    for sup_event in msg.get("suppress", ()): 
+                        name = sup_event["name"]
+                        if name not in sup_event_map:
+                            raise Exception(f'No suppression handler defined for suppressed event {name}')
+                        args_tuple = parse_args(name, sup_event["args"])
+                        sup_flag = True
+                        sup_events.add(name)
+                        enc_set = sup_sets.get(name)
+                        if enc_set is None:
+                            sup_sets[name] = {args_tuple}
+                        else:
+                            enc_set.add(args_tuple)
 
         self._materialize_aggregated_encodings()
         
@@ -472,7 +407,6 @@ class MultiLogger(BaseLogger):
     def parse_event(self, name : str, args : Tuple[str, ...], cmd : str, enforcer_name : str) -> None:
         """Parse event and update both per-enforcer and aggregated state"""
         args_tuple = self.parse_args(name, args)
-        state = self.enforcers_state[enforcer_name]
         
         if cmd == 'Suppress':
             if name in self.pep.sup_event_map:
@@ -481,12 +415,6 @@ class MultiLogger(BaseLogger):
                     self._sup_enc_sets[name] = set()
                 self._sup_enc_sets[name].add(args_tuple)
                 self.sup_events.add(name)
-                
-                # Update per-enforcer state
-                if name not in state['sup_enc']:
-                    state['sup_enc'][name] = set()
-                state['sup_enc'][name].add(args_tuple)
-                state['sup_events'].add(name)
             else:
                 raise Exception(f'No suppression handler defined for suppressed event {name}')
         
@@ -497,19 +425,9 @@ class MultiLogger(BaseLogger):
                     self._cau_enc_sets[name] = set()
                 self._cau_enc_sets[name].add(args_tuple)
                 self.cau_events.add(name)
-                
-                # Update per-enforcer state
-                if name not in state['cau_enc']:
-                    state['cau_enc'][name] = set()
-                state['cau_enc'][name].add(args_tuple)
-                state['cau_events'].add(name)
             else:
                 raise Exception(f'No causation handler defined for caused event {name}')
     
     def clean_cache(self) -> None:
-        """Clean outdated cache entries for all enforcers"""
-        for name in self.enforcers_state:
-            cache = self.enforcers_state[name]['cache']
-            for k, (ts, _) in list(cache.items()):
-                if ts + self.cache_timeout < time():
-                    del cache[k]
+        """No-op for MultiLogger (no active cache in multi path)."""
+        return
