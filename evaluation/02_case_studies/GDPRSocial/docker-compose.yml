@@ -14,6 +14,7 @@ services:
       context: ..
       dockerfile: GDPRSocial/Dockerfile
     volumes:
+      - ./benchmark/privacy_testsuite/db_snapshots:/app/benchmark/privacy_testsuite/db_snapshots
       - ./policies:/app/policies
       - ./output:/app/output
       - ./benchmark/privacy_testsuite/logs:/app/benchmark/privacy_testsuite/logs
