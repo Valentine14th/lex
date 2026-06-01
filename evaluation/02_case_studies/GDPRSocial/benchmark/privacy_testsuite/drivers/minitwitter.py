@@ -241,6 +241,8 @@ class Scenario:
                 return self._run_erase_tweet(result_base)
             elif self.sc == "right_to_info":
                 return self._run_right_to_info(result_base)
+            elif self.sc == "access_request":
+                return self._run_access_request(result_base)
             elif self.sc == "privacy_notices":
                 return self._run_privacy_notices(result_base)
             elif self.sc == "give_consent":
@@ -335,7 +337,23 @@ class Scenario:
         with Task("run", 'Scenario "right_to_info"'):
             s = self._random_user_session()
             r = s.get(ACCESS_URL)
-            assert r.ok
+            assert r.ok, f"right_to_info GET failed: {r.status_code}"
+            return {**base, "t": r.elapsed.total_seconds()}
+
+    def _run_access_request(self, base):
+        with Task("run", 'Scenario "access_request"'):
+            s = self._random_user_session()
+            r_get = s.get(ACCESS_URL)
+            assert r_get.ok, f"access_request GET failed: {r_get.status_code}"
+            rq_id = self._extract_hidden(r_get.text, "gdpr_request_id")
+            csrf = s.cookies.get("csrftoken")
+            r = s.post(ACCESS_URL, data={
+                "gdpr_request_id": rq_id,
+                "new_controller": "",
+                "submit": "true",
+                "csrfmiddlewaretoken": csrf,
+            }, allow_redirects=False)
+            assert r.status_code == 302, f"access_request POST failed: {r.status_code}"
             return {**base, "t": r.elapsed.total_seconds()}
 
     def _run_privacy_notices(self, base):
