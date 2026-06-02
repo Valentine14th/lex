@@ -9,6 +9,7 @@ policy events understood by the EnfGuard enforcement engine.
 
 import json
 import os
+import shutil
 import uuid
 import zipfile
 from io import BytesIO
@@ -547,20 +548,62 @@ def _sig_for(idx: int) -> str:
         return _sigs[idx]
     return _sigs[-1] if _sigs else INSTRLIB_SIG
 
-if _MULTI_PDP_AVAILABLE and len(_formulas) > 1:
+
+def _state_for(name: str) -> str | None:
+    """Return a per-enforcer state path to avoid cross-enforcer contention."""
+    if not INSTRLIB_STATE:
+        return None
+    base, ext = os.path.splitext(INSTRLIB_STATE)
+    ext = ext or ".state"
+    safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name)
+    return f"{base}__{safe_name}{ext}"
+
+
+def _seed_state_for(name: str) -> str | None:
+    """Copy the common source state file into a per-enforcer state file."""
+    state_path = _state_for(name)
+    if state_path is None:
+        return None
+    if not os.path.isfile(INSTRLIB_STATE):
+        raise RuntimeError(
+            f"[Enforcer] INSTRLIB_STATE must exist for multi mode seeding: {INSTRLIB_STATE}"
+        )
+    state_dir = os.path.dirname(state_path)
+    if state_dir:
+        os.makedirs(state_dir, exist_ok=True)
+    shutil.copy2(INSTRLIB_STATE, state_path)
+    return state_path
+
+if _MULTI_PDP_AVAILABLE: #and len(_formulas) > 1:
     print(f"[Enforcer] Multi-enforcer mode: {len(_formulas)} formulas detected")
     pdp = MultiPDP(log_file=INSTRLIB_LOG)
     for _idx, _formula in enumerate(_formulas):
         _name = os.path.splitext(os.path.basename(_formula))[0]
-        pdp.add_enforcer(name=_name, exe=INSTRLIB_EXE, sig=_sig_for(_idx), formula=_formula)
+        _state = _seed_state_for(_name)
+        pdp.add_enforcer(
+            name=_name,
+            exe=INSTRLIB_EXE,
+            sig=_sig_for(_idx),
+            formula=_formula,
+            func=INSTRLIB_FUNC,
+            state_file=_state,
+        )
 else:
     if len(_formulas) > 1:
         print(f"[Enforcer] Warning: multiple formulas specified but MultiPDP not available; using first formula only")
     print(f"[Enforcer] Single enforcer mode: {_formulas[0]}")
-    try:
-        pdp = EnfGuard(INSTRLIB_EXE, _sig_for(0), _formulas[0], log_file=INSTRLIB_LOG, func=INSTRLIB_FUNC, state_file=INSTRLIB_STATE)
-    except TypeError:
-        pdp = EnfGuard(INSTRLIB_EXE, _sig_for(0), _formulas[0], log_file=INSTRLIB_LOG)
+    if INSTRLIB_STATE and not os.path.isfile(INSTRLIB_STATE):
+        raise RuntimeError(
+            f"[Enforcer] INSTRLIB_STATE must exist for single-enforcer mode: {INSTRLIB_STATE}"
+        )
+    pdp = EnfGuard(
+        INSTRLIB_EXE,
+        _sig_for(0),
+        _formulas[0],
+        log_file=INSTRLIB_LOG,
+        func=INSTRLIB_FUNC,
+        state_file=INSTRLIB_STATE,
+    )
 
 
 # =========================================================================

@@ -18,7 +18,7 @@ from instrlib.event import TimedTuple
 
 class PDP(ABC):
 
-    def __init__(self, name : str = "enforcer", log_file : Union[str, None] = None):
+    def __init__(self, name : str = "enforcer", log_file : Union[str, None] = None, timer_state_file : Union[str, None] = None):
         self.name             : str            = name
         self.log_file         : str     | None = log_file
         self.ocaml_proc       : Popen   | None = None
@@ -27,10 +27,11 @@ class PDP(ABC):
         self.reader_thread    : Thread  | None = None
         self.pep              : PEP     | None = None
         self.write_prio       : PriorityQueue  = PriorityQueue()
-        self.timer            : Timer          = Timer()
+        self.timer            : Timer          = Timer(state_file=timer_state_file)
         self.termination_flag : Event          = Event()
         self.read_queue       : Queue          = Queue()
         self.cpu_core         : int     | None = None
+        self.timer_state_file : str | None     = timer_state_file
         
     @abstractmethod
     def ts_bytes(self, stm : str, tsp : Union[float, None] = None, flag_q : bool = False) -> bytes:
@@ -94,7 +95,9 @@ class EnfGuard(PDP):
 
     def __init__(self, exe : str, sig : str, formula : str, *args, **kwargs):
         cpu_core = kwargs.pop('cpu_core', None)
-        super(EnfGuard, self).__init__(*args, **kwargs)
+        self.func : str | None = kwargs.pop('func', None)
+        self.state_file : str | None = kwargs.pop('state_file', None)
+        super(EnfGuard, self).__init__(*args, timer_state_file=self.state_file, **kwargs)
         self.exe     : str = exe
         self.sig     : str = sig
         self.formula : str = formula
@@ -125,11 +128,15 @@ class EnfGuard(PDP):
                     if '(' in line:
                         event_name = line.split('(')[0].strip()
                         allowed_events.add(event_name)
+            if not allowed_events:
+                raise RuntimeError(
+                    f"[EnfGuard] Signature file parsed but contains no event declarations: {sig_path}"
+                )
             print(f"[EnfGuard] Parsed signature {sig_path}: {len(allowed_events)} events")
         except FileNotFoundError:
-            print(f"[EnfGuard] Warning: Signature file not found: {sig_path}")
+            raise RuntimeError(f"[EnfGuard] Signature file not found: {sig_path}")
         except Exception as e:
-            print(f"[EnfGuard] Error parsing signature {sig_path}: {e}")
+            raise RuntimeError(f"[EnfGuard] Error parsing signature {sig_path}: {e}") from e
         return allowed_events
     
     def accepts_event(self, event_name : str) -> bool:
@@ -147,12 +154,17 @@ class EnfGuard(PDP):
             return b'@' + tsp2.encode() + b' ' + str(stm).encode() + b';\n'
     
     def command(self):
-        return [
+        command = [
             self.exe,
             '-sig',     self.sig,
             '-formula', self.formula,
             '-json',
         ]
+        if self.func is not None:
+            command += ['-func', self.func]
+        if self.state_file is not None:
+            command += ['-state', self.state_file]
+        return command
     
     def parse_events(self, input_string : str) -> Dict[str, Set[Tuple[str, ...]]]:
         event_pattern = r'(\w+)\(((?:[^()"]|"(?:[^"\\]|\\.)*")*)\)' #r'(\w+)\((.*?)\)'
@@ -169,8 +181,10 @@ class EnfGuard(PDP):
     def tick(self) -> str:
         return "tick()"
     
+NO_PRINT = False
 
 def _print(agent : str, name : str, msg : str) -> None:
+    if NO_PRINT: return
     colors = {
         "black": "\033[30m",
         "red": "\033[31m",
@@ -347,13 +361,22 @@ class MultiPDP:
             return []
         return list(range(cpu_count))
         
-    def add_enforcer(self, name : str, exe : str, sig : str, formula : str) -> None:
+    def add_enforcer(self, name : str, exe : str, sig : str, formula : str, func : Union[str, None] = None, state_file : Union[str, None] = None) -> None:
         """Add a new enforcer with the given name and configuration"""
         cpu_core : int | None = None
         if self.pinned_cpus:
             cpu_core = self.pinned_cpus[len(self.enforcers) % len(self.pinned_cpus)]
 
-        pdp = EnfGuard(name=name, exe=exe, sig=sig, formula=formula, log_file=self.log_file, cpu_core=cpu_core)
+        pdp = EnfGuard(
+            name=name,
+            exe=exe,
+            sig=sig,
+            formula=formula,
+            log_file=self.log_file,
+            cpu_core=cpu_core,
+            func=func,
+            state_file=state_file,
+        )
         self.enforcers.append((name, pdp))
         if cpu_core is None:
             print(f"[MultiPDP] Added enforcer '{name}' for formula: {formula}")
