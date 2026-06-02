@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 from subprocess import Popen, PIPE, STDOUT
 import uuid
+import re
 
 import requests
 from lorem_text import lorem
@@ -43,6 +44,8 @@ TEMPLATE_DB  = SNAPSHOT_DIR / "_template.sqlite3"
 MANAGE_PY    = PROJECT_ROOT / "manage.py"
 LIVE_DB      = PROJECT_ROOT / "db.sqlite3"
 STATE_FILE   = PROJECT_ROOT / "enfflash.state"
+STATE_SEED_FILE = PROJECT_ROOT / "enfflash_seed.state"
+POLICY_DIR   = PROJECT_ROOT / "policies"
 
 ENFGUARD_EXE = os.environ.get(
     "INSTRLIB_EXE",
@@ -50,7 +53,7 @@ ENFGUARD_EXE = os.environ.get(
 )
 
 # ── parameter space ─────────────────────────────────────────────────────
-CONFIGS        = [(1, 100), (10, 1000), (100, 10000)]   # (users, tweets)
+CONFIGS        = [(1, 100)]   # (users, tweets) (10, 1000), (100, 10000)
 CONSENT_LEVELS = ["none"]#, "statistics", "statistics_ads"]
 
 # ── URLs ─────────────────────────────────────────────────────────────────
@@ -65,6 +68,101 @@ PASSWORD_HASH = (
 )
 
 ADS_PER_USER = 2
+
+
+def _sanitize_name(name):
+    """Create filesystem-safe tags for snapshot filenames."""
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
+
+
+def _policy_formula_candidates():
+    """Yield .mfotl policy files selected for snapshot generation.
+
+    If PREPARE_POLICY_DIRS is set (comma-separated), only those entries
+    under POLICY_DIR are considered. Each entry may be a subdirectory or
+    a direct .mfotl file path. Otherwise, fall back to top-level policies.
+    """
+    raw = os.environ.get("PREPARE_POLICY_DIRS", "").strip()
+    if raw:
+        selected = []
+        for entry in [x.strip() for x in raw.split(",") if x.strip()]:
+            path = Path(entry)
+            if not path.is_absolute():
+                path = POLICY_DIR / path
+            if path.is_dir():
+                selected.extend(sorted(path.glob("*.mfotl")))
+            elif path.is_file() and path.suffix == ".mfotl":
+                selected.append(path)
+            else:
+                print(f"  [skip] PREPARE_POLICY_DIRS entry not found: {entry}")
+        return selected
+
+    return sorted(POLICY_DIR.glob("*.mfotl"))
+
+
+def _discover_policy_groups():
+    """Return [(group_name, formula_arg, sig_arg, [policy_names])].
+
+    - If PREPARE_POLICY_DIRS is set, each directory entry is one group and all
+      *.mfotl/*.sig files in it are run together in the same multi-enforcer run.
+    - Otherwise, each top-level policy file is treated as a single-policy group.
+    """
+    groups = []
+    raw = os.environ.get("PREPARE_POLICY_DIRS", "").strip()
+
+    if raw:
+        for entry in [x.strip() for x in raw.split(",") if x.strip()]:
+            path = Path(entry)
+            if not path.is_absolute():
+                path = POLICY_DIR / path
+            if not path.is_dir():
+                print(f"  [skip] PREPARE_POLICY_DIRS entry is not a directory: {entry}")
+                continue
+
+            mfotls = sorted(path.glob("*.mfotl"))
+            if not mfotls:
+                print(f"  [skip] No .mfotl files in: {path}")
+                continue
+
+            missing = [m.stem for m in mfotls if not m.with_suffix(".sig").exists()]
+            if missing:
+                print(f"  [skip] Missing .sig files in {path}: {', '.join(missing)}")
+                continue
+
+            policy_names = [m.stem for m in mfotls]
+            groups.append((path.name, path, path, policy_names))
+
+        if groups:
+            return groups
+
+    singles = []
+    for formula_path in sorted(POLICY_DIR.glob("*.mfotl")):
+        sig_path = formula_path.with_suffix(".sig")
+        if sig_path.exists():
+            name = formula_path.stem
+            singles.append((name, formula_path, sig_path, [name]))
+        else:
+            print(f"  [skip] Missing .sig for policy '{formula_path.stem}'")
+
+    if singles:
+        return singles
+
+    fallback = "minitwit_gdpr"
+    print("  [warn] No discoverable policies, using fallback")
+    return [(
+        fallback,
+        POLICY_DIR / f"{fallback}.mfotl",
+        POLICY_DIR / f"{fallback}.sig",
+        [fallback],
+    )]
+
+
+def _runtime_state_for(policy_name):
+    """Mirror twitt.enforcer._state_for for STATE_SEED_FILE base path."""
+    base, ext = os.path.splitext(str(STATE_SEED_FILE))
+    ext = ext or ".state"
+    safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in policy_name)
+    return Path(f"{base}__{safe_name}{ext}")
 
 
 def _random_text():
@@ -118,18 +216,40 @@ def _kill_port():
     time.sleep(0.5)
 
 
-def _start_server(policy="minitwit_gdpr"):
+def _start_server(policy_formula, policy_sig, policy_names):
     """Start the enforced Django dev server, return (proc, log_fh)."""
     _kill_port()
 
-    # Remove old state so the monitor starts fresh for this snapshot
-    if STATE_FILE.exists():
-        STATE_FILE.unlink()
-
     env = os.environ.copy()
     env["INSTRLIB_EXE"] = ENFGUARD_EXE
-    env["INSTRLIB_FORMULA"] = f"policies/{policy}.mfotl"
-    env["INSTRLIB_SIG"] = f"policies/{policy}.sig"
+    env["INSTRLIB_FORMULA"] = str(policy_formula)
+    env["INSTRLIB_SIG"] = str(policy_sig)
+
+    multi_mode = len(policy_names) > 1
+    if multi_mode:
+        # Reset common seed for multi-enforcer cloning for each snapshot run.
+        if STATE_FILE.exists():
+            shutil.copy2(STATE_FILE, STATE_SEED_FILE)
+        else:
+            STATE_SEED_FILE.write_bytes(b"")
+        env["INSTRLIB_STATE"] = str(STATE_SEED_FILE)
+
+        # Remove stale per-enforcer states from previous runs.
+        for policy_name in policy_names:
+            runtime_state = _runtime_state_for(policy_name)
+            if runtime_state.exists():
+                runtime_state.unlink()
+    else:
+        # MultiPDP may still be active with a single formula and expects a
+        # valid source state file to clone from.
+        if STATE_FILE.exists():
+            env["INSTRLIB_STATE"] = str(STATE_FILE)
+        elif STATE_SEED_FILE.exists():
+            env["INSTRLIB_STATE"] = str(STATE_SEED_FILE)
+        else:
+            raise RuntimeError(
+                f"Missing baseline state file: {STATE_FILE}"
+            )
 
     log_fh = open(SNAPSHOT_DIR / "_server.log", "w")
     proc = Popen(
@@ -144,7 +264,7 @@ def _start_server(policy="minitwit_gdpr"):
             r = requests.get(LOGIN_URL, timeout=2)
             if r.status_code == 200:
                 return proc, log_fh
-        except requests.ConnectionError:
+        except requests.RequestException:
             pass
     raise RuntimeError("Django server did not start within 30 s")
 
@@ -276,16 +396,23 @@ def _seed_ads(db_path, u, ads_per_user=ADS_PER_USER):
 #  Build one snapshot
 # ─────────────────────────────────────────────────────────────────────────
 
-def build_snapshot(u, n, consent, policy="minitwit_gdpr"):
-    tag = f"u{u}_n{n}_c{consent}"
-    db_dest    = SNAPSHOT_DIR / f"db_{tag}.sqlite3"
-    state_dest = SNAPSHOT_DIR / f"state_{tag}.bin"
+def build_snapshot(u, n, consent, group_name, policy_formula, policy_sig, policy_names):
+    group_tag = _sanitize_name(group_name)
+    base_tag = f"u{u}_n{n}_c{consent}"
+    db_dest = SNAPSHOT_DIR / f"db_{base_tag}.sqlite3"
+    state_dests = [
+        SNAPSHOT_DIR / f"state_p{_sanitize_name(policy_name)}_{base_tag}.bin"
+        for policy_name in policy_names
+    ]
 
-    if db_dest.exists() and state_dest.exists():
-        print(f"  [skip] {tag} already exists")
+    if db_dest.exists() and all(p.exists() for p in state_dests):
+        print(f"  [skip] {group_tag}_{base_tag} already exists")
         return
 
-    print(f"  [{tag}] Preparing ({u} users, {n} tweets, consent={consent}) …")
+    print(
+        f"  [{group_tag}_{base_tag}] Preparing ({u} users, {n} tweets, consent={consent}, "
+        f"group={group_name}, policies={len(policy_names)}) ..."
+    )
 
     # 1. Fresh DB with users
     shutil.copy2(TEMPLATE_DB, LIVE_DB)
@@ -293,7 +420,7 @@ def build_snapshot(u, n, consent, policy="minitwit_gdpr"):
     _seed_ads(LIVE_DB, u)
 
     # 2. Start enforced server
-    proc, log_fh = _start_server(policy)
+    proc, log_fh = _start_server(policy_formula, policy_sig, policy_names)
 
     try:
         tweets_per_user = n // u
@@ -326,13 +453,24 @@ def build_snapshot(u, n, consent, policy="minitwit_gdpr"):
         # 5. Graceful shutdown → monitor flushes enfflash.state
         _stop_server(proc, log_fh)
 
-    # 6. Save snapshot pair
+    # 6. Save snapshot DB + per-enforcer state files
     assert LIVE_DB.exists(), "DB not found after server stop"
-    assert STATE_FILE.exists(), "enfflash.state not found after server stop"
-
     shutil.copy2(LIVE_DB, db_dest)
-    shutil.copy2(STATE_FILE, state_dest)
-    print(f"  [{tag}] Done ✓")
+
+    if len(policy_names) > 1:
+        for policy_name, state_dest in zip(policy_names, state_dests):
+            runtime_state = _runtime_state_for(policy_name)
+            assert runtime_state.exists(), f"State file not found after server stop: {runtime_state}"
+            shutil.copy2(runtime_state, state_dest)
+    else:
+        runtime_state = _runtime_state_for(policy_names[0])
+        if runtime_state.exists():
+            shutil.copy2(runtime_state, state_dests[0])
+        else:
+            assert STATE_FILE.exists(), "enfflash.state not found after server stop"
+            shutil.copy2(STATE_FILE, state_dests[0])
+
+    print(f"  [{group_tag}_{base_tag}] Done ✓")
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -344,10 +482,18 @@ def main():
     print("Creating template database …")
     _create_template_db()
 
-    combos = [(u, n, c) for (u, n) in CONFIGS for c in CONSENT_LEVELS]
+    policy_groups = _discover_policy_groups()
+    print(f"Discovered {len(policy_groups)} policy group(s)")
+
+    combos = [
+        (group_name, policy_formula, policy_sig, policy_names, u, n, c)
+        for (group_name, policy_formula, policy_sig, policy_names) in policy_groups
+        for (u, n) in CONFIGS
+        for c in CONSENT_LEVELS
+    ]
     print(f"\nBuilding {len(combos)} snapshots (this will take a while) …\n")
-    for u, n, consent in combos:
-        build_snapshot(u, n, consent)
+    for group_name, policy_formula, policy_sig, policy_names, u, n, consent in combos:
+        build_snapshot(u, n, consent, group_name, policy_formula, policy_sig, policy_names)
 
     print(f"\nAll snapshots ready in {SNAPSHOT_DIR}/")
 

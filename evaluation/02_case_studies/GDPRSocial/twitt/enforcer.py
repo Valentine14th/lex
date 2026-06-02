@@ -524,6 +524,7 @@ schema.add('TP',                    [int])
 
 _formulas = [f.strip() for f in INSTRLIB_FORMULA.split(',') if f.strip()]
 _sigs = [s.strip() for s in INSTRLIB_SIG.split(',') if s.strip()]
+_states = [s.strip() for s in INSTRLIB_STATE.split(',') if s.strip()] if INSTRLIB_STATE else []
 
 # Expand a single directory to all .mfotl / .sig files within it.
 import glob as _glob
@@ -549,29 +550,39 @@ def _sig_for(idx: int) -> str:
     return _sigs[-1] if _sigs else INSTRLIB_SIG
 
 
-def _state_for(name: str) -> str | None:
-    """Return a per-enforcer state path to avoid cross-enforcer contention."""
-    if not INSTRLIB_STATE:
+def _state_source_for(idx: int) -> str | None:
+    """Return the configured source state file for enforcer idx."""
+    if not _states:
         return None
-    base, ext = os.path.splitext(INSTRLIB_STATE)
+    if idx < len(_states):
+        return _states[idx]
+    return _states[-1]
+
+
+def _state_for(name: str, state_source: str | None = None) -> str | None:
+    """Return a per-enforcer state path to avoid cross-enforcer contention."""
+    source = state_source if state_source else (_states[0] if _states else None)
+    if not source:
+        return None
+    base, ext = os.path.splitext(source)
     ext = ext or ".state"
     safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name)
     return f"{base}__{safe_name}{ext}"
 
 
-def _seed_state_for(name: str) -> str | None:
-    """Copy the common source state file into a per-enforcer state file."""
-    state_path = _state_for(name)
-    if state_path is None:
+def _seed_state_for(name: str, state_source: str | None) -> str | None:
+    """Copy source state into a per-enforcer runtime state file."""
+    state_path = _state_for(name, state_source)
+    if state_path is None or state_source is None:
         return None
-    if not os.path.isfile(INSTRLIB_STATE):
+    if not os.path.isfile(state_source):
         raise RuntimeError(
-            f"[Enforcer] INSTRLIB_STATE must exist for multi mode seeding: {INSTRLIB_STATE}"
+            f"[Enforcer] INSTRLIB_STATE source must exist for multi mode seeding: {state_source}"
         )
     state_dir = os.path.dirname(state_path)
     if state_dir:
         os.makedirs(state_dir, exist_ok=True)
-    shutil.copy2(INSTRLIB_STATE, state_path)
+    shutil.copy2(state_source, state_path)
     return state_path
 
 if _MULTI_PDP_AVAILABLE: #and len(_formulas) > 1:
@@ -579,7 +590,7 @@ if _MULTI_PDP_AVAILABLE: #and len(_formulas) > 1:
     pdp = MultiPDP(log_file=INSTRLIB_LOG)
     for _idx, _formula in enumerate(_formulas):
         _name = os.path.splitext(os.path.basename(_formula))[0]
-        _state = _seed_state_for(_name)
+        _state = _seed_state_for(_name, _state_source_for(_idx))
         pdp.add_enforcer(
             name=_name,
             exe=INSTRLIB_EXE,

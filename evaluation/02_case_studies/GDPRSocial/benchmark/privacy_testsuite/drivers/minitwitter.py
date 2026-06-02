@@ -61,7 +61,7 @@ ERASURE_URL          = f"{BASE}/gdpr/request/erasure/"
 OBJECTION_URL        = f"{BASE}/gdpr/request/objection/"
 
 # ── Constants ────────────────────────────────────────────────────────────
-CONFIGS        = [(1, 100), (10, 1000), (100, 10000)]   # (users, tweets) (1000, 10000)
+CONFIGS        = [(1,100),]   # (users, tweets) (1000, 10000) (10, 100), (10, 1000), (100,10000), (1000,10000)
 CONSENT_LEVELS = ["none"]#, "statistics", "statistics_ads"]
 
 
@@ -97,13 +97,32 @@ class Scenario:
         src = self._snapshot_path()
         assert src.exists(), f"Snapshot not found: {src}"
         shutil.copy2(src, self.database)
-        # Restore enforcer state for enforced runs
         state_src = self._state_snapshot_path()
+        use_snapshot_state = str(self.env.get("INSTRLIB_USE_SNAPSHOT_STATE", "")).strip().lower() in ("1", "true", "yes", "on")
+        external_state = str(self.env.get("INSTRLIB_STATE", "")).strip()
+        has_external_state = bool(external_state)
         state_dst = self.project_root / "enfflash.state"
-        if state_src.exists():
+
+        # If state is provided externally (e.g. run_all_splits multi-enforcer),
+        # do not replace it with legacy per-config state_u... snapshots.
+        if has_external_state and not use_snapshot_state:
+            return
+
+        if use_snapshot_state:
+            assert state_src.exists(), f"State snapshot not found: {state_src}"
+            self.env["INSTRLIB_STATE"] = str(state_src)
+            if state_dst.exists():
+                state_dst.unlink()
+        elif state_src.exists() and not has_external_state:
             shutil.copy2(state_src, state_dst)
+            self.env["INSTRLIB_STATE"] = str(state_dst)
         elif state_dst.exists():
-            state_dst.unlink()
+            if not has_external_state:
+                state_dst.unlink()
+                self.env.pop("INSTRLIB_STATE", None)
+        else:
+            if not has_external_state:
+                self.env.pop("INSTRLIB_STATE", None)
 
     def _user_session(self, i):
         session = requests.Session()
@@ -563,20 +582,20 @@ class Application:
 
             scenario_names = [
                 "timeline",
-                "post_tweet",
-                #"erase_tweet",
-                "follow_user",
-                #"search_user",
-                "like_tweet",
-                "send_message",
-                "right_to_info",
-                "privacy_notices",
-                "give_consent",
-                "revoke_consent",
-                "special_consent",
-                "request_rectification",
-                "request_erasure",
-                "request_objection",
+                #"post_tweet",
+                ###"erase_tweet",
+                #"follow_user",
+                ##"search_user",
+                #"like_tweet",
+                #"send_message",
+                #"right_to_info",
+                #"privacy_notices",
+                #"give_consent",
+                #"revoke_consent",
+                #"special_consent",
+                #"request_rectification",
+                #"request_erasure",
+                #"request_objection",
             ]
 
             scenarios = []
