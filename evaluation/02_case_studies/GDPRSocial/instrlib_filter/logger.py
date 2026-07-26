@@ -207,6 +207,7 @@ class Logger(BaseLogger):
         event.set()
         result = (cau_flag, sup_flag, self.cau_events, self.sup_events)
         self.cache_update(events, ts, result) # cache the result
+        print(f"[LoggerTiming] Time spent in log: {(time() - ts) * 1000.0:.3f}ms")
         return result
     
     def get_command(self, cau_flag : bool, sup_flag : bool, singleQueue : Queue) -> Tuple[bool, bool]:
@@ -444,6 +445,9 @@ class MultiLogger(BaseLogger):
         
         event.set()
         result = (cau_flag, sup_flag, self.cau_events, self.sup_events)
+        
+        print(f"[MultiLoggerTiming] Time spent in log: {(time() - ts) * 1000.0:.3f}ms")
+        
         return result
     
     def get_command_from_enforcer(self, enforcer_name : str, singleQueue : Queue) -> Tuple[bool, bool]:
