@@ -17,6 +17,7 @@ services:
       - ./policies:/app/policies
       - ./output:/app/output
       - ./benchmark/privacy_testsuite/logs:/app/benchmark/privacy_testsuite/logs
+      - ./log:/app/log
       - ./benchmark/privacy_testsuite/drivers/minitwitter.py:/app/benchmark/privacy_testsuite/drivers/minitwitter.py
       - ./benchmark/privacy_testsuite/tester.py:/app/benchmark/privacy_testsuite/tester.py
       - ./benchmark/privacy_testsuite/prepare_databases.py:/app/benchmark/privacy_testsuite/prepare_databases.py
