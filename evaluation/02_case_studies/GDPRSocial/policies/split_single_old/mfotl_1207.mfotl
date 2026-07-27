@@ -1,4 +1,0 @@
-LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
-LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
-LET IsRecipient(_p105 : string, _p106 : string)+ = (Declaration(_p105) ∧:L HasText(_p105, "<h6>Recipients of your personal data</h6><p>We intend to share your personal data with the following entity: " ^ string_of_entity(_p106) ^ ".</p>")) ∧:R NoteEntity(_p106) IN
-□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1207:1-1215:45"}{∀c. ∀ds. ∀e. (∃a. ∃d. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsCollection(a, ds)) ∧ HasIntendedRecipient(d, e)) ∧ PersonalData(d, ds)) →:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsRecipient(re, e))}

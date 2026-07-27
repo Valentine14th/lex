@@ -1,5 +1,0 @@
-LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
-LET HasIntendedAutomatedDecision(_p160 : string, _p161 : string) = ∃a. ∃ds. Collect(a, _p160, ds, "personalized_ad") ∧ ((_p161) = "We use the content of the page shown to the user to display personalized advertisement") IN
-LET IsAutomatedDecision(_p143 : string)+ = Declaration(_p143) ∧:L HasText(_p143, "<h6>Automated decision-making</h6><p>We use the content of your latest posts to display personalized advertisement. No human review is involved in this decision.</p>") IN
-LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
-□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1450:1-1458:45"}{∀c. ∀ds. (∃a. ∃d. ∃de. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsCollection(a, ds)) ∧ PersonalData(d, ds)) ∧ HasIntendedAutomatedDecision(d, de)) →:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsAutomatedDecision(re))}

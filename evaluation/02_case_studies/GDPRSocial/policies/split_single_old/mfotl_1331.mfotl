@@ -1,5 +1,0 @@
-LET DataProcessing(_p183 : string, _p184 : string, _p185 : string, _p186 : string)- = ∃ds. ∃p. (((∃ds'. Read(_p186, ds, _p185, p, ds')) ∨:L (∃ds'. Write(_p186, ds, _p185, p, ds')) ∨:L Collect(_p185, _p186, ds, p)) ∧:L ((_p184) = "GDPRSocial, Inc.")) ∧:L ((_p183) = "GDPRSocial, Inc.") IN
-LET HasStorageCriteria(_p150 : string, _p151 : string) = ⊤ ∧ ((_p151) = "Your data is stored until you delete your account") IN
-LET IsCollection(_p138 : string, _p139 : string) = ∃d. ∃p. Collect(_p138, d, _p139, p) IN
-LET IsStorageCriteria(_p90 : string, _p91 : string)+ = (Declaration(_p90) ∧:L HasText(_p90, "<h6>Storage criteria</h6><p>The criteria used to determine the period for which your personal data will be stored are: " ^ string_of_criteria(_p91) ^ ".</p>")) ∧:R NoteCriteria(_p91) IN
-□[0s,∞) {"../Lex/example/GDPR/gdpr.lex:1331:1-1339:45"}{∀c. ∀cr. ∀ds. (∃a. ∃d. ∃pr. ((DataProcessing(pr, c, a, d) ∧ IsCollection(a, ds)) ∧ PersonalData(d, ds)) ∧ HasStorageCriteria(d, cr)) →:R ⧫[0s,∞) (∃de. ∃re. Inform(c, ds, de) ∧:L Contains(de, re) ∧:L IsStorageCriteria(re, cr))}
