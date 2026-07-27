@@ -124,61 +124,55 @@ App access:
 - http://127.0.0.1:8000/
 - Login page: http://127.0.0.1:8000/accounts/login/
 
-### 4) Run benchmark (Docker)
 
-The preferred way is via Docker Compose, which pre-configures all volume mounts
-(`./policies`, `./output`, `./instrlib`, `./instrlib_filter`).
+## Parallel enforcement
 
-**Default run** (uses the `command` defined in `docker-compose.yml`):
+To experiment with enforcing a policy split across multiple sub-formulas, use the
+[policy splitting tool](LINK). It takes a monolithic `.mfotl` policy and produces a
+folder of sub-formula files, each with a matching `.sig`, following this structure:
 
-```bash
-docker compose run --rm benchmark
+```
+policies/
+└── my_split/
+    ├── formula_a.mfotl
+    ├── formula_a.sig
+    ├── formula_b.mfotl
+    ├── formula_b.sig
+    └── ...
 ```
 
-**Override arguments per run** — any arguments after the service name replace
-the `command` entirely:
+Both recommended options below run via Docker Compose (requires the image to be built first — see Option 2 above).
+
+**Single run** — pass the split folder as `--formula`; all `.mfotl` and `.sig` files are picked up automatically:
 
 ```bash
-# Single formula
 docker compose run --rm benchmark gdpr /opt/whyenf/enfguard \
   --instrlib /app/instrlib \
-  --formula /app/policies/minitwit_gdpr.mfotl \
-  --sig /app/policies/minitwit_gdpr.sig \
-  --output-dir /app/output
-
-# Formula directory (all .mfotl files used, .sig files auto-detected)
-docker compose run --rm benchmark gdpr /opt/whyenf/enfguard \
-  --instrlib /app/instrlib \
-  --formula /app/policies/split/
-
-# Different instrlib version
-docker compose run --rm benchmark gdpr /opt/whyenf/enfguard \
-  --instrlib /app/instrlib_filter \
-  --formula /app/policies/split/
-
-# Un-instrumented baseline (no enforcer argument)
-docker compose run --rm benchmark baseline \
-  --output-dir /app/output
+  --formula /app/policies/my_split/
 ```
 
-**Available in-container paths** (all bind-mounted from host):
+**Sweep over multiple splits** — list the folders in `benchmark/run_all_splits.sh`
+under `SPLITS` and run the script:
 
-| Container path        | Host path           |
-|-----------------------|---------------------|
-| `/app/policies/`      | `./policies/`       |
-| `/app/output/`        | `./output/`         |
-| `/app/instrlib/`      | `./instrlib/`       |
-| `/app/instrlib_filter/` | `./instrlib_filter/` |
+```bash
+SPLITS=(
+    my_split
+    another_split
+)
+```
 
-Changes to any of these on the host are reflected immediately — no rebuild needed.
-Results are written to `./output/minitwitter_<timestamp>/` on the host.
+```bash
+./benchmark/run_all_splits.sh
+# or BUILD_ONCE=1 ./benchmark/run_all_splits.sh  to rebuild the image first
+```
 
-Expected runtime is around 5–7 minutes per run.
+Results for each split are written to `output/<split-name>/` on the host.
 
 ## Notes
 
-- The old `whyenf/bin/whyenf.exe` path is obsolete for this setup.
 - For Docker, `enfguard` and `enfflash` are copied from the separate `whyenf-enfflash:latest` image.
+- The compose file mounts the desired instrlib version onto `/app/instrlib` — benchmark commands always use that path. To switch version, update the mount in `docker-compose.yml`: `- ./instrlib_filter:/app/instrlib`.
+- Outputs: measurements in `output/`, per-scenario server logs in `benchmark/privacy_testsuite/logs/multi_runs/`, and the raw event stream sent to the enforcer(s) in `GDPRSocial/log`. All can be parsed further, e.g. for transparency or fine-grained timing analysis.
 
 
 

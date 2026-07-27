@@ -344,3 +344,7 @@ TSWLatexianTemp*
 
 __pycache__
 *.secret
+**/*logs*
+**/*output*
+**/*multi*
+**/GDPRSocial/log
